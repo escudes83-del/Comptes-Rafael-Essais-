@@ -1129,7 +1129,7 @@
       <div style="border-top:1px solid var(--border);margin:2px 0;"></div>
       <div class="subtitle" style="font-size:11px;line-height:1.2;">Relevés du 16 au 15</div>
     </div>
-    <a href="comptes_rafael_2027_v3.html" target="_blank" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-radius:8px;padding:5px 10px;background:rgba(155,89,247,.15);border:1px solid rgba(155,89,247,.35);text-decoration:none;">
+    <a href="comptes_rafael_2027.html" target="_blank" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-radius:8px;padding:5px 10px;background:rgba(155,89,247,.15);border:1px solid rgba(155,89,247,.35);text-decoration:none;">
       <div style="font-size:11px;font-weight:700;color:var(--aec);">📅 Compte 2027</div>
       <div style="font-size:9px;color:var(--aec);opacity:.8;">Visiteur</div>
     </a>
@@ -1634,6 +1634,7 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  saveToFirebase();
 }
 
 // ============================================================
@@ -5165,72 +5166,42 @@ window.addEventListener('storage', function(e) {
     renderPills();
   }
 });
+
+// ============================================================
+// FIREBASE REST — Synchro inter-appareils (sans SDK externe)
+// ============================================================
+const FIREBASE_URL = 'https://comptes-rafael-default-rtdb.firebaseio.com';
+
+async function saveToFirebase() {
+  try {
+    await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state)
+    });
+  } catch(e) { console.warn('Firebase save error:', e); }
+}
+
+async function loadFromFirebase() {
+  try {
+    const res = await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json');
+    const data = await res.json();
+    if (data && typeof data === 'object') {
+      const fbStr = JSON.stringify(data);
+      const localRaw = localStorage.getItem(STORAGE_KEY);
+      if (fbStr !== localRaw) {
+        localStorage.setItem(STORAGE_KEY, fbStr);
+        state = loadState();
+        render();
+      }
+    }
+  } catch(e) { console.warn('Firebase load error:', e); }
+}
+
+// Polling toutes les 5 secondes pour synchro temps réel
+setInterval(loadFromFirebase, 5000);
+
+// Chargement initial depuis Firebase
+loadFromFirebase();
+
 </script>
-<!-- Modal alerte ouverture -->
-<div class="modal-overlay" id="modalAlerteOuverture">
-  <div class="modal">
-    <h2>👋 Bonjour Rafael !</h2>
-    <div id="modalAlerteContenu" style="font-size:13px;line-height:1.7;margin-bottom:16px;"></div>
-    <div class="form-actions">
-      <button class="btn btn-yellow" onclick="comprisAlerteOuverture()">✓ Compris !</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal reliquat budget fin de période -->
-<div class="modal-overlay" id="modalReliquat">
-  <div class="modal">
-    <h2>💡 Budget restant de la période précédente</h2>
-    <div id="modalReliquatContenu" style="font-size:13px;line-height:1.7;margin-bottom:16px;"></div>
-    <div class="form-actions" style="flex-wrap:wrap;gap:8px;">
-      <button class="btn btn-secondary" onclick="closeModal('modalReliquat')">✓ Laisser sur le compte</button>
-      <button class="btn btn-accent" onclick="reliquatVersPortefeuille()" style="background:var(--accent);">💰 Mettre au portefeuille</button>
-      <button class="btn btn-yellow" onclick="reliquatVersDettte()">🏠 Rembourser la dette</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal alerte consommation -->
-<div class="modal-overlay" id="modalAlerteConso">
-  <div class="modal">
-    <h2>⚠️ Attention budget</h2>
-    <div id="modalAlerteConsoContenu" style="font-size:13px;line-height:1.7;margin-bottom:16px;"></div>
-    <div class="form-actions">
-      <button class="btn btn-yellow" onclick="closeModal('modalAlerteConso')">✓ Compris</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal confirmation extra dette -->
-<div class="modal-overlay" id="modalExtraConfirm">
-  <div class="modal">
-    <h2>⚠️ Vérification budget</h2>
-    <div id="extraConfirmContent" style="font-size:13px;line-height:1.6;margin-bottom:16px;"></div>
-    <div class="form-actions" style="gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-secondary" onclick="annulerExtra()">✕ Annuler</button>
-      <button class="btn btn-accent" onclick="confirmerExtraPortefeuille()" style="background:var(--accent);">💰 Mettre au portefeuille</button>
-      <button class="btn btn-yellow" onclick="confirmerExtra()">🏠 Rembourser la dette</button>
-    </div>
-  </div>
-</div>
-
-
-<div class="modal-overlay" id="modalRemiseCompte">
-  <div class="modal">
-    <h2>↩ Remettre sur le compte</h2>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:16px;">Modifiez le montant si vous voulez retirer partiellement.</p>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
-      <label style="font-size:12px;color:var(--muted);">Montant ($)</label>
-      <input type="number" id="remise_compte_input_modal" step="0.01" min="0"
-        style="width:130px;background:var(--bg);border:1px solid var(--border);border-radius:5px;
-               color:var(--text);font-size:14px;font-family:var(--font-mono);font-weight:700;padding:5px 10px;">
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modalRemiseCompte')">✕ Annuler</button>
-      <button class="btn" onclick="confirmerRemiseCompte()"
-        style="background:var(--red);color:#fff;border-color:var(--red);">↩ Confirmer</button>
-    </div>
-  </div>
-</div>
-</body>
-</html>

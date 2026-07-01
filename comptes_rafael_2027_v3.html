@@ -1147,12 +1147,14 @@
     <div id="rappelElecBandeau" style="display:none;"></div>
     <div id="rappelIRCCBandeau" style="display:none;"></div>
     <div id="rappelAlerteBandeau" style="display:none;"></div>
+    <div id="rappelReliquatBandeau" style="display:none;"></div>
+    <div id="rappelPortefeuilleBandeau" style="display:none;"></div>
   </div>
   <div class="header-right">
-    <button class="btn btn-secondary btn-sm" id="btnTableau" onclick="toggleTableau()" style="font-size:11px;">📊 Tableau</button>
     <div style="display:flex;flex-direction:column;gap:6px;">
       <button class="btn btn-purple btn-sm" onclick="openModal('modalSimFrequence')" style="font-size:11px;">🔧 Paramètres</button>
       <button class="btn btn-secondary btn-sm" onclick="openModal('modalSimulation')" style="font-size:11px;">📊 Simuler</button>
+      <button class="btn btn-secondary btn-sm" id="btnTableau" onclick="toggleTableau()" style="font-size:11px;">📊 Tableau</button>
     </div>
   </div>
 </div>
@@ -1640,6 +1642,7 @@ function loadState() {
 }
 
 function saveState() {
+  state._savedAt = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   saveToFirebase();
 }
@@ -2425,9 +2428,9 @@ function renderRappels() {
     if (joursRestants > 37) return;
     const depasse = joursRestants < 0;
     const joursLabel = depasse ? 'DÉPASSÉ' : joursRestants === 0 ? "AUJ." : `J-${joursRestants}`;
-    htmlCarre += `<div class="rappel-carre" onclick="ouvrirRappelModal('${r.id}')" style="cursor:pointer;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:5px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:170px;min-height:38px;animation:pulse-dette 1.8s ease-in-out infinite;">
-      <div style="font-size:11px;font-weight:800;color:var(--red);letter-spacing:1px;">RAPPEL · ${joursLabel}</div>
-      <div style="font-size:11px;font-weight:600;color:var(--text);margin-top:2px;">Assurance santé internat.</div>
+    htmlCarre += `<div class="rappel-carre" onclick="ouvrirRappelModal('${r.id}')" style="cursor:pointer;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:38px;animation:pulse-dette 1.8s ease-in-out infinite;">
+      <div style="font-size:10px;font-weight:800;color:var(--red);letter-spacing:.5px;">RAPPEL · ${joursLabel}</div>
+      <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;">Assurance santé internat.</div>
     </div>`;
   });
   if (htmlCarre) { elBandeau.style.display = 'flex'; elBandeau.innerHTML = htmlCarre; }
@@ -2440,9 +2443,9 @@ function renderRappels() {
     const detteRestante = getDetteAuMois(keyAffiche);
     if (detteRestante > 0) {
       elDette.style.display = 'flex';
-      elDette.innerHTML = `<div style="background:rgba(247,197,72,.15);border:2px solid var(--yellow);border-radius:10px;padding:5px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:170px;min-height:38px;animation:pulse-dette 1.8s ease-in-out infinite;">
-        <div style="font-size:11px;font-weight:800;color:var(--yellow);letter-spacing:1px;">RAPPEL · ${fmt(detteRestante)}</div>
-        <div style="font-size:11px;font-weight:600;color:var(--text);margin-top:2px;">Dette propriétaire</div>
+      elDette.innerHTML = `<div style="background:rgba(247,197,72,.15);border:2px solid var(--yellow);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:38px;animation:pulse-dette 1.8s ease-in-out infinite;">
+        <div style="font-size:10px;font-weight:800;color:var(--yellow);letter-spacing:.5px;">RAPPEL · ${fmt(detteRestante)}</div>
+        <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;">Dette propriétaire</div>
       </div>`;
     } else {
       elDette.style.display = 'none';
@@ -2493,7 +2496,7 @@ function renderRappels() {
       elElec.style.display = 'flex';
       elElec.innerHTML = `<div style="background:rgba(247,162,79,.12);border:2px solid var(--accent2);border-radius:10px;padding:5px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:160px;min-height:38px;">
         <div style="font-size:11px;font-weight:800;color:var(--accent2);letter-spacing:1px;">⚠ À VÉRIFIER</div>
-        <div style="font-size:11px;font-weight:600;color:var(--text);margin-top:2px;">Frais électricité</div>
+        <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;">Frais électricité</div>
       </div>`;
     } else {
       elElec.style.display = 'none';
@@ -2513,9 +2516,9 @@ function renderRappels() {
     const resteIRCC = Math.max(0, detteInit - rembTotal);
     if (resteIRCC > 0) {
       elIRCC.style.display = 'flex';
-      elIRCC.innerHTML = `<div onclick="ouvrirRemboursementIRCC()" style="cursor:pointer;background:rgba(79,142,247,.10);border:2px solid var(--accent);border-radius:10px;padding:5px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:170px;min-height:38px;">
-        <div style="font-size:11px;font-weight:800;color:var(--accent);letter-spacing:1px;">SUIVI · ${fmt(resteIRCC)}</div>
-        <div style="font-size:11px;font-weight:600;color:var(--text);margin-top:2px;">Aide Pilou</div>
+      elIRCC.innerHTML = `<div onclick="ouvrirRemboursementIRCC()" style="cursor:pointer;background:rgba(79,142,247,.10);border:2px solid var(--accent);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:38px;">
+        <div style="font-size:10px;font-weight:800;color:var(--accent);letter-spacing:.5px;">SUIVI · ${fmt(resteIRCC)}</div>
+        <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;">Aide Pilou</div>
       </div>`;
     } else {
       elIRCC.style.display = 'none';
@@ -2555,11 +2558,12 @@ function renderRappels() {
       if (msgs.length > 0) {
         const alerteKey = 'alerte_budget_' + keyAffiche + '_' + msgs.join('|').replace(/[^a-zA-Z0-9]/g, '');
         const dejaVue = (state.rappels || {})[alerteKey + '_supprime'];
-        if (!dejaVue) {
-          alerteHtml = `<div style="cursor:default;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:5px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:180px;min-height:38px;animation:pulse-dette 1.8s ease-in-out infinite;">
-            <div style="font-size:11px;font-weight:800;color:var(--red);letter-spacing:1px;">⚠ ALERTE BUDGET</div>
-            <div style="font-size:10px;font-weight:600;color:var(--text);margin-top:2px;text-align:center;">${msgs.join(' · ')}</div>
-            <button onclick="acquitterAlerteBudget('${alerteKey}')" style="margin-top:3px;background:transparent;border:1px solid rgba(255,255,255,.3);border-radius:4px;color:var(--text);font-size:9px;padding:2px 8px;cursor:pointer;">✓ J'ai compris</button>
+        const activee = true;
+        if (!dejaVue && activee) {
+          alerteHtml = `<div style="cursor:default;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:130px;min-height:38px;animation:pulse-dette 1.8s ease-in-out infinite;">
+            <div style="font-size:10px;font-weight:800;color:var(--red);letter-spacing:.5px;">⚠ ALERTE BUDGET</div>
+            <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;text-align:center;">${msgs.join(' · ')}</div>
+            <button onclick="acquitterAlerteBudget('${alerteKey}')" style="margin-top:3px;background:transparent;border:1px solid rgba(255,255,255,.3);border-radius:4px;color:var(--text);font-size:9px;padding:2px 8px;cursor:pointer;">✕ Ne plus afficher</button>
           </div>`;
         }
       }
@@ -2572,6 +2576,49 @@ function renderRappels() {
       elAlerte.innerHTML = '';
     }
   }
+
+  // Cadre RELIQUAT — budget non dépensé de la période précédente, proposer répartition
+  const elReliquat = document.getElementById('rappelReliquatBandeau');
+  if (elReliquat) {
+    const curIdxR = getCurrentPeriodeIndex();
+    const prevIdxR = curIdxR - 1;
+    let reliquatHtml = '';
+    if (prevIdxR >= 0) {
+      const prevKeyR = PERIODES[prevIdxR].key;
+      const dejaTraite = (state.rappels || {})['reliquat_' + prevKeyR + '_traite'];
+      if (!dejaTraite) {
+        const prevN = getSommeEntreesAll(prevKeyR, 'nourriture');
+        const prevP = getSommeEntreesAll(prevKeyR, 'perso');
+        const resteNR = Math.max(0, state.fixes.budget_nourriture - prevN);
+        const resteSPR = Math.max(0, state.fixes.budget_perso - prevP);
+        const resteTotalR = resteNR + resteSPR;
+        if (resteTotalR > 5) {
+          reliquatHtml = `<div onclick="ouvrirModalReliquat()" style="cursor:pointer;background:rgba(62,207,142,.12);border:2px solid var(--green);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:38px;">
+            <div style="font-size:10px;font-weight:800;color:var(--green);letter-spacing:.5px;">RELIQUAT · ${fmt(resteTotalR)}</div>
+            <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;">Budget non dépensé</div>
+          </div>`;
+        }
+      }
+    }
+    if (reliquatHtml) { elReliquat.style.display = 'flex'; elReliquat.innerHTML = reliquatHtml; }
+    else { elReliquat.style.display = 'none'; elReliquat.innerHTML = ''; }
+  }
+
+  // Cadre PORTEFEUILLE — affiche le solde du portefeuille dette s'il est > 0
+  const elPortefeuille = document.getElementById('rappelPortefeuilleBandeau');
+  if (elPortefeuille) {
+    const totalPortefeuille = (state.portefeuilleDette || []).reduce((s,v) => s+v.montant, 0);
+    if (totalPortefeuille > 0) {
+      elPortefeuille.style.display = 'flex';
+      elPortefeuille.innerHTML = `<div onclick="document.getElementById('detteBlockPerm')?.scrollIntoView({behavior:'smooth',block:'center'})" style="cursor:pointer;background:rgba(247,197,72,.12);border:2px solid var(--yellow);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:38px;">
+        <div style="font-size:10px;font-weight:800;color:var(--yellow);letter-spacing:.5px;">PORTEFEUILLE · ${fmt(totalPortefeuille)}</div>
+        <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;">Épargne dette</div>
+      </div>`;
+    } else {
+      elPortefeuille.style.display = 'none';
+      elPortefeuille.innerHTML = '';
+    }
+  }
 }
 
 function acquitterAlerteBudget(alerteKey) {
@@ -2579,6 +2626,31 @@ function acquitterAlerteBudget(alerteKey) {
   state.rappels[alerteKey + '_supprime'] = true;
   saveState();
   renderRappels();
+}
+
+function comprisAlerteOuverture() {
+  closeModal('modalAlerteOuverture');
+  const curIdx3 = getCurrentPeriodeIndex();
+  const keyActuelle = PERIODES[curIdx3]?.key;
+  if (!keyActuelle) return;
+  const nourritureBudget = state.fixes.budget_nourriture;
+  const persoBudget = state.fixes.budget_perso;
+  const nourritureReel = getSommeEntreesAll(keyActuelle, 'nourriture');
+  const persoReel = getSommeEntreesAll(keyActuelle, 'perso');
+  const soldesAlerte = calculerSoldes();
+  const sAlerte = soldesAlerte[keyActuelle];
+  const deficitProjete = sAlerte ? sAlerte.fin < 0 : false;
+  const msgs = [];
+  if (nourritureReel > nourritureBudget * 0.5) msgs.push(`Nourriture: ${fmt(nourritureReel)}/${fmt(nourritureBudget)}`);
+  if (persoReel > persoBudget * 0.5) msgs.push(`Perso: ${fmt(persoReel)}/${fmt(persoBudget)}`);
+  if (deficitProjete) msgs.push(`Déficit projeté: ${fmt(sAlerte.fin)}`);
+  if (msgs.length > 0) {
+    const alerteKey = 'alerte_budget_' + keyActuelle + '_' + msgs.join('|').replace(/[^a-zA-Z0-9]/g, '');
+    if (!state.rappels) state.rappels = {};
+    state.rappels['alerte_bandeau_active'] = alerteKey;
+    saveState();
+    renderRappels();
+  }
 }
 
 function ouvrirRemboursementIRCC() {
@@ -4951,7 +5023,7 @@ document.getElementById('depRemb')?.addEventListener('change', function() {
 });
 
 // ============================================================
-// FIREBASE REST — Synchro inter-appareils (sans SDK externe)
+// FIREBASE REST — Synchro inter-appareils avec protection timestamp
 // ============================================================
 const FIREBASE_URL = 'https://comptes-rafael-default-rtdb.firebaseio.com';
 
@@ -4968,28 +5040,34 @@ async function saveToFirebase() {
 async function loadFromFirebase() {
   try {
     const res = await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json');
-    const data = await res.json();
-    if (data && typeof data === 'object') {
-      const fbStr = JSON.stringify(data);
-      const localRaw = localStorage.getItem(STORAGE_KEY);
-      if (fbStr !== localRaw) {
-        localStorage.setItem(STORAGE_KEY, fbStr);
-        state = loadState();
-        render();
-      }
+    const fbData = await res.json();
+    if (!fbData || typeof fbData !== 'object') return;
+
+    const localRaw = localStorage.getItem(STORAGE_KEY);
+    const localData = localRaw ? JSON.parse(localRaw) : null;
+
+    const fbTs = fbData._savedAt || 0;
+    const localTs = localData ? (localData._savedAt || 0) : 0;
+
+    // N'ecraser localStorage que si Firebase est plus recent
+    if (fbTs > localTs) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(fbData));
+      state = loadState();
+      render();
     }
   } catch(e) { console.warn('Firebase load error:', e); }
 }
 
-// Polling toutes les 5 secondes pour synchro temps réel
+// Polling toutes les 5 secondes
 setInterval(loadFromFirebase, 5000);
 
-// Chargement initial depuis Firebase
-loadFromFirebase();
-
-
-document.addEventListener('DOMContentLoaded', function() {
-  // Ouvrir automatiquement la période courante au chargement
+document.addEventListener('DOMContentLoaded', async function() {
+  // Si localStorage vide, attendre Firebase avant de render
+  const localRaw = localStorage.getItem(STORAGE_KEY);
+  if (!localRaw) {
+    await loadFromFirebase();
+  }
+  // Ouvrir automatiquement la periode courante au chargement
   const curKey = PERIODES[getCurrentPeriodeIndex()]?.key;
   if (curKey) {
     selectedMois = curKey;
@@ -5002,5 +5080,72 @@ document.addEventListener('DOMContentLoaded', function() {
 window.addEventListener('scroll', function() {
   fermerDetteCalendrier();
 }, { passive: true });
-
 </script>
+<!-- Modal alerte ouverture -->
+<div class="modal-overlay" id="modalAlerteOuverture">
+  <div class="modal">
+    <h2>👋 Bonjour Rafael !</h2>
+    <div id="modalAlerteContenu" style="font-size:13px;line-height:1.7;margin-bottom:16px;"></div>
+    <div class="form-actions">
+      <button class="btn btn-yellow" onclick="comprisAlerteOuverture()">✓ Compris !</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal reliquat budget fin de période -->
+<div class="modal-overlay" id="modalReliquat">
+  <div class="modal">
+    <h2>💡 Budget restant de la période précédente</h2>
+    <div id="modalReliquatContenu" style="font-size:13px;line-height:1.7;margin-bottom:16px;"></div>
+    <div class="form-actions" style="flex-wrap:wrap;gap:8px;">
+      <button class="btn btn-secondary" onclick="closeModal('modalReliquat')">✓ Laisser sur le compte</button>
+      <button class="btn btn-accent" onclick="reliquatVersPortefeuille()" style="background:var(--accent);">💰 Mettre au portefeuille</button>
+      <button class="btn btn-yellow" onclick="reliquatVersDettte()">🏠 Rembourser la dette</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal alerte consommation -->
+<div class="modal-overlay" id="modalAlerteConso">
+  <div class="modal">
+    <h2>⚠️ Attention budget</h2>
+    <div id="modalAlerteConsoContenu" style="font-size:13px;line-height:1.7;margin-bottom:16px;"></div>
+    <div class="form-actions">
+      <button class="btn btn-yellow" onclick="closeModal('modalAlerteConso')">✓ Compris</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal confirmation extra dette -->
+<div class="modal-overlay" id="modalExtraConfirm">
+  <div class="modal">
+    <h2>⚠️ Vérification budget</h2>
+    <div id="extraConfirmContent" style="font-size:13px;line-height:1.6;margin-bottom:16px;"></div>
+    <div class="form-actions" style="gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-secondary" onclick="annulerExtra()">✕ Annuler</button>
+      <button class="btn btn-accent" onclick="confirmerExtraPortefeuille()" style="background:var(--accent);">💰 Mettre au portefeuille</button>
+      <button class="btn btn-yellow" onclick="confirmerExtra()">🏠 Rembourser la dette</button>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal-overlay" id="modalRemiseCompte">
+  <div class="modal">
+    <h2>↩ Remettre sur le compte</h2>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:16px;">Modifiez le montant si vous voulez retirer partiellement.</p>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+      <label style="font-size:12px;color:var(--muted);">Montant ($)</label>
+      <input type="number" id="remise_compte_input_modal" step="0.01" min="0"
+        style="width:130px;background:var(--bg);border:1px solid var(--border);border-radius:5px;
+               color:var(--text);font-size:14px;font-family:var(--font-mono);font-weight:700;padding:5px 10px;">
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modalRemiseCompte')">✕ Annuler</button>
+      <button class="btn" onclick="confirmerRemiseCompte()"
+        style="background:var(--red);color:#fff;border-color:var(--red);">↩ Confirmer</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

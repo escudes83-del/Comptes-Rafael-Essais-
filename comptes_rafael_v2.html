@@ -5109,12 +5109,45 @@ document.getElementById('depRemb')?.addEventListener('change', function() {
   document.getElementById('depRembDetail').style.display = this.checked ? 'block' : 'none';
 });
 
-document.addEventListener('DOMContentLoaded', async function() {
-  // Si localStorage vide, attendre Firebase avant de render
-  const localRaw = localStorage.getItem(STORAGE_KEY);
-  if (!localRaw) {
-    await loadFromFirebase();
-  }
+// ============================================================
+// FIREBASE REST — Synchro inter-appareils (sans SDK externe)
+// ============================================================
+const FIREBASE_URL = 'https://comptes-rafael-default-rtdb.firebaseio.com';
+
+async function saveToFirebase() {
+  try {
+    await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state)
+    });
+  } catch(e) { console.warn('Firebase save error:', e); }
+}
+
+async function loadFromFirebase() {
+  try {
+    const res = await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json');
+    const data = await res.json();
+    if (data && typeof data === 'object') {
+      const fbStr = JSON.stringify(data);
+      const localRaw = localStorage.getItem(STORAGE_KEY);
+      if (fbStr !== localRaw) {
+        localStorage.setItem(STORAGE_KEY, fbStr);
+        state = loadState();
+        render();
+      }
+    }
+  } catch(e) { console.warn('Firebase load error:', e); }
+}
+
+// Polling toutes les 5 secondes pour synchro temps réel
+setInterval(loadFromFirebase, 5000);
+
+// Chargement initial depuis Firebase
+loadFromFirebase();
+
+
+document.addEventListener('DOMContentLoaded', function() {
   // Ouvrir automatiquement la période courante au chargement
   const curKey = PERIODES[getCurrentPeriodeIndex()]?.key;
   if (curKey) {
@@ -5171,42 +5204,5 @@ window.addEventListener('storage', function(e) {
     renderPills();
   }
 });
-
-// ============================================================
-// FIREBASE REST — Synchro inter-appareils (sans SDK externe)
-// ============================================================
-const FIREBASE_URL = 'https://comptes-rafael-default-rtdb.firebaseio.com';
-
-async function saveToFirebase() {
-  try {
-    await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state)
-    });
-  } catch(e) { console.warn('Firebase save error:', e); }
-}
-
-async function loadFromFirebase() {
-  try {
-    const res = await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json');
-    const data = await res.json();
-    if (data && typeof data === 'object') {
-      const fbStr = JSON.stringify(data);
-      const localRaw = localStorage.getItem(STORAGE_KEY);
-      if (fbStr !== localRaw) {
-        localStorage.setItem(STORAGE_KEY, fbStr);
-        state = loadState();
-        render();
-      }
-    }
-  } catch(e) { console.warn('Firebase load error:', e); }
-}
-
-// Polling toutes les 5 secondes pour synchro temps réel
-setInterval(loadFromFirebase, 5000);
-
-// Chargement initial depuis Firebase
-loadFromFirebase();
 
 </script>

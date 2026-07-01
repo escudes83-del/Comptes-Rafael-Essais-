@@ -4950,26 +4950,6 @@ document.getElementById('depRemb')?.addEventListener('change', function() {
   document.getElementById('depRembDetail').style.display = this.checked ? 'block' : 'none';
 });
 
-document.addEventListener('DOMContentLoaded', async function() {
-  // Si localStorage vide, attendre Firebase avant de render
-  const localRaw = localStorage.getItem(STORAGE_KEY);
-  if (!localRaw) {
-    await loadFromFirebase();
-  }
-  // Ouvrir automatiquement la période courante au chargement
-  const curKey = PERIODES[getCurrentPeriodeIndex()]?.key;
-  if (curKey) {
-    selectedMois = curKey;
-    state.selectedMois = curKey;
-  }
-  render();
-});
-
-// Fermer le bloc dette au scroll
-window.addEventListener('scroll', function() {
-  fermerDetteCalendrier();
-}, { passive: true });
-
 // ============================================================
 // FIREBASE REST — Synchro inter-appareils (sans SDK externe)
 // ============================================================
@@ -5006,5 +4986,21 @@ setInterval(loadFromFirebase, 5000);
 
 // Chargement initial depuis Firebase
 loadFromFirebase();
+
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Ouvrir automatiquement la période courante au chargement
+  const curKey = PERIODES[getCurrentPeriodeIndex()]?.key;
+  if (curKey) {
+    selectedMois = curKey;
+    state.selectedMois = curKey;
+  }
+  render();
+});
+
+// Fermer le bloc dette au scroll
+window.addEventListener('scroll', function() {
+  fermerDetteCalendrier();
+}, { passive: true });
 
 </script>

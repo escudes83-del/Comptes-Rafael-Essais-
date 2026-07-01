@@ -1,0 +1,20 @@
+{
+  "name": "Comptes Rafael",
+  "short_name": "Rafael $",
+  "start_url": "mini_app_rafael.html",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#0f3460",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

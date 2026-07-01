@@ -93,6 +93,21 @@
 </head>
 <body>
 
+<div id="pinScreen" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#111827;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:20px;">
+  <div style="font-size:64px;">🐾</div>
+  <div style="font-size:18px;font-weight:700;color:#7eb8f7;">Comptes Rafael</div>
+  <div style="font-size:12px;color:#4a7fba;margin-bottom:8px;">Code PIN requis</div>
+  <div style="position:relative;display:inline-block;">
+    <input type="password" id="pinInput" placeholder="PIN" autocomplete="off" inputmode="text"
+      style="font-size:24px;text-align:center;width:220px;padding:12px 40px 12px 40px;border-radius:12px;border:1.5px solid #378add;background:#0d2137;color:#fff;outline:none;"
+      onkeydown="if(event.key==='Enter')verifierPin()">
+    <button onclick="toggleVisu('pinInput',this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:#4a7fba;font-size:18px;cursor:pointer;padding:0;">👁</button>
+  </div>
+  <button onclick="verifierPin()" style="background:#378add;color:#fff;border:none;border-radius:12px;padding:12px 32px;font-size:15px;font-weight:700;cursor:pointer;">Entrer</button>
+  <div id="pinErreur" style="color:#e24b4a;font-size:12px;display:none;">PIN incorrect — réessayez</div>
+</div>
+
+
 <div class="header">
   <div>
     <div class="header-title">💳 Comptes Rafael</div>
@@ -175,6 +190,39 @@
 </div>
 
 <script>
+// ============================================================
+// GESTION PIN
+// ============================================================
+const PIN_DEFAULT = 'Pilou';
+
+let pinValide = false;
+
+function afficherEcranPin() {
+  const screen = document.getElementById('pinScreen');
+  if (screen) {
+    screen.style.display = 'flex';
+    setTimeout(() => { const inp = document.getElementById('pinInput'); if(inp) inp.focus(); }, 300);
+  }
+}
+
+function verifierPin() {
+  const saisi = document.getElementById('pinInput')?.value || '';
+  const pinRef = (state && state.pinCode) ? state.pinCode : PIN_DEFAULT;
+  if (saisi === pinRef) {
+    pinValide = true;
+    document.getElementById('pinScreen').style.display = 'none';
+    document.getElementById('pinInput').value = '';
+    document.getElementById('pinErreur').style.display = 'none';
+    mettreAJourUI(); // Charger l'UI maintenant que le PIN est validé
+  } else {
+    document.getElementById('pinErreur').style.display = 'block';
+    document.getElementById('pinInput').value = '';
+    const inp = document.getElementById('pinInput');
+    if(inp) inp.focus();
+  }
+}
+
+
 const FIREBASE_URL = 'https://comptes-rafael-default-rtdb.firebaseio.com';
 const STORAGE_KEY = 'comptes_rafael_v1';
 let state = null;
@@ -216,6 +264,38 @@ function setSyncStatus(type, msg) {
   el.textContent = msg; el.className = 'sync-status ' + type;
 }
 
+
+function toggleVisu(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    btn.textContent = '🙈';
+    setTimeout(() => { inp.type = 'password'; btn.textContent = '👁'; }, 3000);
+  } else {
+    inp.type = 'password';
+    btn.textContent = '👁';
+  }
+}
+
+function changerPin() {
+  const actuel = document.getElementById('pinChangerActuel')?.value || '';
+  const nouveau = document.getElementById('pinChangerNouveau')?.value || '';
+  const confirm = document.getElementById('pinChangerConfirm')?.value || '';
+  const msg = document.getElementById('pinChangerMsg');
+  const pinRef = (state && state.pinCode) ? state.pinCode : PIN_DEFAULT;
+  if (actuel !== pinRef) { msg.textContent='❌ PIN actuel incorrect.'; msg.style.color='#e24b4a'; msg.style.display='block'; return; }
+  if (!nouveau || nouveau.length < 3) { msg.textContent='❌ PIN trop court (min. 3 car.).'; msg.style.color='#e24b4a'; msg.style.display='block'; return; }
+  if (nouveau !== confirm) { msg.textContent='❌ PINs ne correspondent pas.'; msg.style.color='#e24b4a'; msg.style.display='block'; return; }
+  if (state) state.pinCode = nouveau;
+  sauvegarderDansFirebase(); // fire and forget
+  msg.textContent='✅ PIN changé !'; msg.style.color='#5dcaa5'; msg.style.display='block';
+  document.getElementById('pinChangerActuel').value='';
+  document.getElementById('pinChangerNouveau').value='';
+  document.getElementById('pinChangerConfirm').value='';
+  setTimeout(()=>{ document.getElementById('modalPin').style.display='none'; msg.style.display='none'; }, 1500);
+}
+
 async function chargerDepuisFirebase() {
   setSyncStatus('loading', '⏳ Connexion...');
   try {
@@ -242,6 +322,7 @@ setInterval(chargerDepuisFirebase, 10000);
 
 function mettreAJourUI() {
   if (!state) return;
+  if (!pinValide) return; // Attendre validation PIN
   periodeKey = getPeriodeCourante();
   budgetNourr = state.fixes?.budget_nourriture || 300;
   budgetPerso = state.fixes?.budget_perso || 200;
@@ -333,11 +414,50 @@ async function validerSaisie() {
   fermerModal();
   mettreAJourUI();
   setSyncStatus('loading','⏳ Sauvegarde...');
-  await sauvegarderDansFirebase();
+  sauvegarderDansFirebase();
 }
 
 document.getElementById('modal-overlay').addEventListener('click',function(e){if(e.target===this)fermerModal();});
+afficherEcranPin();
 chargerDepuisFirebase();
 </script>
+
+<!-- Bouton changer PIN -->
+<div style="text-align:center;margin-bottom:20px;">
+  <button onclick="document.getElementById('modalPin').style.display='flex'"
+    style="background:transparent;border:0.5px solid #1e4a7a;border-radius:10px;padding:8px 16px;color:#4a7fba;font-size:11px;cursor:pointer;">
+    🔐 Changer le PIN
+  </button>
+</div>
+
+<!-- Modal changement PIN -->
+<div id="modalPin" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:200;justify-content:center;align-items:center;">
+  <div style="background:#1a2744;border-radius:20px;padding:24px;width:85%;max-width:320px;">
+    <div style="font-size:15px;font-weight:700;color:#7eb8f7;text-align:center;margin-bottom:16px;">🔐 Changer le PIN</div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+      <input type="password" id="pinChangerActuel" placeholder="PIN actuel" autocomplete="off"
+        style="flex:1;font-size:15px;padding:10px;border-radius:10px;border:1px solid #1e4a7a;background:#0d2137;color:#fff;outline:none;">
+      <button onclick="toggleVisu('pinChangerActuel',this)" style="background:transparent;border:none;color:#4a7fba;font-size:18px;cursor:pointer;padding:4px;">👁</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+      <input type="password" id="pinChangerNouveau" placeholder="Nouveau PIN" autocomplete="off"
+        style="flex:1;font-size:15px;padding:10px;border-radius:10px;border:1px solid #1e4a7a;background:#0d2137;color:#fff;outline:none;">
+      <button onclick="toggleVisu('pinChangerNouveau',this)" style="background:transparent;border:none;color:#4a7fba;font-size:18px;cursor:pointer;padding:4px;">👁</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px;">
+      <input type="password" id="pinChangerConfirm" placeholder="Confirmer nouveau PIN" autocomplete="off"
+        style="flex:1;font-size:15px;padding:10px;border-radius:10px;border:1px solid #1e4a7a;background:#0d2137;color:#fff;outline:none;">
+      <button onclick="toggleVisu('pinChangerConfirm',this)" style="background:transparent;border:none;color:#4a7fba;font-size:18px;cursor:pointer;padding:4px;">👁</button>
+    </div>
+    <div id="pinChangerMsg" style="font-size:11px;margin-bottom:10px;display:none;"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <button onclick="document.getElementById('modalPin').style.display='none'"
+        style="background:#0d2137;border:0.5px solid #1e4a7a;border-radius:10px;padding:12px;color:#4a7fba;font-size:14px;cursor:pointer;">Annuler</button>
+      <button onclick="changerPin()"
+        style="background:#378add;border:none;border-radius:10px;padding:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Changer</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

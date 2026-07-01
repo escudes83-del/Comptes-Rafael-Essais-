@@ -5125,11 +5125,31 @@ async function saveToFirebase() {
   } catch(e) { console.warn('Firebase save error:', e); }
 }
 
+// Firebase peut convertir les tableaux JS en objets — on les restitue en tableaux
+function normalizeFirebaseData(obj) {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) return obj.map(normalizeFirebaseData);
+  if (typeof obj === 'object') {
+    const keys = Object.keys(obj);
+    const isArrayLike = keys.length > 0 && keys.every(k => /^\d+$/.test(k));
+    if (isArrayLike) {
+      return keys.sort((a,b) => +a - +b).map(k => normalizeFirebaseData(obj[k]));
+    }
+    const result = {};
+    for (const k of keys) result[k] = normalizeFirebaseData(obj[k]);
+    return result;
+  }
+  return obj;
+}
+
 async function loadFromFirebase() {
   try {
     const res = await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json');
-    const fbData = await res.json();
-    if (!fbData || typeof fbData !== 'object') return;
+    const raw = await res.json();
+    if (!raw || typeof raw !== 'object') return;
+
+    // Normaliser les tableaux convertis par Firebase en objets
+    const fbData = normalizeFirebaseData(raw);
 
     const localRaw = localStorage.getItem(STORAGE_KEY);
     const localData = localRaw ? JSON.parse(localRaw) : null;

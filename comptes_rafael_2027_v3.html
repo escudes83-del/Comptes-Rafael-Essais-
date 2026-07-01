@@ -1514,7 +1514,7 @@
 <div class="modal-overlay" id="modalDetteDetail">
   <div class="modal">
     <h2>🏠 Remboursement dette propriétaire</h2>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Dette initiale : 1 700 $. Remb. : 200$ en juin, puis saisie manuelle par période.</p>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Dette initiale : 1 100 $ (solde restant début 2027). Remb. : 100$/mois, saisie manuelle par période.</p>
     <div id="detteDetailTable"><!-- injecté --></div>
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="closeModal('modalDetteDetail')">Fermer</button>
@@ -1550,7 +1550,7 @@
 // ============================================================
 
 const STORAGE_KEY = 'comptes_rafael_2027';
-const DETTE_INITIALE = 1700;
+const DETTE_INITIALE = 1100;
 
 // Périodes : du 16 d'un mois au 15 du suivant
 // On nomme chaque période par sa date de fin (le 15)
@@ -1607,7 +1607,7 @@ function defaultState() {
   return {
     mode: 'visiteur', // 'visiteur' | 'aec'
     aecDepuis: null,  // période key ex '2026-10'
-    soldeDepart: 616.81,
+    soldeDepart: 5954.65,
     dateRef: null,
     soldeRef: null,
     dettePayments: {},
@@ -1633,9 +1633,11 @@ function loadState() {
     if (raw) {
       const s = JSON.parse(raw);
       if (s.detteIRCC === undefined) s.detteIRCC = 2000;
-      // Firebase supprime les null — on les restitue
+      // Firebase supprime les null
       if (s.soldeRef === undefined) s.soldeRef = null;
       if (s.dateRef === undefined) s.dateRef = null;
+      // Corriger soldeDepart si encore à la valeur 2026 par erreur
+      if (Math.abs((s.soldeDepart || 0) - 616.81) < 0.01) s.soldeDepart = 5954.65;
       return s;
     }
   } catch(e) {}
@@ -5040,16 +5042,13 @@ async function saveToFirebase() {
   } catch(e) { console.warn('Firebase save error:', e); }
 }
 
-// Firebase peut convertir les tableaux JS en objets — on les restitue en tableaux
 function normalizeFirebaseData(obj) {
   if (obj === null || obj === undefined) return obj;
   if (Array.isArray(obj)) return obj.map(normalizeFirebaseData);
   if (typeof obj === 'object') {
     const keys = Object.keys(obj);
     const isArrayLike = keys.length > 0 && keys.every(k => /^\d+$/.test(k));
-    if (isArrayLike) {
-      return keys.sort((a,b) => +a - +b).map(k => normalizeFirebaseData(obj[k]));
-    }
+    if (isArrayLike) return keys.sort((a,b) => +a - +b).map(k => normalizeFirebaseData(obj[k]));
     const result = {};
     for (const k of keys) result[k] = normalizeFirebaseData(obj[k]);
     return result;
@@ -5062,17 +5061,11 @@ async function loadFromFirebase() {
     const res = await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json');
     const raw = await res.json();
     if (!raw || typeof raw !== 'object') return;
-
-    // Normaliser les tableaux convertis par Firebase en objets
     const fbData = normalizeFirebaseData(raw);
-
     const localRaw = localStorage.getItem(STORAGE_KEY);
     const localData = localRaw ? JSON.parse(localRaw) : null;
-
     const fbTs = fbData._savedAt || 0;
     const localTs = localData ? (localData._savedAt || 0) : 0;
-
-    // N'ecraser localStorage que si Firebase est plus recent
     if (fbTs > localTs) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(fbData));
       state = loadState();
@@ -5081,16 +5074,13 @@ async function loadFromFirebase() {
   } catch(e) { console.warn('Firebase load error:', e); }
 }
 
-// Polling toutes les 5 secondes
 setInterval(loadFromFirebase, 5000);
 
 document.addEventListener('DOMContentLoaded', async function() {
-  // Si localStorage vide, attendre Firebase avant de render
   const localRaw = localStorage.getItem(STORAGE_KEY);
   if (!localRaw) {
     await loadFromFirebase();
   }
-  // Ouvrir automatiquement la periode courante au chargement
   const curKey = PERIODES[getCurrentPeriodeIndex()]?.key;
   if (curKey) {
     selectedMois = curKey;

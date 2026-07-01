@@ -158,15 +158,15 @@
 </div>
 
 <div class="btns">
-  <button class="btn-main btn-nourr" onclick="ouvrirModal('nourr')">
+  <button class="btn-main btn-nourr" onclick="resetSessionTimer();ouvrirModal('nourr')">
     <span class="btn-icon">🛒</span>
     <span>Nourriture</span>
   </button>
-  <button class="btn-main btn-perso" onclick="ouvrirModal('perso')">
+  <button class="btn-main btn-perso" onclick="resetSessionTimer();ouvrirModal('perso')">
     <span class="btn-icon">🧴</span>
     <span>Perso</span>
   </button>
-  <button class="btn-main btn-except" onclick="ouvrirModal('except')">
+  <button class="btn-main btn-except" onclick="resetSessionTimer();ouvrirModal('except')">
     <span class="btn-icon">⚡</span>
     <span>Exception.</span>
   </button>
@@ -196,8 +196,32 @@
 const PIN_DEFAULT = 'Pilou';
 
 let pinValide = false;
+const PIN_SESSION_KEY = 'rafael_pin_session';
+const PIN_SESSION_DUREE = 15 * 60 * 1000; // 15 minutes en ms
+
+function sessionPinValide() {
+  try {
+    const ts = parseInt(localStorage.getItem(PIN_SESSION_KEY) || '0');
+    return Date.now() - ts < PIN_SESSION_DUREE;
+  } catch(e) { return false; }
+}
+
+function enregistrerSession() {
+  try { localStorage.setItem(PIN_SESSION_KEY, Date.now().toString()); } catch(e) {}
+}
+
+function resetSessionTimer() {
+  // Réinitialiser le timer à chaque interaction
+  if (pinValide) enregistrerSession();
+}
 
 function afficherEcranPin() {
+  // Si session encore valide, pas besoin du PIN
+  if (sessionPinValide()) {
+    pinValide = true;
+    enregistrerSession();
+    return;
+  }
   const screen = document.getElementById('pinScreen');
   if (screen) {
     screen.style.display = 'flex';
@@ -210,10 +234,11 @@ function verifierPin() {
   const pinRef = (state && state.pinCode) ? state.pinCode : PIN_DEFAULT;
   if (saisi === pinRef) {
     pinValide = true;
+    enregistrerSession();
     document.getElementById('pinScreen').style.display = 'none';
     document.getElementById('pinInput').value = '';
     document.getElementById('pinErreur').style.display = 'none';
-    mettreAJourUI(); // Charger l'UI maintenant que le PIN est validé
+    mettreAJourUI();
   } else {
     document.getElementById('pinErreur').style.display = 'block';
     document.getElementById('pinInput').value = '';
@@ -278,6 +303,16 @@ function toggleVisu(inputId, btn) {
   }
 }
 
+
+function verouiller() {
+  pinValide = false;
+  try { localStorage.removeItem(PIN_SESSION_KEY); } catch(e) {}
+  const screen = document.getElementById('pinScreen');
+  if (screen) {
+    screen.style.display = 'flex';
+    setTimeout(() => { const inp = document.getElementById('pinInput'); if(inp) inp.focus(); }, 200);
+  }
+}
 function changerPin() {
   const actuel = document.getElementById('pinChangerActuel')?.value || '';
   const nouveau = document.getElementById('pinChangerNouveau')?.value || '';
@@ -422,6 +457,14 @@ afficherEcranPin();
 chargerDepuisFirebase();
 </script>
 
+
+<!-- Bouton verrouiller -->
+<div style="text-align:center;margin-bottom:10px;">
+  <button onclick="verouiller()"
+    style="background:#0d2137;border:1px solid #378add;border-radius:10px;padding:10px 24px;color:#7eb8f7;font-size:13px;font-weight:600;cursor:pointer;width:calc(100% - 32px);">
+    🔒 Verrouiller l'application
+  </button>
+</div>
 <!-- Bouton changer PIN -->
 <div style="text-align:center;margin-bottom:20px;">
   <button onclick="document.getElementById('modalPin').style.display='flex'"

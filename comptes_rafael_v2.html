@@ -5109,7 +5109,12 @@ document.getElementById('depRemb')?.addEventListener('change', function() {
   document.getElementById('depRembDetail').style.display = this.checked ? 'block' : 'none';
 });
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+  // Si localStorage vide, attendre Firebase avant de render
+  const localRaw = localStorage.getItem(STORAGE_KEY);
+  if (!localRaw) {
+    await loadFromFirebase();
+  }
   // Ouvrir automatiquement la période courante au chargement
   const curKey = PERIODES[getCurrentPeriodeIndex()]?.key;
   if (curKey) {

@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Comptes Rafael — Saisie</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #111827; color: #fff; font-family: -apple-system, BlinkMacSystemFont, sans-serif; min-height: 100vh; padding: 16px; }
+
+  .header { background: #0f3460; border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .header-title { font-size: 15px; color: #7eb8f7; font-weight: 700; }
+  .header-sub { font-size: 11px; color: #4a7fba; margin-top: 2px; }
+  .header-date { text-align: right; font-size: 11px; color: #7eb8f7; }
+  .header-statut { font-size: 9px; color: #4a7fba; }
+
+  .sync-status { text-align: center; font-size: 10px; padding: 6px; border-radius: 8px; margin-bottom: 12px; }
+  .sync-status.ok { background: #0d2a1a; color: #5dcaa5; }
+  .sync-status.loading { background: #1a1a0d; color: #f0c040; }
+  .sync-status.error { background: #2a0d0d; color: #e24b4a; }
+
+  .budgets { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .budget-card { background: #0d2137; border-radius: 14px; padding: 14px 12px; border: 0.5px solid #1e4a7a; }
+  .budget-card.perso { background: #150d2e; border-color: #2d1f5e; }
+  .budget-card.except { background: #1a120d; border-color: #5a3a1a; grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; }
+  .budget-label { font-size: 10px; color: #4a7fba; margin-bottom: 6px; }
+  .budget-card.perso .budget-label { color: #9b7fe8; }
+  .budget-card.except .budget-label { color: #c07a30; margin-bottom: 0; }
+  .budget-amount { font-size: 22px; font-weight: 700; color: #7eb8f7; margin-bottom: 6px; }
+  .budget-card.perso .budget-amount { color: #c4abf0; }
+  .budget-card.except .budget-amount { font-size: 18px; color: #e0a060; margin-bottom: 0; }
+  .progress-bar { height: 5px; background: #0a1a2e; border-radius: 3px; margin-bottom: 4px; overflow: hidden; }
+  .progress-fill { height: 5px; background: #378add; border-radius: 3px; transition: width 0.3s; }
+  .budget-card.perso .progress-fill { background: #7f77dd; }
+  .progress-fill.danger { background: #e24b4a; }
+  .budget-reste { font-size: 9px; color: #4a7fba; }
+  .budget-card.perso .budget-reste { color: #9b7fe8; }
+
+  .dispo-row { background: #0d2137; border-radius: 14px; padding: 12px 16px; margin-bottom: 14px; border: 0.5px solid #1e3a2e; display: flex; justify-content: space-between; align-items: center; }
+  .dispo-label { font-size: 9px; color: #4a7fba; margin-bottom: 2px; }
+  .dispo-amount { font-size: 20px; font-weight: 700; color: #7eb8f7; }
+  .dispo-amount.ok { color: #5dcaa5; }
+  .dispo-amount.warn { color: #f0c040; }
+  .dispo-amount.danger { color: #e24b4a; }
+
+  .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .btn-main { border-radius: 14px; padding: 16px 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; border: none; transition: transform 0.1s, opacity 0.1s; }
+  .btn-main:active { transform: scale(0.96); opacity: 0.85; }
+  .btn-nourr { background: #0b2a4a; border: 1.5px solid #378add; color: #7eb8f7; }
+  .btn-perso { background: #1a0b35; border: 1.5px solid #7f77dd; color: #c4abf0; }
+  .btn-except { background: #2a1a0b; border: 1.5px solid #c07a30; color: #e0a060; }
+  .btn-icon { font-size: 24px; }
+
+  .historique { background: #0d2137; border-radius: 14px; padding: 12px 14px; border: 0.5px solid #1e4a7a; margin-bottom: 14px; }
+  .hist-title { font-size: 10px; color: #4a7fba; margin-bottom: 8px; }
+  .hist-item { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 0.5px solid #1a3060; }
+  .hist-item:last-child { border-bottom: none; }
+  .hist-desc { font-size: 12px; color: #8899aa; }
+  .hist-montant { font-size: 12px; font-weight: 600; }
+  .hist-nourr { color: #7eb8f7; }
+  .hist-perso { color: #c4abf0; }
+  .hist-except { color: #e0a060; }
+  .hist-empty { font-size: 11px; color: #4a5568; text-align: center; padding: 8px 0; }
+
+  .alerte { background: #2d0b0b; border-radius: 12px; padding: 10px 14px; border: 0.5px solid #7a1e1e; margin-bottom: 12px; display: none; }
+  .alerte.show { display: block; }
+  .alerte-text { font-size: 11px; color: #e24b4a; }
+
+  /* Modal */
+  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); display: none; justify-content: center; align-items: flex-end; z-index: 100; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: #1a2744; border-radius: 24px 24px 0 0; padding: 24px 20px 32px; width: 100%; }
+  .modal-title { font-size: 16px; font-weight: 700; color: #7eb8f7; margin-bottom: 18px; text-align: center; }
+  .modal-title.perso { color: #c4abf0; }
+  .modal-title.except { color: #e0a060; }
+  .montant-input { width: 100%; font-size: 36px; font-weight: 700; color: #fff; background: transparent; border: none; border-bottom: 2px solid #378add; outline: none; padding: 8px 0; margin-bottom: 14px; text-align: center; }
+  .desc-input { width: 100%; font-size: 15px; color: #aaa; background: #0d2137; border: 0.5px solid #1e4a7a; border-radius: 10px; padding: 12px 14px; outline: none; margin-bottom: 18px; }
+  .modal-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn-annuler { background: #0d2137; border: 0.5px solid #1e4a7a; border-radius: 12px; padding: 14px; color: #4a7fba; font-size: 15px; cursor: pointer; }
+  .btn-valider { background: #378add; border: none; border-radius: 12px; padding: 14px; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .btn-valider.perso { background: #7f77dd; }
+  .btn-valider.except { background: #c07a30; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">💳 Comptes Rafael</div>
+    <div class="header-sub" id="header-periode">Chargement...</div>
+  </div>
+  <div class="header-date">
+    <div id="header-date">—</div>
+    <div class="header-statut" id="header-statut">Visiteur</div>
+  </div>
+</div>
+
+<div class="sync-status loading" id="sync-status">⏳ Connexion à Firebase...</div>
+
+<div class="budgets">
+  <div class="budget-card">
+    <div class="budget-label">🛒 Nourriture dépensée</div>
+    <div class="budget-amount" id="nourr-amount">—</div>
+    <div class="progress-bar"><div class="progress-fill" id="nourr-bar" style="width:0%"></div></div>
+    <div class="budget-reste" id="nourr-reste">Reste : — / 300 $</div>
+  </div>
+  <div class="budget-card perso">
+    <div class="budget-label">🧴 Perso dépensé</div>
+    <div class="budget-amount" id="perso-amount">—</div>
+    <div class="progress-bar"><div class="progress-fill" id="perso-bar" style="width:0%"></div></div>
+    <div class="budget-reste" id="perso-reste">Reste : — / 200 $</div>
+  </div>
+  <div class="budget-card except">
+    <div>
+      <div class="budget-label">⚡ Exceptionnel dépensé</div>
+      <div class="budget-amount" id="except-amount">—</div>
+    </div>
+  </div>
+</div>
+
+<div class="dispo-row">
+  <div>
+    <div class="dispo-label">Budget restant total</div>
+    <div class="dispo-amount" id="dispo-amount">—</div>
+  </div>
+  <div style="text-align:right;">
+    <div class="dispo-label">Période</div>
+    <div style="font-size:13px;color:#5dcaa5;" id="periode-label">—</div>
+  </div>
+</div>
+
+<div class="alerte" id="alerte">
+  <div class="alerte-text" id="alerte-text"></div>
+</div>
+
+<div class="btns">
+  <button class="btn-main btn-nourr" onclick="ouvrirModal('nourr')">
+    <span class="btn-icon">🛒</span>
+    <span>Nourriture</span>
+  </button>
+  <button class="btn-main btn-perso" onclick="ouvrirModal('perso')">
+    <span class="btn-icon">🧴</span>
+    <span>Perso</span>
+  </button>
+  <button class="btn-main btn-except" onclick="ouvrirModal('except')">
+    <span class="btn-icon">⚡</span>
+    <span>Exception.</span>
+  </button>
+</div>
+
+<div class="historique">
+  <div class="hist-title">Dernières saisies (cette période)</div>
+  <div id="historique-list"><div class="hist-empty">Chargement...</div></div>
+</div>
+
+<!-- Modal saisie -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">🛒 Ajouter nourriture</div>
+    <input type="number" class="montant-input" id="montant-input" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+    <input type="text" class="desc-input" id="desc-input" placeholder="Description (ex: IGA, Pharmaprix...)">
+    <div class="modal-btns">
+      <button class="btn-annuler" onclick="fermerModal()">Annuler</button>
+      <button class="btn-valider" id="btn-valider" onclick="validerSaisie()">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG FIREBASE
+// ============================================================
+const FIREBASE_URL = 'https://comptes-rafael-default-rtdb.firebaseio.com';
+const STORAGE_KEY = 'comptes_rafael_v1';
+
+// ============================================================
+// ÉTAT LOCAL
+// ============================================================
+let state = null;
+let periodeKey = null;
+let budgetNourr = 300;
+let budgetPerso = 200;
+
+// ============================================================
+// UTILITAIRES
+// ============================================================
+function uid() { return Math.random().toString(36).slice(2, 9); }
+
+function fmt(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return n.toLocaleString('fr-CA', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' $';
+}
+
+function getDateAujourdhui() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getPeriodeLabel(key) {
+  const mois = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
+  if (!key) return '—';
+  const [annee, m] = key.split('-').map(Number);
+  const moisDebut = m === 1 ? 12 : m - 1;
+  const anneeDebut = m === 1 ? annee - 1 : annee;
+  return `16 ${mois[moisDebut-1]} → 15 ${mois[m-1]}`;
+}
+
+function getPeriodeCourante() {
+  const today = getDateAujourdhui();
+  const parts = today.split('-');
+  const y = parseInt(parts[0]);
+  const m = parseInt(parts[1]);
+  const d = parseInt(parts[2]);
+  let annee, mois;
+  if (d >= 16) {
+    annee = m === 12 ? y + 1 : y;
+    mois = m === 12 ? 1 : m + 1;
+  } else {
+    annee = y;
+    mois = m;
+  }
+  return `${annee}-${String(mois).padStart(2, '0')}`;
+}
+
+function getSomme(entries, type) {
+  if (!Array.isArray(entries)) {
+    if (entries && typeof entries === 'object') {
+      entries = Object.values(entries);
+    } else {
+      return 0;
+    }
+  }
+  return entries.filter(e => e.type === type && !e.rembourse).reduce((s, e) => s + (e.montant || 0), 0);
+}
+
+// ============================================================
+// FIREBASE
+// ============================================================
+async function chargerDepuisFirebase() {
+  setSyncStatus('loading', '⏳ Connexion...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const data = await res.json();
+    if (!data || typeof data !== 'object') {
+      setSyncStatus('error', '❌ Aucune donnée trouvée');
+      return;
+    }
+    state = data;
+    mettreAJourUI();
+    setSyncStatus('ok', '✅ Synchronisé');
+  } catch(e) {
+    setSyncStatus('error', '❌ Erreur connexion Firebase');
+  }
+}
+
+async function sauvegarderDansFirebase() {
+  try {
+    state._savedAt = Date.now();
+    await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state)
+    });
+    setSyncStatus('ok', '✅ Sauvegardé');
+  } catch(e) {
+    setSyncStatus('error', '⚠️ Erreur sauvegarde');
+  }
+}
+
+function setSyncStatus(type, msg) {
+  const el = document.getElementById('sync-status');
+  el.textContent = msg;
+  el.className = 'sync-status ' + type;
+}
+
+// Polling toutes les 10 secondes
+setInterval(chargerDepuisFirebase, 10000);
+
+// ============================================================
+// INTERFACE
+// ============================================================
+function mettreAJourUI() {
+  if (!state) return;
+
+  periodeKey = getPeriodeCourante();
+  budgetNourr = state.fixes?.budget_nourriture || 300;
+  budgetPerso = state.fixes?.budget_perso || 200;
+
+  // Date et période
+  const today = getDateAujourdhui();
+  const parts = today.split('-');
+  const jours = ['dim','lun','mar','mer','jeu','ven','sam'];
+  const d = new Date(today + 'T12:00:00');
+  document.getElementById('header-date').textContent =
+    `${jours[d.getDay()]} ${parts[2]} ${['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'][parseInt(parts[1])-1]}`;
+  document.getElementById('header-periode').textContent = getPeriodeLabel(periodeKey);
+  document.getElementById('header-statut').textContent = state.mode === 'aec' ? 'AEC Étudiant' : 'Visiteur';
+  document.getElementById('periode-label').textContent = periodeKey;
+
+  // Entrées de la période
+  const entries = state.entrees?.[periodeKey] || [];
+
+  const totalNourr = getSomme(entries, 'nourriture');
+  const totalPerso = getSomme(entries, 'perso');
+  const totalExcept = getSomme(entries, 'exceptionnel');
+
+  const resteNourr = budgetNourr - totalNourr;
+  const restePerso = budgetPerso - totalPerso;
+  const dispo = resteNourr + restePerso;
+
+  // Nourriture
+  document.getElementById('nourr-amount').textContent = fmt(totalNourr);
+  const pN = Math.min(100, Math.round(totalNourr / budgetNourr * 100));
+  document.getElementById('nourr-bar').style.width = pN + '%';
+  document.getElementById('nourr-bar').className = 'progress-fill' + (totalNourr > budgetNourr ? ' danger' : '');
+  document.getElementById('nourr-reste').textContent = `Reste : ${fmt(resteNourr)} / ${fmt(budgetNourr)}`;
+
+  // Perso
+  document.getElementById('perso-amount').textContent = fmt(totalPerso);
+  const pP = Math.min(100, Math.round(totalPerso / budgetPerso * 100));
+  document.getElementById('perso-bar').style.width = pP + '%';
+  document.getElementById('perso-bar').className = 'progress-fill' + (totalPerso > budgetPerso ? ' danger' : '');
+  document.getElementById('perso-reste').textContent = `Reste : ${fmt(restePerso)} / ${fmt(budgetPerso)}`;
+
+  // Exceptionnel
+  document.getElementById('except-amount').textContent = fmt(totalExcept);
+
+  // Dispo
+  const dispoEl = document.getElementById('dispo-amount');
+  dispoEl.textContent = fmt(dispo);
+  dispoEl.className = 'dispo-amount ' + (dispo < 0 ? 'danger' : dispo < 100 ? 'warn' : 'ok');
+
+  // Alertes
+  const alerte = document.getElementById('alerte');
+  const alerteText = document.getElementById('alerte-text');
+  if (totalNourr > budgetNourr && totalPerso > budgetPerso) {
+    alerte.classList.add('show');
+    alerteText.textContent = '⚠️ Budgets Nourriture ET Perso dépassés !';
+  } else if (totalNourr > budgetNourr) {
+    alerte.classList.add('show');
+    alerteText.textContent = `⚠️ Budget Nourriture dépassé (${fmt(totalNourr)} / ${fmt(budgetNourr)})`;
+  } else if (totalPerso > budgetPerso) {
+    alerte.classList.add('show');
+    alerteText.textContent = `⚠️ Budget Perso dépassé (${fmt(totalPerso)} / ${fmt(budgetPerso)})`;
+  } else {
+    alerte.classList.remove('show');
+  }
+
+  // Historique (les 5 dernières saisies de la période)
+  const list = document.getElementById('historique-list');
+  const allEntries = Array.isArray(entries) ? entries : Object.values(entries);
+  const saisies = allEntries
+    .filter(e => ['nourriture','perso','exceptionnel'].includes(e.type))
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 5);
+
+  if (saisies.length === 0) {
+    list.innerHTML = '<div class="hist-empty">Aucune saisie cette période</div>';
+  } else {
+    list.innerHTML = saisies.map(e => {
+      const icone = e.type === 'nourriture' ? '🛒' : e.type === 'perso' ? '🧴' : '⚡';
+      const cls = e.type === 'nourriture' ? 'hist-nourr' : e.type === 'perso' ? 'hist-perso' : 'hist-except';
+      return `<div class="hist-item">
+        <span class="hist-desc">${icone} ${e.desc || e.type}</span>
+        <span class="hist-montant ${cls}">-${fmt(e.montant)}</span>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+let categorieActive = 'nourr';
+
+function ouvrirModal(cat) {
+  categorieActive = cat;
+  const title = document.getElementById('modal-title');
+  const valider = document.getElementById('btn-valider');
+  const input = document.getElementById('montant-input');
+
+  if (cat === 'nourr') {
+    title.textContent = '🛒 Ajouter nourriture';
+    title.className = 'modal-title';
+    valider.className = 'btn-valider';
+  } else if (cat === 'perso') {
+    title.textContent = '🧴 Ajouter perso';
+    title.className = 'modal-title perso';
+    valider.className = 'btn-valider perso';
+  } else {
+    title.textContent = '⚡ Ajouter exceptionnel';
+    title.className = 'modal-title except';
+    valider.className = 'btn-valider except';
+  }
+
+  document.getElementById('montant-input').value = '';
+  document.getElementById('desc-input').value = '';
+  document.getElementById('modal-overlay').classList.add('show');
+  setTimeout(() => input.focus(), 100);
+}
+
+function fermerModal() {
+  document.getElementById('modal-overlay').classList.remove('show');
+}
+
+async function validerSaisie() {
+  const montant = parseFloat(document.getElementById('montant-input').value);
+  const desc = document.getElementById('desc-input').value.trim();
+
+  if (!montant || montant <= 0) {
+    alert('Entre un montant valide.');
+    return;
+  }
+
+  if (!state) {
+    alert('Données non chargées. Attends la synchronisation.');
+    return;
+  }
+
+  const type = categorieActive === 'nourr' ? 'nourriture' : categorieActive === 'perso' ? 'perso' : 'exceptionnel';
+  const descFinale = desc || (type === 'nourriture' ? 'Nourriture' : type === 'perso' ? 'Perso' : 'Exceptionnel');
+
+  const entry = {
+    id: uid(),
+    type: type,
+    montant: montant,
+    desc: descFinale,
+    date: getDateAujourdhui(),
+    rembourse: false,
+    rembDesc: ''
+  };
+
+  if (!state.entrees) state.entrees = {};
+  if (!state.entrees[periodeKey]) state.entrees[periodeKey] = [];
+  if (!Array.isArray(state.entrees[periodeKey])) {
+    state.entrees[periodeKey] = Object.values(state.entrees[periodeKey]);
+  }
+  state.entrees[periodeKey].push(entry);
+
+  fermerModal();
+  mettreAJourUI();
+  setSyncStatus('loading', '⏳ Sauvegarde...');
+  await sauvegarderDansFirebase();
+}
+
+// Fermer modal en cliquant dehors
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) fermerModal();
+});
+
+// ============================================================
+// INIT
+// ============================================================
+chargerDepuisFirebase();
+</script>
+</body>
+</html>

@@ -1638,6 +1638,8 @@ function loadState() {
       if (s.dateRef === undefined) s.dateRef = null;
       // Corriger soldeDepart si encore à la valeur 2026 par erreur
       if (Math.abs((s.soldeDepart || 0) - 616.81) < 0.01) s.soldeDepart = 5954.65;
+      // Corriger detteInitiale si encore à 1700 (valeur 2026)
+      if (!s.detteInitiale || s.detteInitiale > 1100) s.detteInitiale = 1100;
       return s;
     }
   } catch(e) {}

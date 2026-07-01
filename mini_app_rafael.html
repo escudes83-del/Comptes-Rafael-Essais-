@@ -3,7 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Comptes Rafael — Saisie</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rafael $">
+<meta name="theme-color" content="#0f3460">
+<title>Comptes Rafael</title>
+<link rel="manifest" href="data:application/json,{%22name%22:%22Comptes%20Rafael%22,%22short_name%22:%22Rafael%20%24%22,%22start_url%22:%22mini_app_rafael.html%22,%22display%22:%22standalone%22,%22background_color%22:%22%23111827%22,%22theme_color%22:%22%230f3460%22}">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #111827; color: #fff; font-family: -apple-system, BlinkMacSystemFont, sans-serif; min-height: 100vh; padding: 16px; }
@@ -38,7 +44,7 @@
 
   .dispo-row { background: #0d2137; border-radius: 14px; padding: 12px 16px; margin-bottom: 14px; border: 0.5px solid #1e3a2e; display: flex; justify-content: space-between; align-items: center; }
   .dispo-label { font-size: 9px; color: #4a7fba; margin-bottom: 2px; }
-  .dispo-amount { font-size: 20px; font-weight: 700; color: #7eb8f7; }
+  .dispo-amount { font-size: 20px; font-weight: 700; }
   .dispo-amount.ok { color: #5dcaa5; }
   .dispo-amount.warn { color: #f0c040; }
   .dispo-amount.danger { color: #e24b4a; }
@@ -66,7 +72,6 @@
   .alerte.show { display: block; }
   .alerte-text { font-size: 11px; color: #e24b4a; }
 
-  /* Modal */
   .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); display: none; justify-content: center; align-items: flex-end; z-index: 100; }
   .modal-overlay.show { display: flex; }
   .modal { background: #1a2744; border-radius: 24px 24px 0 0; padding: 24px 20px 32px; width: 100%; }
@@ -81,6 +86,10 @@
   .btn-valider.perso { background: #7f77dd; }
   .btn-valider.except { background: #c07a30; }
 </style>
+
+<!-- Icône SVG inline encodée en base64 pour l'écran d'accueil -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230f3460'/%3E%3Ctext y='62' x='50' text-anchor='middle' font-size='54' font-family='system-ui'%3E💳%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230f3460'/%3E%3Ctext y='62' x='50' text-anchor='middle' font-size='54' font-family='system-ui'%3E💳%3C/text%3E%3C/svg%3E">
 </head>
 <body>
 
@@ -121,7 +130,7 @@
 <div class="dispo-row">
   <div>
     <div class="dispo-label">Budget restant total</div>
-    <div class="dispo-amount" id="dispo-amount">—</div>
+    <div class="dispo-amount ok" id="dispo-amount">—</div>
   </div>
   <div style="text-align:right;">
     <div class="dispo-label">Période</div>
@@ -153,7 +162,6 @@
   <div id="historique-list"><div class="hist-empty">Chargement...</div></div>
 </div>
 
-<!-- Modal saisie -->
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal">
     <div class="modal-title" id="modal-title">🛒 Ajouter nourriture</div>
@@ -167,289 +175,168 @@
 </div>
 
 <script>
-// ============================================================
-// CONFIG FIREBASE
-// ============================================================
 const FIREBASE_URL = 'https://comptes-rafael-default-rtdb.firebaseio.com';
 const STORAGE_KEY = 'comptes_rafael_v1';
-
-// ============================================================
-// ÉTAT LOCAL
-// ============================================================
 let state = null;
 let periodeKey = null;
 let budgetNourr = 300;
 let budgetPerso = 200;
 
-// ============================================================
-// UTILITAIRES
-// ============================================================
 function uid() { return Math.random().toString(36).slice(2, 9); }
-
 function fmt(n) {
   if (n === null || n === undefined || isNaN(n)) return '—';
-  return n.toLocaleString('fr-CA', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' $';
+  return n.toLocaleString('fr-CA', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' $';
 }
-
-function getDateAujourdhui() {
-  return new Date().toISOString().slice(0, 10);
-}
+function getDateAujourdhui() { return new Date().toISOString().slice(0,10); }
 
 function getPeriodeLabel(key) {
   const mois = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
   if (!key) return '—';
   const [annee, m] = key.split('-').map(Number);
   const moisDebut = m === 1 ? 12 : m - 1;
-  const anneeDebut = m === 1 ? annee - 1 : annee;
   return `16 ${mois[moisDebut-1]} → 15 ${mois[m-1]}`;
 }
 
 function getPeriodeCourante() {
   const today = getDateAujourdhui();
-  const parts = today.split('-');
-  const y = parseInt(parts[0]);
-  const m = parseInt(parts[1]);
-  const d = parseInt(parts[2]);
+  const [y,m,d] = today.split('-').map(Number);
   let annee, mois;
-  if (d >= 16) {
-    annee = m === 12 ? y + 1 : y;
-    mois = m === 12 ? 1 : m + 1;
-  } else {
-    annee = y;
-    mois = m;
-  }
-  return `${annee}-${String(mois).padStart(2, '0')}`;
+  if (d >= 16) { annee = m===12?y+1:y; mois = m===12?1:m+1; }
+  else { annee = y; mois = m; }
+  return `${annee}-${String(mois).padStart(2,'0')}`;
 }
 
 function getSomme(entries, type) {
-  if (!Array.isArray(entries)) {
-    if (entries && typeof entries === 'object') {
-      entries = Object.values(entries);
-    } else {
-      return 0;
-    }
-  }
-  return entries.filter(e => e.type === type && !e.rembourse).reduce((s, e) => s + (e.montant || 0), 0);
+  if (!Array.isArray(entries)) entries = entries ? Object.values(entries) : [];
+  return entries.filter(e => e.type===type && !e.rembourse).reduce((s,e) => s+(e.montant||0), 0);
 }
 
-// ============================================================
-// FIREBASE
-// ============================================================
+function setSyncStatus(type, msg) {
+  const el = document.getElementById('sync-status');
+  el.textContent = msg; el.className = 'sync-status ' + type;
+}
+
 async function chargerDepuisFirebase() {
   setSyncStatus('loading', '⏳ Connexion...');
   try {
     const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
     const data = await res.json();
-    if (!data || typeof data !== 'object') {
-      setSyncStatus('error', '❌ Aucune donnée trouvée');
-      return;
-    }
+    if (!data || typeof data !== 'object') { setSyncStatus('error','❌ Aucune donnée'); return; }
     state = data;
     mettreAJourUI();
-    setSyncStatus('ok', '✅ Synchronisé');
-  } catch(e) {
-    setSyncStatus('error', '❌ Erreur connexion Firebase');
-  }
+    setSyncStatus('ok', '✅ Synchronisé · ' + new Date().toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'}));
+  } catch(e) { setSyncStatus('error','❌ Erreur connexion'); }
 }
 
 async function sauvegarderDansFirebase() {
   try {
     state._savedAt = Date.now();
     await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state)
+      method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(state)
     });
-    setSyncStatus('ok', '✅ Sauvegardé');
-  } catch(e) {
-    setSyncStatus('error', '⚠️ Erreur sauvegarde');
-  }
+    setSyncStatus('ok','✅ Sauvegardé · ' + new Date().toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'}));
+  } catch(e) { setSyncStatus('error','⚠️ Erreur sauvegarde'); }
 }
 
-function setSyncStatus(type, msg) {
-  const el = document.getElementById('sync-status');
-  el.textContent = msg;
-  el.className = 'sync-status ' + type;
-}
-
-// Polling toutes les 10 secondes
 setInterval(chargerDepuisFirebase, 10000);
 
-// ============================================================
-// INTERFACE
-// ============================================================
 function mettreAJourUI() {
   if (!state) return;
-
   periodeKey = getPeriodeCourante();
   budgetNourr = state.fixes?.budget_nourriture || 300;
   budgetPerso = state.fixes?.budget_perso || 200;
 
-  // Date et période
   const today = getDateAujourdhui();
-  const parts = today.split('-');
+  const [y,m,d] = today.split('-');
   const jours = ['dim','lun','mar','mer','jeu','ven','sam'];
-  const d = new Date(today + 'T12:00:00');
-  document.getElementById('header-date').textContent =
-    `${jours[d.getDay()]} ${parts[2]} ${['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'][parseInt(parts[1])-1]}`;
+  const dateObj = new Date(today + 'T12:00:00');
+  const moisNoms = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
+  document.getElementById('header-date').textContent = `${jours[dateObj.getDay()]} ${d} ${moisNoms[parseInt(m)-1]}`;
   document.getElementById('header-periode').textContent = getPeriodeLabel(periodeKey);
-  document.getElementById('header-statut').textContent = state.mode === 'aec' ? 'AEC Étudiant' : 'Visiteur';
+  document.getElementById('header-statut').textContent = state.mode==='aec' ? 'AEC Étudiant' : 'Visiteur';
   document.getElementById('periode-label').textContent = periodeKey;
 
-  // Entrées de la période
   const entries = state.entrees?.[periodeKey] || [];
-
-  const totalNourr = getSomme(entries, 'nourriture');
-  const totalPerso = getSomme(entries, 'perso');
-  const totalExcept = getSomme(entries, 'exceptionnel');
-
+  const totalNourr = getSomme(entries,'nourriture');
+  const totalPerso = getSomme(entries,'perso');
+  const totalExcept = getSomme(entries,'exceptionnel');
   const resteNourr = budgetNourr - totalNourr;
   const restePerso = budgetPerso - totalPerso;
   const dispo = resteNourr + restePerso;
 
-  // Nourriture
   document.getElementById('nourr-amount').textContent = fmt(totalNourr);
-  const pN = Math.min(100, Math.round(totalNourr / budgetNourr * 100));
-  document.getElementById('nourr-bar').style.width = pN + '%';
-  document.getElementById('nourr-bar').className = 'progress-fill' + (totalNourr > budgetNourr ? ' danger' : '');
+  const pN = Math.min(100, Math.round(totalNourr/budgetNourr*100));
+  document.getElementById('nourr-bar').style.width = pN+'%';
+  document.getElementById('nourr-bar').className = 'progress-fill'+(totalNourr>budgetNourr?' danger':'');
   document.getElementById('nourr-reste').textContent = `Reste : ${fmt(resteNourr)} / ${fmt(budgetNourr)}`;
 
-  // Perso
   document.getElementById('perso-amount').textContent = fmt(totalPerso);
-  const pP = Math.min(100, Math.round(totalPerso / budgetPerso * 100));
-  document.getElementById('perso-bar').style.width = pP + '%';
-  document.getElementById('perso-bar').className = 'progress-fill' + (totalPerso > budgetPerso ? ' danger' : '');
+  const pP = Math.min(100, Math.round(totalPerso/budgetPerso*100));
+  document.getElementById('perso-bar').style.width = pP+'%';
+  document.getElementById('perso-bar').className = 'progress-fill'+(totalPerso>budgetPerso?' danger':'');
   document.getElementById('perso-reste').textContent = `Reste : ${fmt(restePerso)} / ${fmt(budgetPerso)}`;
 
-  // Exceptionnel
   document.getElementById('except-amount').textContent = fmt(totalExcept);
 
-  // Dispo
   const dispoEl = document.getElementById('dispo-amount');
   dispoEl.textContent = fmt(dispo);
-  dispoEl.className = 'dispo-amount ' + (dispo < 0 ? 'danger' : dispo < 100 ? 'warn' : 'ok');
+  dispoEl.className = 'dispo-amount '+(dispo<0?'danger':dispo<100?'warn':'ok');
 
-  // Alertes
   const alerte = document.getElementById('alerte');
   const alerteText = document.getElementById('alerte-text');
-  if (totalNourr > budgetNourr && totalPerso > budgetPerso) {
-    alerte.classList.add('show');
-    alerteText.textContent = '⚠️ Budgets Nourriture ET Perso dépassés !';
-  } else if (totalNourr > budgetNourr) {
-    alerte.classList.add('show');
-    alerteText.textContent = `⚠️ Budget Nourriture dépassé (${fmt(totalNourr)} / ${fmt(budgetNourr)})`;
-  } else if (totalPerso > budgetPerso) {
-    alerte.classList.add('show');
-    alerteText.textContent = `⚠️ Budget Perso dépassé (${fmt(totalPerso)} / ${fmt(budgetPerso)})`;
-  } else {
-    alerte.classList.remove('show');
-  }
+  if (totalNourr>budgetNourr && totalPerso>budgetPerso) { alerte.classList.add('show'); alerteText.textContent='⚠️ Budgets Nourriture ET Perso dépassés !'; }
+  else if (totalNourr>budgetNourr) { alerte.classList.add('show'); alerteText.textContent=`⚠️ Budget Nourriture dépassé (${fmt(totalNourr)} / ${fmt(budgetNourr)})`; }
+  else if (totalPerso>budgetPerso) { alerte.classList.add('show'); alerteText.textContent=`⚠️ Budget Perso dépassé (${fmt(totalPerso)} / ${fmt(budgetPerso)})`; }
+  else { alerte.classList.remove('show'); }
 
-  // Historique (les 5 dernières saisies de la période)
-  const list = document.getElementById('historique-list');
   const allEntries = Array.isArray(entries) ? entries : Object.values(entries);
-  const saisies = allEntries
-    .filter(e => ['nourriture','perso','exceptionnel'].includes(e.type))
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 5);
-
-  if (saisies.length === 0) {
-    list.innerHTML = '<div class="hist-empty">Aucune saisie cette période</div>';
-  } else {
+  const saisies = allEntries.filter(e=>['nourriture','perso','exceptionnel'].includes(e.type)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  const list = document.getElementById('historique-list');
+  if (saisies.length===0) { list.innerHTML='<div class="hist-empty">Aucune saisie cette période</div>'; }
+  else {
     list.innerHTML = saisies.map(e => {
-      const icone = e.type === 'nourriture' ? '🛒' : e.type === 'perso' ? '🧴' : '⚡';
-      const cls = e.type === 'nourriture' ? 'hist-nourr' : e.type === 'perso' ? 'hist-perso' : 'hist-except';
-      return `<div class="hist-item">
-        <span class="hist-desc">${icone} ${e.desc || e.type}</span>
-        <span class="hist-montant ${cls}">-${fmt(e.montant)}</span>
-      </div>`;
+      const icone = e.type==='nourriture'?'🛒':e.type==='perso'?'🧴':'⚡';
+      const cls = e.type==='nourriture'?'hist-nourr':e.type==='perso'?'hist-perso':'hist-except';
+      return `<div class="hist-item"><span class="hist-desc">${icone} ${e.desc||e.type}</span><span class="hist-montant ${cls}">-${fmt(e.montant)}</span></div>`;
     }).join('');
   }
 }
 
-// ============================================================
-// MODAL
-// ============================================================
 let categorieActive = 'nourr';
-
 function ouvrirModal(cat) {
   categorieActive = cat;
   const title = document.getElementById('modal-title');
   const valider = document.getElementById('btn-valider');
-  const input = document.getElementById('montant-input');
-
-  if (cat === 'nourr') {
-    title.textContent = '🛒 Ajouter nourriture';
-    title.className = 'modal-title';
-    valider.className = 'btn-valider';
-  } else if (cat === 'perso') {
-    title.textContent = '🧴 Ajouter perso';
-    title.className = 'modal-title perso';
-    valider.className = 'btn-valider perso';
-  } else {
-    title.textContent = '⚡ Ajouter exceptionnel';
-    title.className = 'modal-title except';
-    valider.className = 'btn-valider except';
-  }
-
-  document.getElementById('montant-input').value = '';
-  document.getElementById('desc-input').value = '';
+  if (cat==='nourr') { title.textContent='🛒 Ajouter nourriture'; title.className='modal-title'; valider.className='btn-valider'; }
+  else if (cat==='perso') { title.textContent='🧴 Ajouter perso'; title.className='modal-title perso'; valider.className='btn-valider perso'; }
+  else { title.textContent='⚡ Ajouter exceptionnel'; title.className='modal-title except'; valider.className='btn-valider except'; }
+  document.getElementById('montant-input').value='';
+  document.getElementById('desc-input').value='';
   document.getElementById('modal-overlay').classList.add('show');
-  setTimeout(() => input.focus(), 100);
+  setTimeout(()=>document.getElementById('montant-input').focus(),100);
 }
 
-function fermerModal() {
-  document.getElementById('modal-overlay').classList.remove('show');
-}
+function fermerModal() { document.getElementById('modal-overlay').classList.remove('show'); }
 
 async function validerSaisie() {
   const montant = parseFloat(document.getElementById('montant-input').value);
   const desc = document.getElementById('desc-input').value.trim();
-
-  if (!montant || montant <= 0) {
-    alert('Entre un montant valide.');
-    return;
-  }
-
-  if (!state) {
-    alert('Données non chargées. Attends la synchronisation.');
-    return;
-  }
-
-  const type = categorieActive === 'nourr' ? 'nourriture' : categorieActive === 'perso' ? 'perso' : 'exceptionnel';
-  const descFinale = desc || (type === 'nourriture' ? 'Nourriture' : type === 'perso' ? 'Perso' : 'Exceptionnel');
-
-  const entry = {
-    id: uid(),
-    type: type,
-    montant: montant,
-    desc: descFinale,
-    date: getDateAujourdhui(),
-    rembourse: false,
-    rembDesc: ''
-  };
-
-  if (!state.entrees) state.entrees = {};
-  if (!state.entrees[periodeKey]) state.entrees[periodeKey] = [];
-  if (!Array.isArray(state.entrees[periodeKey])) {
-    state.entrees[periodeKey] = Object.values(state.entrees[periodeKey]);
-  }
+  if (!montant || montant<=0) { alert('Entre un montant valide.'); return; }
+  if (!state) { alert('Données non chargées.'); return; }
+  const type = categorieActive==='nourr'?'nourriture':categorieActive==='perso'?'perso':'exceptionnel';
+  const descFinale = desc||(type==='nourriture'?'Nourriture':type==='perso'?'Perso':'Exceptionnel');
+  const entry = { id:uid(), type, montant, desc:descFinale, date:getDateAujourdhui(), rembourse:false, rembDesc:'' };
+  if (!state.entrees) state.entrees={};
+  if (!state.entrees[periodeKey]) state.entrees[periodeKey]=[];
+  if (!Array.isArray(state.entrees[periodeKey])) state.entrees[periodeKey]=Object.values(state.entrees[periodeKey]);
   state.entrees[periodeKey].push(entry);
-
   fermerModal();
   mettreAJourUI();
-  setSyncStatus('loading', '⏳ Sauvegarde...');
+  setSyncStatus('loading','⏳ Sauvegarde...');
   await sauvegarderDansFirebase();
 }
 
-// Fermer modal en cliquant dehors
-document.getElementById('modal-overlay').addEventListener('click', function(e) {
-  if (e.target === this) fermerModal();
-});
-
-// ============================================================
-// INIT
-// ============================================================
+document.getElementById('modal-overlay').addEventListener('click',function(e){if(e.target===this)fermerModal();});
 chargerDepuisFirebase();
 </script>
 </body>

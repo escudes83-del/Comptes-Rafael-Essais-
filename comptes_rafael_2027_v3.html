@@ -1151,15 +1151,21 @@ input, textarea, select { cursor: text; }
   <div style="display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;">
     <div style="display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;">
       <div class="app-header h1" style="font-size:13px;font-weight:700;line-height:1.2;"><svg xmlns="http://www.w3.org/2000/svg" width="52" height="22" viewBox="0 0 52 22" style="vertical-align:middle;margin-right:4px;">
+  <style>
+    @keyframes clignote1 { 0%,100%{opacity:1} 50%{opacity:0.15} }
+    @keyframes clignote2 { 0%,100%{opacity:0.15} 50%{opacity:1} }
+    .patte1 { animation: clignote1 1.4s ease-in-out infinite; }
+    .patte2 { animation: clignote2 1.4s ease-in-out infinite; }
+  </style>
   <!-- Patte gauche inclinée vers la gauche (-20deg) -->
-  <g transform="rotate(-20, 8, 13)">
+  <g class="patte1" transform="rotate(-20, 8, 13)">
     <ellipse cx="8" cy="15" rx="3.5" ry="4.5" fill="#d4851a"/>
     <ellipse cx="3.5" cy="9" rx="2" ry="2.5" fill="#d4851a"/>
     <ellipse cx="8" cy="7" rx="2" ry="2.5" fill="#d4851a"/>
     <ellipse cx="12.5" cy="9" rx="2" ry="2.5" fill="#d4851a"/>
   </g>
   <!-- Patte droite inclinée vers la droite (+20deg) -->
-  <g transform="rotate(20, 38, 13)">
+  <g class="patte2" transform="rotate(20, 38, 13)">
     <ellipse cx="38" cy="15" rx="3.5" ry="4.5" fill="#d4851a"/>
     <ellipse cx="33.5" cy="9" rx="2" ry="2.5" fill="#d4851a"/>
     <ellipse cx="38" cy="7" rx="2" ry="2.5" fill="#d4851a"/>

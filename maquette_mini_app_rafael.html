@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini App Rafael — Maquette</title>
+<style>
+  body { background: #f0f0f0; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 30px 0; margin: 0; font-family: -apple-system, sans-serif; }
+  .phone { width: 340px; background: #1a1a2e; border-radius: 40px; padding: 18px; box-shadow: 0 0 0 8px #222, 0 20px 60px rgba(0,0,0,0.4); }
+  .screen { background: #111827; border-radius: 26px; overflow: hidden; }
+  .header { background: #0f3460; padding: 18px 20px 14px; display: flex; justify-content: space-between; align-items: center; }
+  .header-title { font-size: 13px; color: #7eb8f7; font-weight: 600; }
+  .header-sub { font-size: 10px; color: #4a7fba; margin-top: 2px; }
+  .header-date { text-align: right; font-size: 11px; color: #7eb8f7; }
+  .budgets { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 16px 8px; }
+  .budget-card { background: #0d2137; border-radius: 14px; padding: 14px 12px; border: 0.5px solid #1e4a7a; }
+  .budget-card.perso { background: #150d2e; border-color: #2d1f5e; }
+  .budget-label { font-size: 10px; color: #4a7fba; margin-bottom: 6px; }
+  .budget-card.perso .budget-label { color: #9b7fe8; }
+  .budget-amount { font-size: 20px; font-weight: 600; color: #7eb8f7; margin-bottom: 8px; }
+  .budget-card.perso .budget-amount { color: #c4abf0; }
+  .progress-bar { height: 5px; background: #0a1a2e; border-radius: 3px; margin-bottom: 5px; overflow: hidden; }
+  .progress-fill { height: 5px; background: #378add; border-radius: 3px; transition: width 0.3s; }
+  .budget-card.perso .progress-fill { background: #7f77dd; }
+  .progress-fill.danger { background: #e24b4a; }
+  .budget-reste { font-size: 9px; color: #4a7fba; }
+  .budget-card.perso .budget-reste { color: #9b7fe8; }
+  .solde-row { margin: 4px 16px 12px; background: #0d2137; border-radius: 14px; padding: 12px 16px; border: 0.5px solid #1e3a2e; display: flex; justify-content: space-between; }
+  .solde-item { }
+  .solde-label { font-size: 9px; color: #1d9e75; margin-bottom: 3px; }
+  .solde-amount { font-size: 16px; font-weight: 600; color: #5dcaa5; }
+  .dispo-label { font-size: 9px; color: #4a7fba; margin-bottom: 3px; text-align: right; }
+  .dispo-amount { font-size: 16px; font-weight: 600; color: #7eb8f7; text-align: right; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px 14px; }
+  .btn-main { border-radius: 16px; padding: 18px 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 7px; border: none; transition: transform 0.1s; }
+  .btn-main:active { transform: scale(0.97); }
+  .btn-nourr { background: #0b2a4a; border: 1.5px solid #378add; color: #7eb8f7; }
+  .btn-perso { background: #1a0b35; border: 1.5px solid #7f77dd; color: #c4abf0; }
+  .btn-icon { font-size: 28px; }
+  .historique { margin: 0 16px 12px; background: #0d2137; border-radius: 14px; padding: 12px 14px; border: 0.5px solid #1e4a7a; }
+  .hist-title { font-size: 10px; color: #4a7fba; margin-bottom: 8px; }
+  .hist-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 0.5px solid #1a3060; }
+  .hist-item:last-child { border-bottom: none; }
+  .hist-desc { font-size: 12px; color: #8899aa; }
+  .hist-nourr { color: #7eb8f7; font-size: 12px; font-weight: 500; }
+  .hist-perso { color: #c4abf0; font-size: 12px; font-weight: 500; }
+  .alerte { margin: 0 16px 12px; background: #2d0b0b; border-radius: 14px; padding: 11px 14px; border: 0.5px solid #7a1e1e; display: none; }
+  .alerte.show { display: block; }
+  .alerte-text { font-size: 11px; color: #e24b4a; }
+  .sync-btn { margin: 0 16px 18px; width: calc(100% - 32px); background: #0f3460; border: 0.5px solid #378add; border-radius: 12px; padding: 12px; color: #7eb8f7; font-size: 12px; cursor: pointer; }
+
+  /* Modal saisie */
+  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: flex-end; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: #1a2744; border-radius: 24px 24px 0 0; padding: 20px; width: 100%; max-width: 340px; }
+  .modal-title { font-size: 15px; font-weight: 600; color: #7eb8f7; margin-bottom: 16px; text-align: center; }
+  .modal-title.perso { color: #c4abf0; }
+  .montant-input { width: 100%; font-size: 32px; font-weight: 600; color: #fff; background: transparent; border: none; border-bottom: 2px solid #378add; outline: none; padding: 8px 0; margin-bottom: 14px; text-align: center; box-sizing: border-box; }
+  .desc-input { width: 100%; font-size: 14px; color: #aaa; background: #0d2137; border: 0.5px solid #1e4a7a; border-radius: 10px; padding: 10px 14px; outline: none; box-sizing: border-box; margin-bottom: 16px; }
+  .modal-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn-annuler { background: #0d2137; border: 0.5px solid #1e4a7a; border-radius: 12px; padding: 12px; color: #4a7fba; font-size: 14px; cursor: pointer; }
+  .btn-valider { background: #378add; border: none; border-radius: 12px; padding: 12px; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-valider.perso { background: #7f77dd; }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="screen">
+
+    <div class="header">
+      <div>
+        <div class="header-title">💳 Comptes Rafael</div>
+        <div class="header-sub">16 jun → 15 jul</div>
+      </div>
+      <div class="header-date">
+        <div>Lun 30 juin</div>
+        <div style="font-size:9px;color:#4a7fba;">Visiteur</div>
+      </div>
+    </div>
+
+    <div class="budgets">
+      <div class="budget-card">
+        <div class="budget-label">🛒 Nourriture</div>
+        <div class="budget-amount" id="nourr-amount">49,77 $</div>
+        <div class="progress-bar"><div class="progress-fill" id="nourr-bar" style="width:17%"></div></div>
+        <div class="budget-reste" id="nourr-reste">Reste : 250,23 $ / 300 $</div>
+      </div>
+      <div class="budget-card perso">
+        <div class="budget-label">🧴 Perso</div>
+        <div class="budget-amount" id="perso-amount">0,00 $</div>
+        <div class="progress-bar"><div class="progress-fill" id="perso-bar" style="width:0%"></div></div>
+        <div class="budget-reste" id="perso-reste">Reste : 200,00 $ / 200 $</div>
+      </div>
+    </div>
+
+    <div class="solde-row">
+      <div class="solde-item">
+        <div class="solde-label">Solde au jour J</div>
+        <div class="solde-amount">8 060,35 $</div>
+      </div>
+      <div>
+        <div class="dispo-label">Dispo ce mois</div>
+        <div class="dispo-amount" id="dispo-amount">450,23 $</div>
+      </div>
+    </div>
+
+    <div class="btns">
+      <button class="btn-main btn-nourr" onclick="ouvrirModal('nourr')">
+        <span class="btn-icon">🛒</span>
+        <span>+ Nourriture</span>
+      </button>
+      <button class="btn-main btn-perso" onclick="ouvrirModal('perso')">
+        <span class="btn-icon">🧴</span>
+        <span>+ Perso</span>
+      </button>
+    </div>
+
+    <div class="alerte" id="alerte">
+      <div class="alerte-text" id="alerte-text"></div>
+    </div>
+
+    <div class="historique">
+      <div class="hist-title">Dernières saisies</div>
+      <div id="historique-list">
+        <div class="hist-item">
+          <span class="hist-desc">🛒 IGA</span>
+          <span class="hist-nourr">-35,41 $</span>
+        </div>
+        <div class="hist-item">
+          <span class="hist-desc">🛒 Metro</span>
+          <span class="hist-nourr">-14,36 $</span>
+        </div>
+        <div class="hist-item">
+          <span class="hist-desc">🧴 Pharmacie</span>
+          <span class="hist-perso">-12,50 $</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="sync-btn">🔄 Synchroniser avec l'app laptop</button>
+
+  </div>
+</div>
+
+<!-- Modal saisie -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">🛒 Ajouter nourriture</div>
+    <input type="number" class="montant-input" id="montant-input" placeholder="0,00 $" step="0.01" min="0">
+    <input type="text" class="desc-input" id="desc-input" placeholder="Description (ex: IGA)">
+    <div class="modal-btns">
+      <button class="btn-annuler" onclick="fermerModal()">Annuler</button>
+      <button class="btn-valider" id="btn-valider" onclick="validerSaisie()">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let categorieActive = 'nourr';
+let nourr = 49.77, perso = 0;
+const budgetNourr = 300, budgetPerso = 200;
+
+function ouvrirModal(cat) {
+  categorieActive = cat;
+  const modal = document.getElementById('modal-overlay');
+  const title = document.getElementById('modal-title');
+  const valider = document.getElementById('btn-valider');
+  modal.classList.add('show');
+  document.getElementById('montant-input').value = '';
+  document.getElementById('desc-input').value = '';
+  document.getElementById('montant-input').focus();
+  if (cat === 'nourr') {
+    title.textContent = '🛒 Ajouter nourriture';
+    title.className = 'modal-title';
+    valider.className = 'btn-valider';
+  } else {
+    title.textContent = '🧴 Ajouter perso';
+    title.className = 'modal-title perso';
+    valider.className = 'btn-valider perso';
+  }
+}
+
+function fermerModal() {
+  document.getElementById('modal-overlay').classList.remove('show');
+}
+
+function validerSaisie() {
+  const montant = parseFloat(document.getElementById('montant-input').value) || 0;
+  const desc = document.getElementById('desc-input').value || (categorieActive === 'nourr' ? 'Nourriture' : 'Perso');
+  if (montant <= 0) return;
+
+  if (categorieActive === 'nourr') {
+    nourr += montant;
+    majBudget();
+    ajouterHistorique('nourr', desc, montant);
+  } else {
+    perso += montant;
+    majBudget();
+    ajouterHistorique('perso', desc, montant);
+  }
+  fermerModal();
+}
+
+function majBudget() {
+  document.getElementById('nourr-amount').textContent = nourr.toFixed(2).replace('.', ',') + ' $';
+  document.getElementById('perso-amount').textContent = perso.toFixed(2).replace('.', ',') + ' $';
+  const pNourr = Math.min(100, Math.round(nourr / budgetNourr * 100));
+  const pPerso = Math.min(100, Math.round(perso / budgetPerso * 100));
+  const barN = document.getElementById('nourr-bar');
+  const barP = document.getElementById('perso-bar');
+  barN.style.width = pNourr + '%';
+  barP.style.width = pPerso + '%';
+  barN.className = 'progress-fill' + (nourr > budgetNourr ? ' danger' : '');
+  barP.className = 'progress-fill' + (perso > budgetPerso ? ' danger' : '');
+  const resteN = (budgetNourr - nourr).toFixed(2).replace('.', ',');
+  const resteP = (budgetPerso - perso).toFixed(2).replace('.', ',');
+  document.getElementById('nourr-reste').textContent = 'Reste : ' + resteN + ' $ / 300 $';
+  document.getElementById('perso-reste').textContent = 'Reste : ' + resteP + ' $ / 200 $';
+
+  const alerte = document.getElementById('alerte');
+  const alerteText = document.getElementById('alerte-text');
+  if (nourr > budgetNourr && perso > budgetPerso) {
+    alerte.classList.add('show');
+    alerteText.textContent = '⚠️ Budget Nourriture ET Perso dépassés !';
+  } else if (nourr > budgetNourr) {
+    alerte.classList.add('show');
+    alerteText.textContent = '⚠️ Budget Nourriture dépassé (' + nourr.toFixed(2).replace('.', ',') + ' $ / 300 $)';
+  } else if (perso > budgetPerso) {
+    alerte.classList.add('show');
+    alerteText.textContent = '⚠️ Budget Perso dépassé (' + perso.toFixed(2).replace('.', ',') + ' $ / 200 $)';
+  } else {
+    alerte.classList.remove('show');
+  }
+
+  const dispo = Math.max(0, (budgetNourr - nourr) + (budgetPerso - perso));
+  document.getElementById('dispo-amount').textContent = dispo.toFixed(2).replace('.', ',') + ' $';
+}
+
+function ajouterHistorique(cat, desc, montant) {
+  const list = document.getElementById('historique-list');
+  const icone = cat === 'nourr' ? '🛒' : '🧴';
+  const couleur = cat === 'nourr' ? 'hist-nourr' : 'hist-perso';
+  const item = document.createElement('div');
+  item.className = 'hist-item';
+  item.innerHTML = '<span class="hist-desc">' + icone + ' ' + desc + '</span><span class="' + couleur + '">-' + montant.toFixed(2).replace('.', ',') + ' $</span>';
+  list.insertBefore(item, list.firstChild);
+  if (list.children.length > 4) list.removeChild(list.lastChild);
+}
+</script>
+
+</body>
+</html>

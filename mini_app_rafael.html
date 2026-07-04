@@ -16,38 +16,57 @@
 
   .header { background: #0f3460; border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
   .header-title { font-size: 15px; color: #7eb8f7; font-weight: 700; }
-  .header-sub { font-size: 11px; color: #4a7fba; margin-top: 2px; }
-  .header-date { text-align: right; font-size: 11px; color: #7eb8f7; }
-  .header-statut { font-size: 9px; color: #4a7fba; }
+  .header-sub { font-size: 16px; color: #a8d0f5; font-weight: 700; margin-top: 4px; }
+  .header-date { text-align: right; font-size: 13px; color: #7eb8f7; }
+  .header-statut { font-size: 11px; color: #4a7fba; }
 
-  .sync-status { text-align: center; font-size: 10px; padding: 6px; border-radius: 8px; margin-bottom: 12px; }
+  .sync-status { text-align: center; font-size: 12px; padding: 6px; border-radius: 8px; margin-bottom: 12px; }
   .sync-status.ok { background: #0d2a1a; color: #5dcaa5; }
   .sync-status.loading { background: #1a1a0d; color: #f0c040; }
   .sync-status.error { background: #2a0d0d; color: #e24b4a; }
 
   .budgets { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-  .budget-card { background: #0d2137; border-radius: 14px; padding: 14px 12px; border: 0.5px solid #1e4a7a; }
+  .budget-card { background: #0d2137; border-radius: 14px; padding: 14px 12px; border: 0.5px solid #1e4a7a; position: relative; overflow: hidden; }
+  .confirm-check { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 46px; font-weight: 800; color: #5dcaa5; text-shadow: 0 0 14px rgba(93,202,165,0.95), 0 0 28px rgba(93,202,165,0.6); background: rgba(9,22,38,0.6); opacity: 0; pointer-events: none; z-index: 5; }
+  .confirm-check.show { animation: checkFade 1.2s ease-out forwards; }
+  @keyframes checkFade { 0% { opacity: 0; transform: scale(0.5); } 15% { opacity: 1; transform: scale(1.2); } 30% { transform: scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: scale(1); } }
+  .btn-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .mini-hist { background: #0d2137; border-radius: 12px; padding: 8px 10px; border: 0.5px solid #1e4a7a; min-height: 30px; }
+  .btn-group:nth-child(2) .mini-hist { background: #150d2e; border-color: #2d1f5e; }
+  .btn-group:nth-child(3) .mini-hist { background: #1a120d; border-color: #5a3a1a; }
+  .mini-hist .hist-item { padding: 5px 0; gap: 4px; }
+  .mini-hist .hist-desc { font-size: 12px; }
+  .mini-hist .hist-montant { font-size: 12px; }
+  .mini-hist .hist-btn { font-size: 15px; padding: 4px 5px; }
+  .mini-hist .hist-empty { padding: 4px 0; font-size: 11.5px; }
+  .jour-summary { font-size: 11px; color: #6a8fb5; text-align: center; margin-top: 4px; line-height: 1.5; }
+  .jour-summary.perso { color: #9080c0; }
+  .jour-summary.except { color: #c07a30; }
   .budget-card.perso { background: #150d2e; border-color: #2d1f5e; }
   .budget-card.except { background: #1a120d; border-color: #5a3a1a; grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; }
-  .budget-label { font-size: 10px; color: #4a7fba; margin-bottom: 6px; }
+  .budget-label { font-size: 12px; color: #4a7fba; margin-bottom: 6px; }
   .budget-card.perso .budget-label { color: #9b7fe8; }
   .budget-card.except .budget-label { color: #c07a30; margin-bottom: 0; }
-  .budget-amount { font-size: 22px; font-weight: 700; color: #7eb8f7; margin-bottom: 6px; }
+  .budget-amount { font-size: 26px; font-weight: 700; color: #7eb8f7; margin-bottom: 6px; }
   .budget-card.perso .budget-amount { color: #c4abf0; }
   .budget-card.except .budget-amount { font-size: 18px; color: #e0a060; margin-bottom: 0; }
   .progress-bar { height: 5px; background: #0a1a2e; border-radius: 3px; margin-bottom: 4px; overflow: hidden; }
   .progress-fill { height: 5px; background: #378add; border-radius: 3px; transition: width 0.3s; }
   .budget-card.perso .progress-fill { background: #7f77dd; }
   .progress-fill.danger { background: #e24b4a; }
-  .budget-reste { font-size: 9px; color: #4a7fba; }
-  .budget-card.perso .budget-reste { color: #9b7fe8; }
 
-  .dispo-row { background: #0d2137; border-radius: 14px; padding: 12px 16px; margin-bottom: 14px; border: 0.5px solid #1e3a2e; display: flex; justify-content: space-between; align-items: center; }
-  .dispo-label { font-size: 9px; color: #4a7fba; margin-bottom: 2px; }
-  .dispo-amount { font-size: 20px; font-weight: 700; }
+  .dispo-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .dispo-card { background: #0d2137; border-radius: 14px; padding: 10px 8px; border: 0.5px solid #1e3a2e; text-align: center; }
+  .dispo-card.perso { background: #150d2e; border-color: #2d1f5e; }
+  .dispo-card.except { background: #1a120d; border-color: #5a3a1a; display: flex; flex-direction: column; justify-content: center; }
+  .dispo-label { font-size: 12px; color: #4a7fba; margin-bottom: 4px; }
+  .dispo-card.perso .dispo-label { color: #9b7fe8; }
+  .dispo-card.except .dispo-label { color: #c07a30; }
+  .dispo-amount { font-size: 22px; font-weight: 800; line-height: 1.1; }
   .dispo-amount.ok { color: #5dcaa5; }
   .dispo-amount.warn { color: #f0c040; }
   .dispo-amount.danger { color: #e24b4a; }
+  .dispo-periode { font-size: 13px; font-weight: 700; color: #e0a060; line-height: 1.2; }
 
   .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
   .btn-main { border-radius: 14px; padding: 16px 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; border: none; transition: transform 0.1s, opacity 0.1s; }
@@ -59,18 +78,22 @@
 
   .historique { background: #0d2137; border-radius: 14px; padding: 12px 14px; border: 0.5px solid #1e4a7a; margin-bottom: 14px; }
   .hist-title { font-size: 10px; color: #4a7fba; margin-bottom: 8px; }
-  .hist-item { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 0.5px solid #1a3060; }
+  .hist-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid #1a3060; gap: 8px; }
   .hist-item:last-child { border-bottom: none; }
-  .hist-desc { font-size: 12px; color: #8899aa; }
-  .hist-montant { font-size: 12px; font-weight: 600; }
+  .hist-desc { font-size: 13px; color: #8899aa; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hist-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .hist-montant { font-size: 13px; font-weight: 600; white-space: nowrap; }
   .hist-nourr { color: #7eb8f7; }
   .hist-perso { color: #c4abf0; }
   .hist-except { color: #e0a060; }
-  .hist-empty { font-size: 11px; color: #4a5568; text-align: center; padding: 8px 0; }
+  .hist-empty { font-size: 12px; color: #7a8ca0; text-align: center; padding: 8px 0; }
+  .hist-actions { display: flex; gap: 4px; }
+  .hist-btn { background: transparent; border: none; font-size: 16px; padding: 4px 6px; cursor: pointer; line-height: 1; border-radius: 6px; }
+  .hist-btn:active { background: rgba(255,255,255,0.08); }
 
   .alerte { background: #2d0b0b; border-radius: 12px; padding: 10px 14px; border: 0.5px solid #7a1e1e; margin-bottom: 12px; display: none; }
   .alerte.show { display: block; }
-  .alerte-text { font-size: 11px; color: #e24b4a; }
+  .alerte-text { font-size: 13px; color: #e24b4a; }
 
   .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); display: none; justify-content: center; align-items: flex-end; z-index: 100; }
   .modal-overlay.show { display: flex; }
@@ -141,19 +164,20 @@
 <div class="sync-status loading" id="sync-status">⏳ Connexion à Firebase...</div>
 
 <div class="budgets">
-  <div class="budget-card">
+  <div class="budget-card" id="card-nourriture">
+    <div class="confirm-check" id="check-nourriture">✓</div>
     <div class="budget-label">🛒 Nourriture dépensée</div>
     <div class="budget-amount" id="nourr-amount">—</div>
     <div class="progress-bar"><div class="progress-fill" id="nourr-bar" style="width:0%"></div></div>
-    <div class="budget-reste" id="nourr-reste">Reste : — / 300 $</div>
   </div>
-  <div class="budget-card perso">
+  <div class="budget-card perso" id="card-perso">
+    <div class="confirm-check" id="check-perso">✓</div>
     <div class="budget-label">🧴 Perso dépensé</div>
     <div class="budget-amount" id="perso-amount">—</div>
     <div class="progress-bar"><div class="progress-fill" id="perso-bar" style="width:0%"></div></div>
-    <div class="budget-reste" id="perso-reste">Reste : — / 200 $</div>
   </div>
-  <div class="budget-card except">
+  <div class="budget-card except" id="card-except">
+    <div class="confirm-check" id="check-except">✓</div>
     <div>
       <div class="budget-label">⚡ Exceptionnel dépensé</div>
       <div class="budget-amount" id="except-amount">—</div>
@@ -162,13 +186,17 @@
 </div>
 
 <div class="dispo-row">
-  <div>
-    <div class="dispo-label">Budget restant total</div>
-    <div class="dispo-amount ok" id="dispo-amount">—</div>
+  <div class="dispo-card">
+    <div class="dispo-label">Reste Nourriture</div>
+    <div class="dispo-amount ok" id="dispo-nourr-amount">—</div>
   </div>
-  <div style="text-align:right;">
+  <div class="dispo-card perso">
+    <div class="dispo-label">Reste Perso</div>
+    <div class="dispo-amount ok" id="dispo-perso-amount">—</div>
+  </div>
+  <div class="dispo-card except">
     <div class="dispo-label">Période</div>
-    <div style="font-size:13px;color:#5dcaa5;" id="periode-label">—</div>
+    <div class="dispo-periode" id="periode-label">—</div>
   </div>
 </div>
 
@@ -177,23 +205,30 @@
 </div>
 
 <div class="btns">
-  <button class="btn-main btn-nourr" onclick="resetSessionTimer();ouvrirModal('nourr')">
-    <span class="btn-icon">🛒</span>
-    <span>Nourriture</span>
-  </button>
-  <button class="btn-main btn-perso" onclick="resetSessionTimer();ouvrirModal('perso')">
-    <span class="btn-icon">🧴</span>
-    <span>Perso</span>
-  </button>
-  <button class="btn-main btn-except" onclick="resetSessionTimer();ouvrirModal('except')">
-    <span class="btn-icon">⚡</span>
-    <span>Exception.</span>
-  </button>
-</div>
-
-<div class="historique">
-  <div class="hist-title">Dernières saisies (cette période)</div>
-  <div id="historique-list"><div class="hist-empty">Chargement...</div></div>
+  <div class="btn-group">
+    <button class="btn-main btn-nourr" onclick="resetSessionTimer();ouvrirModal('nourr')">
+      <span class="btn-icon">🛒</span>
+      <span>Nourriture</span>
+    </button>
+    <div class="mini-hist" id="hist-nourriture"><div class="hist-empty">—</div></div>
+    <div class="jour-summary" id="jour-nourriture">Hier : —<br>Aujourd'hui : —</div>
+  </div>
+  <div class="btn-group">
+    <button class="btn-main btn-perso" onclick="resetSessionTimer();ouvrirModal('perso')">
+      <span class="btn-icon">🧴</span>
+      <span>Perso</span>
+    </button>
+    <div class="mini-hist" id="hist-perso"><div class="hist-empty">—</div></div>
+    <div class="jour-summary perso" id="jour-perso">Hier : —<br>Aujourd'hui : —</div>
+  </div>
+  <div class="btn-group">
+    <button class="btn-main btn-except" onclick="resetSessionTimer();ouvrirModal('except')">
+      <span class="btn-icon">⚡</span>
+      <span>Exception.</span>
+    </button>
+    <div class="mini-hist" id="hist-except"><div class="hist-empty">—</div></div>
+    <div class="jour-summary except" id="jour-except">Hier : —<br>Aujourd'hui : —</div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="modal-overlay">
@@ -204,6 +239,19 @@
     <div class="modal-btns">
       <button class="btn-annuler" onclick="fermerModal()">Annuler</button>
       <button class="btn-valider" id="btn-valider" onclick="validerSaisie()">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-modal-overlay">
+  <div class="modal">
+    <div class="modal-title" id="edit-modal-title">✏️ Modifier</div>
+    <input type="number" class="montant-input" id="edit-montant-input" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+    <input type="text" class="desc-input" id="edit-desc-input" placeholder="Description">
+    <div class="modal-btns" style="grid-template-columns: 1fr 1fr 1fr;">
+      <button class="btn-annuler" onclick="fermerModalEdition()">Annuler</button>
+      <button class="btn-annuler" style="color:#e24b4a;border-color:#7a1e1e;" onclick="supprimerEntreeDepuisModal()">🗑️ Suppr.</button>
+      <button class="btn-valider" id="btn-edit-valider" onclick="validerEdition()">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -279,7 +327,13 @@ function fmt(n) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   return n.toLocaleString('fr-CA', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' $';
 }
-function getDateAujourdhui() { return new Date().toISOString().slice(0,10); }
+function getDateAujourdhui() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 function getPeriodeLabel(key) {
   const mois = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
@@ -296,6 +350,24 @@ function getPeriodeCourante() {
   if (d >= 16) { annee = m===12?y+1:y; mois = m===12?1:m+1; }
   else { annee = y; mois = m; }
   return `${annee}-${String(mois).padStart(2,'0')}`;
+}
+
+// Retrouve à quelle période (clé YYYY-MM) appartient n'importe quelle date, pas juste "aujourd'hui"
+function getPeriodeKeyPourDate(dateStr) {
+  const [y,m,d] = dateStr.split('-').map(Number);
+  let annee, mois;
+  if (d >= 16) { annee = m===12?y+1:y; mois = m===12?1:m+1; }
+  else { annee = y; mois = m; }
+  return `${annee}-${String(mois).padStart(2,'0')}`;
+}
+
+// Somme des saisies d'une catégorie pour une date précise, en allant chercher dans la bonne période
+// même si cette date appartient à la période précédente (ex: hier = 15, aujourd'hui = 16)
+function sommeParDateEtType(dateStr, type) {
+  const pk = getPeriodeKeyPourDate(dateStr);
+  const raw = state.entrees?.[pk] || [];
+  const list = Array.isArray(raw) ? raw : Object.values(raw);
+  return list.filter(e => e.date===dateStr && e.type===type && !e.rembourse).reduce((s,e)=>s+(e.montant||0), 0);
 }
 
 function getSomme(entries, type) {
@@ -356,6 +428,11 @@ async function chargerDepuisFirebase() {
     const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
     const data = await res.json();
     if (!data || typeof data !== 'object') { setSyncStatus('error','❌ Aucune donnée'); return; }
+    // Protection anti-écrasement : si l'état local est plus récent que ce qui vient d'être lu, on l'ignore
+    if (state && state._savedAt && data._savedAt && data._savedAt < state._savedAt) {
+      setSyncStatus('ok', '✅ Synchronisé · ' + new Date().toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'}));
+      return;
+    }
     state = data;
     mettreAJourUI();
     setSyncStatus('ok', '✅ Synchronisé · ' + new Date().toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'}));
@@ -389,7 +466,7 @@ function mettreAJourUI() {
   document.getElementById('header-date').textContent = `${jours[dateObj.getDay()]} ${d} ${moisNoms[parseInt(m)-1]}`;
   document.getElementById('header-periode').textContent = getPeriodeLabel(periodeKey);
   document.getElementById('header-statut').textContent = state.mode==='aec' ? 'AEC Étudiant' : 'Visiteur';
-  document.getElementById('periode-label').textContent = periodeKey;
+  document.getElementById('periode-label').textContent = getPeriodeLabel(periodeKey);
 
   const entries = state.entrees?.[periodeKey] || [];
   const totalNourr = getSomme(entries,'nourriture');
@@ -403,19 +480,21 @@ function mettreAJourUI() {
   const pN = Math.min(100, Math.round(totalNourr/budgetNourr*100));
   document.getElementById('nourr-bar').style.width = pN+'%';
   document.getElementById('nourr-bar').className = 'progress-fill'+(totalNourr>budgetNourr?' danger':'');
-  document.getElementById('nourr-reste').textContent = `Reste : ${fmt(resteNourr)} / ${fmt(budgetNourr)}`;
 
   document.getElementById('perso-amount').textContent = fmt(totalPerso);
   const pP = Math.min(100, Math.round(totalPerso/budgetPerso*100));
   document.getElementById('perso-bar').style.width = pP+'%';
   document.getElementById('perso-bar').className = 'progress-fill'+(totalPerso>budgetPerso?' danger':'');
-  document.getElementById('perso-reste').textContent = `Reste : ${fmt(restePerso)} / ${fmt(budgetPerso)}`;
 
   document.getElementById('except-amount').textContent = fmt(totalExcept);
 
-  const dispoEl = document.getElementById('dispo-amount');
-  dispoEl.textContent = fmt(dispo);
-  dispoEl.className = 'dispo-amount '+(dispo<0?'danger':dispo<100?'warn':'ok');
+  const dispoNourrEl = document.getElementById('dispo-nourr-amount');
+  dispoNourrEl.textContent = fmt(resteNourr);
+  dispoNourrEl.className = 'dispo-amount '+(resteNourr<0?'danger':resteNourr<20?'warn':'ok');
+
+  const dispoPersoEl = document.getElementById('dispo-perso-amount');
+  dispoPersoEl.textContent = fmt(restePerso);
+  dispoPersoEl.className = 'dispo-amount '+(restePerso<0?'danger':restePerso<20?'warn':'ok');
 
   const alerte = document.getElementById('alerte');
   const alerteText = document.getElementById('alerte-text');
@@ -425,16 +504,99 @@ function mettreAJourUI() {
   else { alerte.classList.remove('show'); }
 
   const allEntries = Array.isArray(entries) ? entries : Object.values(entries);
-  const saisies = allEntries.filter(e=>['nourriture','perso','exceptionnel'].includes(e.type)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
-  const list = document.getElementById('historique-list');
-  if (saisies.length===0) { list.innerHTML='<div class="hist-empty">Aucune saisie cette période</div>'; }
-  else {
-    list.innerHTML = saisies.map(e => {
-      const icone = e.type==='nourriture'?'🛒':e.type==='perso'?'🧴':'⚡';
-      const cls = e.type==='nourriture'?'hist-nourr':e.type==='perso'?'hist-perso':'hist-except';
-      return `<div class="hist-item"><span class="hist-desc">${icone} ${e.desc||e.type}</span><span class="hist-montant ${cls}">-${fmt(e.montant)}</span></div>`;
-    }).join('');
-  }
+  const aujourdhui = getDateAujourdhui();
+
+  const hierObj = new Date(dateObj); hierObj.setDate(hierObj.getDate()-1);
+  const hierDate = `${hierObj.getFullYear()}-${String(hierObj.getMonth()+1).padStart(2,'0')}-${String(hierObj.getDate()).padStart(2,'0')}`;
+  const majJourSummary = (elId, type) => {
+    const hier = sommeParDateEtType(hierDate, type);
+    const today = sommeParDateEtType(aujourdhui, type);
+    document.getElementById(elId).innerHTML = `Hier : ${fmt(hier)}<br>Aujourd'hui : ${fmt(today)}`;
+  };
+  majJourSummary('jour-nourriture', 'nourriture');
+  majJourSummary('jour-perso', 'perso');
+  majJourSummary('jour-except', 'exceptionnel');
+
+  const renderMiniHist = (containerId, type, icone, cls) => {
+    const saisies = allEntries.filter(e=>e.type===type && e.date===aujourdhui).sort((a,b)=>b.date.localeCompare(a.date));
+    const container = document.getElementById(containerId);
+    if (saisies.length===0) { container.innerHTML='<div class="hist-empty">Aucune saisie aujourd\'hui</div>'; return; }
+    container.innerHTML = saisies.map(e => `<div class="hist-item">
+        <span class="hist-desc">${icone} ${e.desc||e.type}</span>
+        <span class="hist-right">
+          <span class="hist-montant ${cls}">-${fmt(e.montant)}</span>
+          <span class="hist-actions">
+            <button class="hist-btn" onclick="resetSessionTimer();ouvrirModalEdition('${e.id}')">✏️</button>
+            <button class="hist-btn" onclick="resetSessionTimer();supprimerEntree('${e.id}')">🗑️</button>
+          </span>
+        </span>
+      </div>`).join('');
+  };
+  renderMiniHist('hist-nourriture', 'nourriture', '🛒', 'hist-nourr');
+  renderMiniHist('hist-perso', 'perso', '🧴', 'hist-perso');
+  renderMiniHist('hist-except', 'exceptionnel', '⚡', 'hist-except');
+}
+
+let entreeEnEdition = null;
+function ouvrirModalEdition(id) {
+  const entries = state.entrees?.[periodeKey] || [];
+  const allEntries = Array.isArray(entries) ? entries : Object.values(entries);
+  const entree = allEntries.find(e => e.id === id);
+  if (!entree) return;
+  entreeEnEdition = id;
+  const titres = { nourriture:'🛒 Modifier nourriture', perso:'🧴 Modifier perso', exceptionnel:'⚡ Modifier exceptionnel' };
+  const classes = { nourriture:'', perso:'perso', exceptionnel:'except' };
+  document.getElementById('edit-modal-title').textContent = titres[entree.type] || 'Modifier';
+  document.getElementById('edit-modal-title').className = 'modal-title ' + (classes[entree.type]||'');
+  document.getElementById('edit-montant-input').value = entree.montant;
+  document.getElementById('edit-desc-input').value = entree.desc || '';
+  const btnEnr = document.getElementById('btn-edit-valider');
+  btnEnr.className = 'btn-valider ' + (classes[entree.type]||'');
+  document.getElementById('edit-modal-overlay').classList.add('show');
+  setTimeout(()=>{ const inp=document.getElementById('edit-montant-input'); inp.focus(); inp.select(); },100);
+}
+
+function fermerModalEdition() { document.getElementById('edit-modal-overlay').classList.remove('show'); entreeEnEdition = null; }
+
+async function validerEdition() {
+  if (!entreeEnEdition) return;
+  const montant = parseFloat(document.getElementById('edit-montant-input').value);
+  const desc = document.getElementById('edit-desc-input').value.trim();
+  if (!montant || montant<=0) { alert('Entre un montant valide.'); return; }
+  // On retrouve la saisie à jour dans l'état courant (au cas où un sync Firebase serait passé par là entre-temps)
+  const entries = state.entrees?.[periodeKey] || [];
+  const allEntries = Array.isArray(entries) ? entries : Object.values(entries);
+  const entree = allEntries.find(e => e.id === entreeEnEdition);
+  if (!entree) { alert('Cette saisie a été modifiée entre-temps. Réessaie.'); fermerModalEdition(); mettreAJourUI(); return; }
+  entree.montant = montant;
+  entree.desc = desc || entree.desc;
+  fermerModalEdition();
+  mettreAJourUI();
+  setSyncStatus('loading','⏳ Sauvegarde...');
+  sauvegarderDansFirebase();
+}
+
+async function supprimerEntreeDepuisModal() {
+  if (!entreeEnEdition) return;
+  supprimerEntree(entreeEnEdition);
+  fermerModalEdition();
+}
+
+async function supprimerEntree(id) {
+  const entries = state.entrees?.[periodeKey] || [];
+  const allEntries = Array.isArray(entries) ? entries : Object.values(entries);
+  const entree = allEntries.find(e => e.id === id);
+  const linked = entree && entree._linkedId ? allEntries.find(e => e.id === entree._linkedId) : null;
+  const msg = linked
+    ? `Cette saisie est liée à un report (${linked.desc} : ${fmt(linked.montant)}). Supprimer les deux ensemble ?`
+    : 'Supprimer cette saisie ?';
+  if (!confirm(msg)) return;
+  let filtered = allEntries.filter(e => e.id !== id);
+  if (linked) filtered = filtered.filter(e => e.id !== linked.id);
+  state.entrees[periodeKey] = filtered;
+  mettreAJourUI();
+  setSyncStatus('loading','⏳ Sauvegarde...');
+  sauvegarderDansFirebase();
 }
 
 let categorieActive = 'nourr';
@@ -467,11 +629,24 @@ async function validerSaisie() {
   state.entrees[periodeKey].push(entry);
   fermerModal();
   mettreAJourUI();
+  flashConfirmCard(type);
   setSyncStatus('loading','⏳ Sauvegarde...');
   sauvegarderDansFirebase();
 }
 
+function flashConfirmCard(type) {
+  const id = type==='nourriture' ? 'check-nourriture' : type==='perso' ? 'check-perso' : 'check-except';
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('show');
+  void el.offsetWidth; // force reflow pour pouvoir rejouer l'animation
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 1300);
+}
+
+
 document.getElementById('modal-overlay').addEventListener('click',function(e){if(e.target===this)fermerModal();});
+document.getElementById('edit-modal-overlay').addEventListener('click',function(e){if(e.target===this)fermerModalEdition();});
 afficherEcranPin();
 chargerDepuisFirebase();
 </script>

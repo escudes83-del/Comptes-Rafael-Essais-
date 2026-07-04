@@ -4534,118 +4534,30 @@ function qaAddDate(periode, type, idAmt, idDesc, idDate) {
     const budgetP = state.fixes.budget_perso;
     const totalN = getSommeEntreesAll(periode, 'nourriture');
     const totalP = getSommeEntreesAll(periode, 'perso');
-    const resteN = budgetN - totalN;
-    const resteP = budgetP - totalP;
     const budget = type === 'nourriture' ? budgetN : budgetP;
     const total = type === 'nourriture' ? totalN : totalP;
 
     if (total > budget * 0.5) {
       const icon = type === 'nourriture' ? '🛒' : '🧴';
       const label = type === 'nourriture' ? 'Nourriture' : 'Perso';
-      const autreType = type === 'nourriture' ? 'perso' : 'nourriture';
-      const autreLabel = type === 'nourriture' ? 'Perso' : 'Nourriture';
-      const autreReste = type === 'nourriture' ? resteP : resteN;
       const p = PERIODES.find(x => x.key === periode);
       const joursRestants = Math.ceil((new Date(p.annee, parseInt(periode.slice(5))-1, 15) - new Date(getDateRef())) / 86400000);
 
       let msg = `${icon} <b>${label}</b> : budget à moitié dépensé.<br><br>`;
       msg += `Dépensé : <b>${fmt(total)}</b> sur <b>${fmt(budget)}</b> · `;
 
-      // Cas dépassement : proposer répartition
-      if (total > budget && montant > 0 && autreReste > 0) {
-        const depassement = total - budget;
-        const surAutre = Math.min(depassement, autreReste).toFixed(2);
-        const surPrincipal = (montant - parseFloat(surAutre)).toFixed(2);
-        msg += `<span style="color:var(--red);">Dépassement : <b>${fmt(depassement)}</b></span><br><br>`;
-        msg += `💡 <b>Proposition de répartition :</b><br>`;
-        msg += `${icon} ${label} : <b>${fmt(parseFloat(surPrincipal))}</b><br>`;
-        msg += `${type==='nourriture'?'🧴':'🛒'} ${autreLabel} : <b>${fmt(parseFloat(surAutre))}</b><br><br>`;
-        // Construire l'interface de répartition sans interpolation dans les attributs
-        const vN = type==='nourriture' ? parseFloat(surPrincipal) : 0;
-        const vP = type==='perso' ? parseFloat(surPrincipal) : parseFloat(surAutre);
-        const inStyle = 'background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;font-family:var(--font-mono);padding:3px 6px;width:100%;';
-        msg += '<div style="margin-top:8px;">'
-          + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Ventiler cette dépense :</div>'
-          + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">'
-          + '<label style="font-size:11px;color:var(--muted);">🛒 Nourriture</label>'
-          + '<input type="number" id="repartN" value="' + vN + '" step="0.01" min="0" style="' + inStyle + '">'
-          + '<label style="font-size:11px;color:var(--muted);">🧴 Perso</label>'
-          + '<input type="number" id="repartP" value="' + vP + '" step="0.01" min="0" style="' + inStyle + '">'
-          + '<label style="font-size:11px;color:var(--muted);">⚡ Exceptionnel</label>'
-          + '<input type="number" id="repartE" value="0" step="0.01" min="0" style="' + inStyle + '">'
-          + '</div>'
-          + '<div id="repartRestant" style="font-size:11px;margin-bottom:8px;"></div>'
-          + '<button onclick="repartirChoix()" style="background:var(--accent);color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:700;padding:7px 14px;cursor:pointer;width:100%;">↔ Appliquer la répartition</button>'
-          + '</div>';
-        // Stocker le contexte pour repartirChoix
-        window._repartirCtx = { periode, type, montant };
-        setTimeout(() => {
-          updateRepartTotal(montant);
-          ['repartN','repartP','repartE'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.oninput = () => updateRepartTotal(montant);
-          });
-        }, 50);
+      const reste = budget - total;
+      if (reste >= 0) {
+        msg += `Reste : <b style="color:var(--yellow);">${fmt(reste)}</b>`;
+        if (joursRestants > 0) msg += ` pour encore <b>${joursRestants} jours</b>`;
       } else {
-        const reste = budget - total;
-        if (reste >= 0) {
-          msg += `Reste : <b style="color:var(--yellow);">${fmt(reste)}</b>`;
-          if (joursRestants > 0) msg += ` pour encore <b>${joursRestants} jours</b>`;
-        } else {
-          msg += `<span style="color:var(--red);">Dépassement : <b>${fmt(-reste)}</b></span>`;
-        }
+        msg += `<span style="color:var(--red);">Dépassement : <b>${fmt(-reste)}</b></span>`;
       }
 
       document.getElementById('modalAlerteConsoContenu').innerHTML = msg;
       openModal('modalAlerteConso');
     }
   }
-}
-
-function updateRepartTotal(montantTotal) {
-  montantTotal = montantTotal || (window._repartirCtx?.montant) || 0;
-  const n = parseFloat(document.getElementById('repartN')?.value || 0);
-  const p = parseFloat(document.getElementById('repartP')?.value || 0);
-  const e = parseFloat(document.getElementById('repartE')?.value || 0);
-  const total = n + p + e;
-  const restant = montantTotal - total;
-  const el = document.getElementById('repartRestant');
-  if (!el) return;
-  if (Math.abs(restant) < 0.01) {
-    el.innerHTML = '<span style="color:var(--green);">✓ Total correct : ' + fmt(montantTotal) + '</span>';
-  } else if (restant > 0) {
-    el.innerHTML = '<span style="color:var(--yellow);">Il reste ' + fmt(restant) + ' à ventiler</span>';
-  } else {
-    el.innerHTML = '<span style="color:var(--red);">Dépassement de ' + fmt(-restant) + ' — réduire les montants</span>';
-  }
-}
-
-function repartirChoix() {
-  const { periode, type: typePrincipal, montant: montantTotal } = window._repartirCtx || {};
-  if (!periode) return;
-  const n = parseFloat(document.getElementById('repartN')?.value || 0);
-  const p = parseFloat(document.getElementById('repartP')?.value || 0);
-  const e = parseFloat(document.getElementById('repartE')?.value || 0);
-  const total = n + p + e;
-  if (Math.abs(total - montantTotal) > 0.01) {
-    document.getElementById('repartRestant').innerHTML = '<span style="color:var(--red);">Le total doit être égal à ' + fmt(montantTotal) + '</span>';
-    return;
-  }
-  // Supprimer/ajuster la dernière entrée du type principal
-  const entrees = state.entrees[periode] || [];
-  const derniere = [...entrees].reverse().find(ex => ex.type === typePrincipal);
-  const desc = derniere?.desc || typePrincipal;
-  // Supprimer l'entrée originale
-  if (derniere) state.entrees[periode] = entrees.filter(ex => ex.id !== derniere.id);
-  // Créer les nouvelles entrées selon la répartition
-  const date = getDateRef();
-  if (n > 0) state.entrees[periode].push({id:uid(), type:'nourriture', montant:n, desc, date, rembourse:false});
-  if (p > 0) state.entrees[periode].push({id:uid(), type:'perso', montant:p, desc, date, rembourse:false});
-  if (e > 0) state.entrees[periode].push({id:uid(), type:'exceptionnel', montant:e, desc, date, rembourse:false});
-  saveState();
-  closeModal('modalAlerteConso');
-  render();
-  renderVueMois(periode);
 }
 
 function vmTxRow(e, periode, isRevenu) {

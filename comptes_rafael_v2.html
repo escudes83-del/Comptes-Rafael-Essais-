@@ -1922,6 +1922,7 @@ function isAECPeriode(key) {
 }
 
 function getMetroPeriode(key) {
+  if (hasFixeEntrees('metro', key)) return sommeFixeEntrees('metro', key);
   // Historique réel
   const hist = {
     '2026-01': 0,
@@ -2016,7 +2017,7 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
   const loyerEntrees = (state.loyerEntrees || {})[periodeKey] || [];
   total += loyerEntrees.filter(e => e.date <= dateRef).reduce((s,e) => s+e.montant, 0);
   // Frais fixes manuels (saisis explicitement) : seulement les entrées dont la date est <= dateRef
-  ['electricite','assurance','gym','netflix','fido','bixi'].forEach(fixKey => {
+  ['electricite','assurance','gym','netflix','fido','bixi','metro'].forEach(fixKey => {
     const entrees = getFixeEntreesPeriode(fixKey, periodeKey);
     total += entrees.filter(e => e.date <= dateRef).reduce((s,e) => s+e.montant, 0);
   });
@@ -2041,7 +2042,7 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
       if (netflixDate >= debutPeriode && netflixDate <= ref) total += state.fixes.netflix;
     }
     // Métro : le 1er du mois suivant le début de période
-    if (!hasFixeEntrees('metro_normal', periodeKey) && !hasFixeEntrees('metro_etudiant', periodeKey)) {
+    if (!hasFixeEntrees('metro', periodeKey)) {
       const metroDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 1);
       if (metroDate <= ref) {
         const isAEC = state.mode === 'aec' && isAECPeriode(periodeKey);

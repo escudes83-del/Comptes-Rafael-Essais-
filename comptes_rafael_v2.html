@@ -834,8 +834,8 @@
     font-size: 12px;
     min-width: 0;
   }
-  .vm-tx-date { color: var(--muted); font-family: var(--font-mono); font-size: 10px; }
-  .vm-tx-desc { color: var(--text); font-size: 10px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-basis: 100%; }
+  .vm-tx-date { color: var(--muted); font-family: var(--font-mono); font-size: 11px; margin-right: 16px; }
+  .vm-tx-desc { color: var(--text); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
   .vm-tx-amt { font-family: var(--font-mono); font-weight: 600; }
   .vm-tx-remb { font-size: 10px; color: var(--green); margin-left: 3px; }
   .vm-tx-del {
@@ -1922,7 +1922,6 @@ function isAECPeriode(key) {
 }
 
 function getMetroPeriode(key) {
-  if (hasFixeEntrees('metro', key)) return sommeFixeEntrees('metro', key);
   // Historique réel
   const hist = {
     '2026-01': 0,
@@ -2017,7 +2016,7 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
   const loyerEntrees = (state.loyerEntrees || {})[periodeKey] || [];
   total += loyerEntrees.filter(e => e.date <= dateRef).reduce((s,e) => s+e.montant, 0);
   // Frais fixes manuels (saisis explicitement) : seulement les entrées dont la date est <= dateRef
-  ['electricite','assurance','gym','netflix','fido','bixi','metro'].forEach(fixKey => {
+  ['electricite','assurance','gym','netflix','fido','bixi'].forEach(fixKey => {
     const entrees = getFixeEntreesPeriode(fixKey, periodeKey);
     total += entrees.filter(e => e.date <= dateRef).reduce((s,e) => s+e.montant, 0);
   });
@@ -2042,7 +2041,7 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
       if (netflixDate >= debutPeriode && netflixDate <= ref) total += state.fixes.netflix;
     }
     // Métro : le 1er du mois suivant le début de période
-    if (!hasFixeEntrees('metro', periodeKey)) {
+    if (!hasFixeEntrees('metro_normal', periodeKey) && !hasFixeEntrees('metro_etudiant', periodeKey)) {
       const metroDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 1);
       if (metroDate <= ref) {
         const isAEC = state.mode === 'aec' && isAECPeriode(periodeKey);

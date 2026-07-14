@@ -1528,6 +1528,20 @@ input, textarea, select { cursor: text; }
     </div>
     <div class="divider" style="margin-top:18px;"></div>
     <div style="margin-top:14px;">
+      <h3 style="font-size:12px;font-weight:700;color:#7eb8f7;margin-bottom:8px;">💾 Sauvegardes</h3>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">Une sauvegarde automatique est faite chaque jour sur Firebase. Tu peux aussi exporter/restaurer manuellement.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <button class="btn btn-primary" style="font-size:11px;" onclick="exporterDonneesJSON()">⬇️ Exporter (.json)</button>
+        <label class="btn btn-secondary" style="font-size:11px;cursor:pointer;">
+          ⬆️ Restaurer un fichier
+          <input type="file" accept=".json" style="display:none;" onchange="importerDonneesJSON(this)">
+        </label>
+        <button class="btn btn-secondary" style="font-size:11px;" onclick="listerSauvegardesAuto()">🗓️ Voir les sauvegardes auto</button>
+      </div>
+      <div id="listeSauvegardesAuto"></div>
+    </div>
+    <div class="divider" style="margin-top:18px;"></div>
+    <div style="margin-top:14px;">
       <h3 style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;">🐾 Zone danger</h3>
       <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">Efface toutes les données enregistrées (irréversible). Mot de passe requis.</p>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1744,6 +1758,7 @@ function saveState() {
   state._savedAt = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   saveToFirebase();
+  backupAutomatiqueSiNecessaire();
 }
 
 // ============================================================
@@ -5167,6 +5182,104 @@ if (state.soldeRef !== null && state.soldeRef !== undefined) {
 document.getElementById('depRemb')?.addEventListener('change', function() {
   document.getElementById('depRembDetail').style.display = this.checked ? 'block' : 'none';
 });
+
+// ============================================================
+// SAUVEGARDES — automatique quotidienne + export/import manuel
+// ============================================================
+
+// Sauvegarde automatique : au max une fois par jour, sur un chemin Firebase séparé,
+// pour ne jamais perdre plus d'une journée de données en cas de problème.
+async function backupAutomatiqueSiNecessaire() {
+  const aujourdhui = getDateRef();
+  if (state._dernierBackupAuto === aujourdhui) return; // déjà fait aujourd'hui
+  try {
+    await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '_backups/' + aujourdhui + '.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state)
+    });
+    state._dernierBackupAuto = aujourdhui;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch(e) { console.warn('Backup auto échoué:', e); }
+}
+
+// Export manuel : télécharge un fichier .json avec l'état complet
+function exporterDonneesJSON() {
+  const data = JSON.stringify(state, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `comptes_rafael_2026_backup_${getDateRef()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Import manuel : restaure depuis un fichier .json téléchargé précédemment
+function importerDonneesJSON(fileInput) {
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data || typeof data !== 'object' || !data.entrees) {
+        alert('Ce fichier ne ressemble pas à une sauvegarde valide.');
+        return;
+      }
+      if (!confirm('Restaurer cette sauvegarde va REMPLACER toutes les données actuelles. Continuer ?')) return;
+      state = data;
+      state._savedAt = Date.now();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      saveToFirebase();
+      render();
+      alert('Sauvegarde restaurée avec succès.');
+    } catch(err) {
+      alert('Erreur de lecture du fichier : ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  fileInput.value = '';
+}
+
+// Liste des sauvegardes automatiques disponibles sur Firebase (les 14 derniers jours)
+async function listerSauvegardesAuto() {
+  const el = document.getElementById('listeSauvegardesAuto');
+  if (!el) return;
+  el.innerHTML = '<div style="font-size:11px;color:var(--muted);">Chargement...</div>';
+  try {
+    const res = await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '_backups.json?shallow=true');
+    const raw = await res.json();
+    if (!raw) { el.innerHTML = '<div style="font-size:11px;color:var(--muted);">Aucune sauvegarde automatique trouvée.</div>'; return; }
+    const dates = Object.keys(raw).sort().reverse().slice(0, 14);
+    el.innerHTML = dates.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:12px;">${d}</span>
+      <button class="btn btn-secondary" style="font-size:10px;padding:3px 8px;" onclick="restaurerSauvegardeAuto('${d}')">Restaurer</button>
+    </div>`).join('');
+  } catch(e) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--red);">Erreur de chargement.</div>';
+  }
+}
+
+async function restaurerSauvegardeAuto(dateKey) {
+  if (!confirm(`Restaurer la sauvegarde automatique du ${dateKey} ? Toutes les données actuelles seront remplacées.`)) return;
+  try {
+    const res = await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '_backups/' + dateKey + '.json');
+    const data = await res.json();
+    if (!data) { alert('Sauvegarde introuvable.'); return; }
+    state = normalizeFirebaseData(data);
+    state._savedAt = Date.now();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    saveToFirebase();
+    render();
+    closeModal('modalSimFrequence');
+    alert('Sauvegarde du ' + dateKey + ' restaurée avec succès.');
+  } catch(e) {
+    alert('Erreur lors de la restauration : ' + e.message);
+  }
+}
 
 // ============================================================
 // FIREBASE REST — Synchro inter-appareils avec protection timestamp

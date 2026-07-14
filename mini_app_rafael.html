@@ -39,9 +39,6 @@
   .mini-hist .hist-montant { font-size: 12px; }
   .mini-hist .hist-btn { font-size: 15px; padding: 4px 5px; }
   .mini-hist .hist-empty { padding: 4px 0; font-size: 11.5px; }
-  .hist-toggle { text-align: center; font-size: 11px; color: #4a7fba; padding: 3px 0 2px; cursor: pointer; user-select: none; }
-  .hist-toggle:active { opacity: 0.6; }
-  .hist-date { font-size: 10px; color: #5a7290; margin-left: 3px; }
   .jour-summary { font-size: 11px; color: #6a8fb5; text-align: center; margin-top: 4px; line-height: 1.5; }
   .jour-summary.perso { color: #9080c0; }
   .jour-summary.except { color: #c07a30; }
@@ -214,7 +211,6 @@
       <span>Nourriture</span>
     </button>
     <div class="mini-hist" id="hist-nourriture"><div class="hist-empty">—</div></div>
-    <div class="hist-toggle" id="toggle-nourriture" onclick="toggleHistExpanded('nourriture')" style="display:none;">Voir plus ▾</div>
     <div class="jour-summary" id="jour-nourriture">Hier : —<br>Aujourd'hui : —</div>
   </div>
   <div class="btn-group">
@@ -223,7 +219,6 @@
       <span>Perso</span>
     </button>
     <div class="mini-hist" id="hist-perso"><div class="hist-empty">—</div></div>
-    <div class="hist-toggle" id="toggle-perso" onclick="toggleHistExpanded('perso')" style="display:none;">Voir plus ▾</div>
     <div class="jour-summary perso" id="jour-perso">Hier : —<br>Aujourd'hui : —</div>
   </div>
   <div class="btn-group">
@@ -232,7 +227,6 @@
       <span>Exception.</span>
     </button>
     <div class="mini-hist" id="hist-except"><div class="hist-empty">—</div></div>
-    <div class="hist-toggle" id="toggle-exceptionnel" onclick="toggleHistExpanded('exceptionnel')" style="display:none;">Voir plus ▾</div>
     <div class="jour-summary except" id="jour-except">Hier : —<br>Aujourd'hui : —</div>
   </div>
 </div>
@@ -242,8 +236,6 @@
     <div class="modal-title" id="modal-title">🛒 Ajouter nourriture</div>
     <input type="number" class="montant-input" id="montant-input" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
     <input type="text" class="desc-input" id="desc-input" placeholder="Description (ex: IGA, Pharmaprix...)">
-    <div style="font-size:12px;color:#7a8ca0;margin-bottom:4px;">Date de la dépense</div>
-    <input type="date" class="desc-input" id="date-input">
     <div class="modal-btns">
       <button class="btn-annuler" onclick="fermerModal()">Annuler</button>
       <button class="btn-valider" id="btn-valider" onclick="validerSaisie()">Ajouter</button>
@@ -256,8 +248,6 @@
     <div class="modal-title" id="edit-modal-title">✏️ Modifier</div>
     <input type="number" class="montant-input" id="edit-montant-input" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
     <input type="text" class="desc-input" id="edit-desc-input" placeholder="Description">
-    <div style="font-size:12px;color:#7a8ca0;margin-bottom:4px;">Date de la dépense</div>
-    <input type="date" class="desc-input" id="edit-date-input">
     <div class="modal-btns" style="grid-template-columns: 1fr 1fr 1fr;">
       <button class="btn-annuler" onclick="fermerModalEdition()">Annuler</button>
       <button class="btn-annuler" style="color:#e24b4a;border-color:#7a1e1e;" onclick="supprimerEntreeDepuisModal()">🗑️ Suppr.</button>
@@ -333,11 +323,6 @@ let budgetNourr = 300;
 let budgetPerso = 200;
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
-let histExpanded = { nourriture:false, perso:false, exceptionnel:false };
-function fmtDateCourt(dateStr) {
-  const [y,m,d] = dateStr.split('-');
-  return `${d}/${m}`;
-}
 function fmt(n) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   return n.toLocaleString('fr-CA', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' $';
@@ -461,7 +446,22 @@ async function sauvegarderDansFirebase() {
       method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(state)
     });
     setSyncStatus('ok','✅ Sauvegardé · ' + new Date().toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'}));
+    backupAutomatiqueSiNecessaire();
   } catch(e) { setSyncStatus('error','⚠️ Erreur sauvegarde'); }
+}
+
+// Sauvegarde automatique quotidienne (même mécanisme que l'app principale — chemin Firebase partagé)
+async function backupAutomatiqueSiNecessaire() {
+  const aujourdhui = getDateAujourdhui();
+  if (state._dernierBackupAuto === aujourdhui) return;
+  try {
+    await fetch(`${FIREBASE_URL}/${STORAGE_KEY}_backups/${aujourdhui}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state)
+    });
+    state._dernierBackupAuto = aujourdhui;
+  } catch(e) { console.warn('Backup auto échoué:', e); }
 }
 
 setInterval(chargerDepuisFirebase, 10000);
@@ -533,17 +533,11 @@ function mettreAJourUI() {
   majJourSummary('jour-except', 'exceptionnel');
 
   const renderMiniHist = (containerId, type, icone, cls) => {
-    const parType = allEntries.filter(e=>e.type===type);
-    const expanded = histExpanded[type];
-    const saisies = (expanded
-      ? parType
-      : parType.filter(e => e.date===aujourdhui || e.date===hierDate)
-    ).sort((a,b)=>b.date.localeCompare(a.date));
+    const saisies = allEntries.filter(e=>e.type===type && e.date===aujourdhui).sort((a,b)=>b.date.localeCompare(a.date));
     const container = document.getElementById(containerId);
-    if (saisies.length===0) { container.innerHTML='<div class="hist-empty">Aucune saisie récente</div>'; }
-    else {
-      container.innerHTML = saisies.map(e => `<div class="hist-item">
-        <span class="hist-desc">${icone} ${e.desc||e.type}<span class="hist-date">${fmtDateCourt(e.date)}</span></span>
+    if (saisies.length===0) { container.innerHTML='<div class="hist-empty">Aucune saisie aujourd\'hui</div>'; return; }
+    container.innerHTML = saisies.map(e => `<div class="hist-item">
+        <span class="hist-desc">${icone} ${e.desc||e.type}</span>
         <span class="hist-right">
           <span class="hist-montant ${cls}">-${fmt(e.montant)}</span>
           <span class="hist-actions">
@@ -552,25 +546,10 @@ function mettreAJourUI() {
           </span>
         </span>
       </div>`).join('');
-    }
-    const toggleBtn = document.getElementById('toggle-'+type);
-    if (toggleBtn) {
-      if (parType.length > 0 && (expanded || parType.length > saisies.length || (!expanded && parType.some(e=>e.date!==aujourdhui && e.date!==hierDate)))) {
-        toggleBtn.style.display = 'block';
-        toggleBtn.textContent = expanded ? 'Voir moins ▴' : 'Voir plus ▾';
-      } else {
-        toggleBtn.style.display = 'none';
-      }
-    }
   };
   renderMiniHist('hist-nourriture', 'nourriture', '🛒', 'hist-nourr');
   renderMiniHist('hist-perso', 'perso', '🧴', 'hist-perso');
   renderMiniHist('hist-except', 'exceptionnel', '⚡', 'hist-except');
-}
-
-function toggleHistExpanded(type) {
-  histExpanded[type] = !histExpanded[type];
-  mettreAJourUI();
 }
 
 let entreeEnEdition = null;
@@ -586,7 +565,6 @@ function ouvrirModalEdition(id) {
   document.getElementById('edit-modal-title').className = 'modal-title ' + (classes[entree.type]||'');
   document.getElementById('edit-montant-input').value = entree.montant;
   document.getElementById('edit-desc-input').value = entree.desc || '';
-  document.getElementById('edit-date-input').value = entree.date || getDateAujourdhui();
   const btnEnr = document.getElementById('btn-edit-valider');
   btnEnr.className = 'btn-valider ' + (classes[entree.type]||'');
   document.getElementById('edit-modal-overlay').classList.add('show');
@@ -599,9 +577,7 @@ async function validerEdition() {
   if (!entreeEnEdition) return;
   const montant = parseFloat(document.getElementById('edit-montant-input').value);
   const desc = document.getElementById('edit-desc-input').value.trim();
-  const nouvelleDate = document.getElementById('edit-date-input').value;
   if (!montant || montant<=0) { alert('Entre un montant valide.'); return; }
-  if (!nouvelleDate) { alert('Entre une date valide.'); return; }
   // On retrouve la saisie à jour dans l'état courant (au cas où un sync Firebase serait passé par là entre-temps)
   const entries = state.entrees?.[periodeKey] || [];
   const allEntries = Array.isArray(entries) ? entries : Object.values(entries);
@@ -609,15 +585,6 @@ async function validerEdition() {
   if (!entree) { alert('Cette saisie a été modifiée entre-temps. Réessaie.'); fermerModalEdition(); mettreAJourUI(); return; }
   entree.montant = montant;
   entree.desc = desc || entree.desc;
-  entree.date = nouvelleDate;
-  const nouvellePeriode = getPeriodeKeyPourDate(nouvelleDate);
-  if (nouvellePeriode !== periodeKey) {
-    // La nouvelle date change de période budgétaire : on déplace l'entrée
-    state.entrees[periodeKey] = allEntries.filter(e => e.id !== entreeEnEdition);
-    if (!state.entrees[nouvellePeriode]) state.entrees[nouvellePeriode] = [];
-    if (!Array.isArray(state.entrees[nouvellePeriode])) state.entrees[nouvellePeriode] = Object.values(state.entrees[nouvellePeriode]);
-    state.entrees[nouvellePeriode].push(entree);
-  }
   fermerModalEdition();
   mettreAJourUI();
   setSyncStatus('loading','⏳ Sauvegarde...');
@@ -657,7 +624,6 @@ function ouvrirModal(cat) {
   else { title.textContent='⚡ Ajouter exceptionnel'; title.className='modal-title except'; valider.className='btn-valider except'; }
   document.getElementById('montant-input').value='';
   document.getElementById('desc-input').value='';
-  document.getElementById('date-input').value=getDateAujourdhui();
   document.getElementById('modal-overlay').classList.add('show');
   setTimeout(()=>document.getElementById('montant-input').focus(),100);
 }
@@ -667,20 +633,18 @@ function fermerModal() { document.getElementById('modal-overlay').classList.remo
 async function validerSaisie() {
   const montant = parseFloat(document.getElementById('montant-input').value);
   const desc = document.getElementById('desc-input').value.trim();
-  const dateChoisie = document.getElementById('date-input').value || getDateAujourdhui();
   if (!montant || montant<=0) { alert('Entre un montant valide.'); return; }
   if (!state) { alert('Données non chargées.'); return; }
   const type = categorieActive==='nourr'?'nourriture':categorieActive==='perso'?'perso':'exceptionnel';
   const descFinale = desc||(type==='nourriture'?'Nourriture':type==='perso'?'Perso':'Exceptionnel');
-  const cible = getPeriodeKeyPourDate(dateChoisie);
-  const entry = { id:uid(), type, montant, desc:descFinale, date:dateChoisie, rembourse:false, rembDesc:'' };
+  const entry = { id:uid(), type, montant, desc:descFinale, date:getDateAujourdhui(), rembourse:false, rembDesc:'' };
   if (!state.entrees) state.entrees={};
-  if (!state.entrees[cible]) state.entrees[cible]=[];
-  if (!Array.isArray(state.entrees[cible])) state.entrees[cible]=Object.values(state.entrees[cible]);
-  state.entrees[cible].push(entry);
+  if (!state.entrees[periodeKey]) state.entrees[periodeKey]=[];
+  if (!Array.isArray(state.entrees[periodeKey])) state.entrees[periodeKey]=Object.values(state.entrees[periodeKey]);
+  state.entrees[periodeKey].push(entry);
   fermerModal();
   mettreAJourUI();
-  if (cible===periodeKey) flashConfirmCard(type);
+  flashConfirmCard(type);
   setSyncStatus('loading','⏳ Sauvegarde...');
   sauvegarderDansFirebase();
 }

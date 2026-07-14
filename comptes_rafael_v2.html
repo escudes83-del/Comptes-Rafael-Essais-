@@ -1714,6 +1714,7 @@ function defaultState() {
     detteIRCC: 2000, // prêt argent reçu de Pilou en juin 2026, à rembourser éventuellement
     fixesEntrees: {}, // { 'gym': { '2026-07': [{id,montant,desc,date}] }, ... }
     fixes: {...DEFAUT_FIXES},
+    budgetHistorique: { nourriture: [], perso: [] }, // [{date:'YYYY-MM-DD', montant}] — permet au budget de changer sans affecter les périodes déjà passées
     // entrées par période: { '2026-01': [{id, type, montant, desc, date, rembourse, rembDesc}] }
     entrees: {},
     selectedMois: null,
@@ -1730,6 +1731,7 @@ function loadState() {
       // Firebase supprime les null — on les restitue
       if (s.soldeRef === undefined) s.soldeRef = null;
       if (s.dateRef === undefined) s.dateRef = null;
+      if (!s.budgetHistorique) s.budgetHistorique = { nourriture: [], perso: [] };
       return s;
     }
   } catch(e) {}
@@ -2078,24 +2080,46 @@ function getSommeEntreesAll(key, type) {
     .reduce((s,e) => s+e.montant, 0);
 }
 
+// Historique des budgets nourriture/perso : permet de changer le budget "à partir de maintenant"
+// sans modifier rétroactivement les périodes déjà passées
+function getDateDebutPeriode(periodeKey) {
+  const p = PERIODES.find(x => x.key === periodeKey);
+  if (!p) return null;
+  return new Date(p.anneeDebut, p.moisDebut - 1, 16);
+}
+
+function getBudgetHistoriquePourPeriode(type, periodeKey) {
+  const valeurActuelle = type === 'nourriture' ? state.fixes.budget_nourriture : state.fixes.budget_perso;
+  const hist = (state.budgetHistorique && state.budgetHistorique[type]) || [];
+  if (hist.length === 0) return valeurActuelle;
+  const debutPeriode = getDateDebutPeriode(periodeKey);
+  if (!debutPeriode) return valeurActuelle;
+  const trie = hist.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const applicables = trie.filter(h => new Date(h.date + 'T00:00:00') <= debutPeriode);
+  if (applicables.length === 0) return trie[0].montant; // avant le tout premier changement connu
+  return applicables[applicables.length - 1].montant;
+}
+function getBudgetNourriturePourPeriode(periodeKey) { return getBudgetHistoriquePourPeriode('nourriture', periodeKey); }
+function getBudgetPersoPourPeriode(periodeKey) { return getBudgetHistoriquePourPeriode('perso', periodeKey); }
+
 // Budget nourriture prévu pour la période
 function getBudgetNourriture(key) {
   // Périodes passées : réel calculé
   const idx = getPeriodeIndex(key);
   const curIdx = getCurrentPeriodeIndex();
   if (idx <= curIdx) {
-    return getSommeEntreesAll(key, 'nourriture') || state.fixes.budget_nourriture;
+    return getSommeEntreesAll(key, 'nourriture') || getBudgetNourriturePourPeriode(key);
   }
-  return state.fixes.budget_nourriture;
+  return getBudgetNourriturePourPeriode(key);
 }
 
 function getBudgetPerso(key) {
   const idx = getPeriodeIndex(key);
   const curIdx = getCurrentPeriodeIndex();
   if (idx <= curIdx) {
-    return getSommeEntreesAll(key, 'perso') || state.fixes.budget_perso;
+    return getSommeEntreesAll(key, 'perso') || getBudgetPersoPourPeriode(key);
   }
-  return state.fixes.budget_perso;
+  return getBudgetPersoPourPeriode(key);
 }
 
 function getSalairePeriode(key) {
@@ -2118,9 +2142,9 @@ function calculerSoldes() {
     // Budget par défaut seulement pour les périodes FUTURES (pas en cours ni passées)
     const isFuturePeriode = getPeriodeIndex(k) > getCurrentPeriodeIndex();
     const nourriture = getSommeEntreesAll(k, 'nourriture') ||
-      (isFuturePeriode ? state.fixes.budget_nourriture : 0);
+      (isFuturePeriode ? getBudgetNourriturePourPeriode(k) : 0);
     const perso = getSommeEntreesAll(k, 'perso') ||
-      (isFuturePeriode ? state.fixes.budget_perso : 0);
+      (isFuturePeriode ? getBudgetPersoPourPeriode(k) : 0);
     const exceptionnel = getSommeEntreesAll(k, 'exceptionnel');
     const salaire = getSalairePeriode(k);
     const autre = getAutresPeriode(k);
@@ -2588,8 +2612,8 @@ function renderRappels() {
     const keyAffiche = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
     const nourritureDepensee = getSommeEntreesAll(keyAffiche, 'nourriture');
     const persoDepense = getSommeEntreesAll(keyAffiche, 'perso');
-    const resteNourr = state.fixes.budget_nourriture - nourritureDepensee;
-    const restePerso = state.fixes.budget_perso - persoDepense;
+    const resteNourr = getBudgetNourriturePourPeriode(keyAffiche) - nourritureDepensee;
+    const restePerso = getBudgetPersoPourPeriode(keyAffiche) - persoDepense;
     const total = resteNourr + restePerso;
     const colNourr = resteNourr < 0 ? 'var(--red)' : 'var(--green)';
     const colPerso = restePerso < 0 ? 'var(--red)' : 'var(--green)';
@@ -2665,8 +2689,8 @@ function renderRappels() {
     let alerteHtml = '';
 
     if (!isPeriodePassee) {
-      const nourritureBudget = state.fixes.budget_nourriture;
-      const persoBudget = state.fixes.budget_perso;
+      const nourritureBudget = getBudgetNourriturePourPeriode(keyAffiche);
+      const persoBudget = getBudgetPersoPourPeriode(keyAffiche);
       const nourritureReel = getSommeEntreesAll(keyAffiche, 'nourriture');
       const persoReel = getSommeEntreesAll(keyAffiche, 'perso');
       const soldesAlerte = calculerSoldes();
@@ -2719,8 +2743,8 @@ function renderRappels() {
       if (!dejaTraite) {
         const prevN = getSommeEntreesAll(prevKeyR, 'nourriture');
         const prevP = getSommeEntreesAll(prevKeyR, 'perso');
-        const resteNR = Math.max(0, state.fixes.budget_nourriture - prevN);
-        const resteSPR = Math.max(0, state.fixes.budget_perso - prevP);
+        const resteNR = Math.max(0, getBudgetNourriturePourPeriode(prevKeyR) - prevN);
+        const resteSPR = Math.max(0, getBudgetPersoPourPeriode(prevKeyR) - prevP);
         const resteTotalR = resteNR + resteSPR;
         if (resteTotalR > 5) {
           reliquatHtml = `<div onclick="ouvrirModalReliquat()" style="cursor:pointer;background:rgba(62,207,142,.12);border:2px solid var(--green);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:38px;">
@@ -2763,8 +2787,8 @@ function comprisAlerteOuverture() {
   const curIdx3 = getCurrentPeriodeIndex();
   const keyActuelle = PERIODES[curIdx3]?.key;
   if (!keyActuelle) return;
-  const nourritureBudget = state.fixes.budget_nourriture;
-  const persoBudget = state.fixes.budget_perso;
+  const nourritureBudget = getBudgetNourriturePourPeriode(keyActuelle);
+  const persoBudget = getBudgetPersoPourPeriode(keyActuelle);
   const nourritureReel = getSommeEntreesAll(keyActuelle, 'nourriture');
   const persoReel = getSommeEntreesAll(keyActuelle, 'perso');
   const soldesAlerte = calculerSoldes();
@@ -3085,8 +3109,8 @@ function renderPills() {
     if (idx === curIdx) {
       const nourr = getSommeEntreesAll(key,'nourriture');
       const perso = getSommeEntreesAll(key,'perso');
-      if (nourr > state.fixes.budget_nourriture) return true;
-      if (perso > state.fixes.budget_perso) return true;
+      if (nourr > getBudgetNourriturePourPeriode(key)) return true;
+      if (perso > getBudgetPersoPourPeriode(key)) return true;
     }
     return false;
   }
@@ -3146,8 +3170,8 @@ function renderPills() {
     // Disponible = budget restant nourriture + perso - extras dette non planifiés
     const nourritureDepensee = getSommeEntreesAll(p.key, 'nourriture');
     const persoDepense = getSommeEntreesAll(p.key, 'perso');
-    const resteNourr = Math.max(0, state.fixes.budget_nourriture - nourritureDepensee);
-    const restePerso = Math.max(0, state.fixes.budget_perso - persoDepense);
+    const resteNourr = Math.max(0, getBudgetNourriturePourPeriode(p.key) - nourritureDepensee);
+    const restePerso = Math.max(0, getBudgetPersoPourPeriode(p.key) - persoDepense);
     const extrasDette = ((state.detteExtras || {})[p.key] || []).reduce((s,e) => s+e.montant, 0);
     // Le portefeuille réduit le dispo mais pas le solde du compte
     const portefeuilleEngage = (state.portefeuilleDette || []).filter(v => v.periode === p.key).reduce((s,v) => s+v.montant, 0);
@@ -3364,8 +3388,8 @@ function renderAlertes() {
     const enCours = isCurrent(k);
     const futur = !enCours;
 
-    const nourritureBudget = state.fixes.budget_nourriture;
-    const persoBudget = state.fixes.budget_perso;
+    const nourritureBudget = getBudgetNourriturePourPeriode(k);
+    const persoBudget = getBudgetPersoPourPeriode(k);
     const nourritureReel = getSommeEntreesAll(k, 'nourriture');
     const persoReel = getSommeEntreesAll(k, 'perso');
     const depasseN = nourritureReel - nourritureBudget;
@@ -3427,8 +3451,8 @@ function checkAlerteOuverture() {
   const k = PERIODES[curIdx]?.key;
   if (!k) return;
 
-  const nourritureBudget = state.fixes.budget_nourriture;
-  const persoBudget = state.fixes.budget_perso;
+  const nourritureBudget = getBudgetNourriturePourPeriode(k);
+  const persoBudget = getBudgetPersoPourPeriode(k);
   const nourritureReel = getSommeEntreesAll(k, 'nourriture');
   const persoReel = getSommeEntreesAll(k, 'perso');
   const resteN = Math.max(0, nourritureBudget - nourritureReel);
@@ -3509,8 +3533,8 @@ function ouvrirModalReliquat() {
   const prevKey = PERIODES[prevIdx].key;
   const nourritureReel = getSommeEntreesAll(prevKey, 'nourriture');
   const persoReel = getSommeEntreesAll(prevKey, 'perso');
-  const resteN = Math.max(0, state.fixes.budget_nourriture - nourritureReel);
-  const resteP = Math.max(0, state.fixes.budget_perso - persoReel);
+  const resteN = Math.max(0, getBudgetNourriturePourPeriode(prevKey) - nourritureReel);
+  const resteP = Math.max(0, getBudgetPersoPourPeriode(prevKey) - persoReel);
   const resteTotal = resteN + resteP;
 
   window._reliquatCtx = { prevKey, resteN, resteP, resteTotal };
@@ -3564,8 +3588,8 @@ function proposerPortefeuille(montant) {
   // Créer entrée dans perso et nourriture proportionnellement
   const nourr = getSommeEntreesAll(curKey, 'nourriture');
   const perso = getSommeEntreesAll(curKey, 'perso');
-  const resteN = Math.max(0, state.fixes.budget_nourriture - nourr);
-  const resteP = Math.max(0, state.fixes.budget_perso - perso);
+  const resteN = Math.max(0, getBudgetNourriturePourPeriode(curKey) - nourr);
+  const resteP = Math.max(0, getBudgetPersoPourPeriode(curKey) - perso);
   // Le portefeuille ne crée pas d'entrées réelles — l'argent reste sur le compte
   if (resteN > 0) {
     state.portefeuilleDette.push({id:uid(), montant:resteN, date:getDateRef(), periode:curKey, budget:'nourriture'});
@@ -3608,8 +3632,8 @@ function renderTable() {
     { id: 'dette', label: 'Remb. dette (via loyer)', getter: k => ((state.loyerEntrees||{})[k]||[]).filter(e=>e.desc&&e.desc.toLowerCase().includes('dette')).reduce((s,e)=>s+e.montant,0), yellow: true, hideIfZero: true },
     { id: 'fixes_total', label: 'Total fixes', getter: k => soldes[k].fixes.total, bold: true },
     { section: true, label: '🛒 VARIABLE' },
-    { id: 'nourriture', label: 'Nourriture', getter: k => soldes[k].nourriture, budgetGetter: k => state.fixes.budget_nourriture },
-    { id: 'perso', label: 'Perso', getter: k => soldes[k].perso, budgetGetter: k => state.fixes.budget_perso },
+    { id: 'nourriture', label: 'Nourriture', getter: k => soldes[k].nourriture, budgetGetter: k => getBudgetNourriturePourPeriode(k) },
+    { id: 'perso', label: 'Perso', getter: k => soldes[k].perso, budgetGetter: k => getBudgetPersoPourPeriode(k) },
     { id: 'exceptionnel', label: 'Exceptionnel', getter: k => soldes[k].exceptionnel, hideIfZero: true },
     { id: 'variable_total', label: 'Total variable', getter: k => soldes[k].nourriture + soldes[k].perso + soldes[k].exceptionnel, bold: true },
     { section: true, label: '📊 SOLDES' },
@@ -3812,8 +3836,8 @@ function renderVueMois(key) {
   const totalNourr = nourr.reduce((a,e)=>a+e.montant,0);
   const totalPerso = perso.reduce((a,e)=>a+e.montant,0);
   const totalExcep = excep.reduce((a,e)=>a+e.montant,0);
-  const budgetNourr = state.fixes.budget_nourriture;
-  const budgetPerso = state.fixes.budget_perso;
+  const budgetNourr = getBudgetNourriturePourPeriode(key);
+  const budgetPerso = getBudgetPersoPourPeriode(key);
 
   function formBlock(idAmt, idDesc, idDate, btnLabel, btnCls, type) {
     return `<div class="vm-form">
@@ -3978,8 +4002,8 @@ function saveDettePaiementCourant() {
   // Calculer ce qui reste pour nourriture et perso
   const nourritureActuelle = getSommeEntreesAll(curKey, 'nourriture');
   const persoActuel = getSommeEntreesAll(curKey, 'perso');
-  const budgetNourr = state.fixes.budget_nourriture;
-  const budgetPerso = state.fixes.budget_perso;
+  const budgetNourr = getBudgetNourriturePourPeriode(curKey);
+  const budgetPerso = getBudgetPersoPourPeriode(curKey);
 
   // Reste disponible après extra
   const resteTotal = soldeApresExtra - s.fixes.total - nourritureActuelle - persoActuel;
@@ -4079,8 +4103,8 @@ function confirmerAnnulExtra(periodeKey, extraId, montantExtra) {
   const s = soldes[periodeKey];
   const nourritureActuelle = getSommeEntreesAll(periodeKey, 'nourriture');
   const persoActuel = getSommeEntreesAll(periodeKey, 'perso');
-  const budgetNourr = state.fixes.budget_nourriture;
-  const budgetPerso = state.fixes.budget_perso;
+  const budgetNourr = getBudgetNourriturePourPeriode(periodeKey);
+  const budgetPerso = getBudgetPersoPourPeriode(periodeKey);
   const soldeApresAnnul = s.fin + montantExtra;
   const p = PERIODES.find(x => x.key === periodeKey);
 
@@ -4285,7 +4309,7 @@ function verserPortefeuille() {
   const extrasDette = ((state.detteExtras || {})[curKey] || []).reduce((s,e) => s+e.montant, 0);
   const totalPortefeuille = (state.portefeuilleDette || [])
     .filter(v => v.periode === curKey).reduce((s,v) => s+v.montant, 0);
-  const dispoActuel = Math.max(0, state.fixes.budget_nourriture + state.fixes.budget_perso - nourr - perso - extrasDette - totalPortefeuille);
+  const dispoActuel = Math.max(0, getBudgetNourriturePourPeriode(curKey) + getBudgetPersoPourPeriode(curKey) - nourr - perso - extrasDette - totalPortefeuille);
 
   if (montant > dispoActuel) {
     alert(`Montant trop élevé. Dispo restant : ${fmt(dispoActuel)}`);
@@ -4604,8 +4628,8 @@ function qaAddDate(periode, type, idAmt, idDesc, idDate) {
 
   // Vérifier budget après ajout pour nourriture et perso
   if (type === 'nourriture' || type === 'perso') {
-    const budgetN = state.fixes.budget_nourriture;
-    const budgetP = state.fixes.budget_perso;
+    const budgetN = getBudgetNourriturePourPeriode(periode);
+    const budgetP = getBudgetPersoPourPeriode(periode);
     const totalN = getSommeEntreesAll(periode, 'nourriture');
     const totalP = getSommeEntreesAll(periode, 'perso');
     const budget = type === 'nourriture' ? budgetN : budgetP;
@@ -4944,9 +4968,25 @@ function renderSimFixesGrid() {
 
 function saveSimFixe() {
   const keys = ['logement','electricite','assurance','gym','netflix','fido','metro_normal','metro_etudiant','budget_nourriture','budget_perso'];
+  // Date d'effet du changement de budget = début de la période actuellement affichée
+  // (ainsi les périodes déjà passées gardent leur ancien budget)
+  const keyEffectif = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
+  const dateEffet = (getDateDebutPeriode(keyEffectif) || new Date(getDateRef())).toISOString().slice(0,10);
   for (const k of keys) {
     const el = document.getElementById('fix_' + k);
-    if (el) state.fixes[k] = parseFloat(el.value) || 0;
+    if (!el) continue;
+    const nouvelleValeur = parseFloat(el.value) || 0;
+    if ((k === 'budget_nourriture' || k === 'budget_perso') && nouvelleValeur !== state.fixes[k]) {
+      const type = k === 'budget_nourriture' ? 'nourriture' : 'perso';
+      if (!state.budgetHistorique) state.budgetHistorique = { nourriture: [], perso: [] };
+      if (!state.budgetHistorique[type]) state.budgetHistorique[type] = [];
+      // Amorcer l'historique avec l'ancienne valeur si c'est le tout premier changement
+      if (state.budgetHistorique[type].length === 0) {
+        state.budgetHistorique[type].push({ date: '2026-01-01', montant: state.fixes[k] });
+      }
+      state.budgetHistorique[type].push({ date: dateEffet, montant: nouvelleValeur });
+    }
+    state.fixes[k] = nouvelleValeur;
   }
   saveState();
   closeModal('modalSimFrequence');
@@ -4990,7 +5030,7 @@ function lancerSimulation() {
     html += `<div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;">`;
     html += `<div style="margin-top:4px;">Solde fin période simulé : <b style="color:${soldeFinSim<0?'var(--red)':'var(--green)'};">${fmt(soldeFinSim)}</b></div>`;
   } else {
-    const budget = cat === 'nourriture' ? state.fixes.budget_nourriture : state.fixes.budget_perso;
+    const budget = cat === 'nourriture' ? getBudgetNourriturePourPeriode(moisKey) : getBudgetPersoPourPeriode(moisKey);
     const dejaDepense = getSommeEntreesAll(moisKey, cat);
     const total = dejaDepense + montant;
     const depasse = total - budget;

@@ -4999,6 +4999,9 @@ function saveSimFixe() {
       if (state.budgetHistorique[type].length === 0) {
         state.budgetHistorique[type].push({ date: '2026-01-01', montant: state.fixes[k] });
       }
+      // Une nouvelle modification écrase tout changement déjà programmé à partir de cette date
+      // (sinon un ancien essai resté daté plus tard pourrait continuer à "gagner")
+      state.budgetHistorique[type] = state.budgetHistorique[type].filter(h => h.date < dateEffet);
       state.budgetHistorique[type].push({ date: dateEffet, montant: nouvelleValeur });
     }
     state.fixes[k] = nouvelleValeur;

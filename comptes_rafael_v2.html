@@ -4985,7 +4985,9 @@ function saveSimFixe() {
   const keys = ['logement','electricite','assurance','gym','netflix','fido','metro_normal','metro_etudiant','budget_nourriture','budget_perso'];
   // Date d'effet du changement de budget = début de la période actuellement affichée
   // (ainsi les périodes déjà passées gardent leur ancien budget)
-  const keyEffectif = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
+  // Toujours ancré sur la période RÉELLE actuelle (aujourd'hui), jamais sur l'onglet affiché à l'écran —
+  // sinon un changement peut s'appliquer à partir d'un mois différent selon la navigation en cours.
+  const keyEffectif = PERIODES[getCurrentPeriodeIndex()]?.key;
   const dateEffet = (getDateDebutPeriode(keyEffectif) || new Date(getDateRef())).toISOString().slice(0,10);
   for (const k of keys) {
     const el = document.getElementById('fix_' + k);

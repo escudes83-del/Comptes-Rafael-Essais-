@@ -4909,7 +4909,8 @@ function renderSimFixesGrid() {
 
 function saveSimFixe() {
   const keys = ['logement','electricite','assurance','gym','netflix','fido','metro_normal','metro_etudiant','budget_nourriture','budget_perso'];
-  const keyEffectif = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
+  // Toujours ancré sur la période RÉELLE actuelle (aujourd'hui), jamais sur l'onglet affiché à l'écran
+  const keyEffectif = PERIODES[getCurrentPeriodeIndex()]?.key;
   const dateEffet = (getDateDebutPeriode(keyEffectif) || new Date(getDateRef())).toISOString().slice(0,10);
   for (const k of keys) {
     const el = document.getElementById('fix_' + k);

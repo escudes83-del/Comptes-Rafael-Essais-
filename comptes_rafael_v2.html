@@ -2572,13 +2572,19 @@ function render() {
 function renderRappels() {
   const today = new Date(getDateRef());
 
+  // Le renouvellement revient chaque année le 8 juillet : on calcule la bonne année cible
+  // (celle qui vient si on est déjà après le 8 juillet de l'année en cours)
+  const limiteThisYear = new Date(today.getFullYear(), 6, 8);
+  const anneeCible = today <= limiteThisYear ? today.getFullYear() : today.getFullYear() + 1;
+  const periodeCible = `${anneeCible}-07`;
+
   window._rappelsSysteme = [
     {
-      id: 'assurance_sante',
+      id: `assurance_sante_${anneeCible}`,
       titre: 'Renouvellement assurance santé internationale',
-      detail: 'À renouveler avant le 8 juillet au soir',
-      dateLimit: (() => { const p='2026-07-08'.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); })(),
-      periode: '2026-07',
+      detail: `À renouveler avant le 8 juillet ${anneeCible} au soir`,
+      dateLimit: new Date(anneeCible, 6, 8),
+      periode: periodeCible,
       depenseCat: 'exceptionnel',
       depenseDesc: 'Assurance santé internationale',
     }
@@ -2587,9 +2593,17 @@ function renderRappels() {
   const elBandeau = document.getElementById('rappelBandeau');
   if (!elBandeau) return;
 
+  // Détection automatique : si une dépense "exceptionnel" mentionnant l'assurance a déjà
+  // été saisie pour la période cible (peu importe comment elle a été saisie), on considère
+  // le renouvellement comme fait — pas besoin de passer par le bouton dédié.
+  function assuranceDejaPayeePourPeriode(periode) {
+    const entrees = (state.entrees && state.entrees[periode]) || [];
+    return entrees.some(e => e.type === 'exceptionnel' && /assurance/i.test(e.desc || ''));
+  }
+
   let htmlCarre = '';
   window._rappelsSysteme.forEach(r => {
-    const done = (state.rappels || {})[r.id + '_done'];
+    const done = (state.rappels || {})[r.id + '_done'] || assuranceDejaPayeePourPeriode(r.periode);
     const supprime = (state.rappels || {})[r.id + '_supprime'];
     if (supprime || done) return;
     const joursRestants = Math.ceil((r.dateLimit - today) / 86400000);
@@ -2917,33 +2931,18 @@ function supprimerRappel(id) {
 }
 
 function ouvrirSaisieRappel(rappelId, periode, cat, desc) {
-  // Ouvrir le modal dépense pré-rempli
+  // Ouvrir le modal dépense pré-rempli (la disparition du rappel se fait ensuite automatiquement,
+  // dès qu'une dépense correspondante est détectée dans la période)
   openModal('modalDepense');
   document.getElementById('depCat').value = cat;
   document.getElementById('depDesc').value = desc;
   const p = PERIODES.find(x => x.key === periode);
   if (p) document.getElementById('depDate').value = `${p.anneeDebut}-${String(p.moisDebut).padStart(2,'0')}-20`;
   document.getElementById('depRembRow').style.display = 'block';
-  // Après sauvegarde, marquer comme fait
-  window._pendingRappelId = rappelId;
 }
 
-// Surcharger saveDepense pour gérer le rappel
-const _origSaveDepense = saveDepense;
-function saveDepense() {
-  _origSaveDepense();
-  if (window._pendingRappelId) {
-    const montant = parseFloat(document.getElementById('depMontant')?.value || '0');
-    if (montant > 0) {
-      if (!state.rappels) state.rappels = {};
-      const today = new Date(getDateRef()).toLocaleDateString('fr-CA');
-      state.rappels[window._pendingRappelId + '_done'] = `${fmt(montant)} le ${today}`;
-      saveState();
-      window._pendingRappelId = null;
-      renderRappels();
-    }
-  }
-}
+// Note : la détection de paiement se fait maintenant automatiquement (voir renderRappels),
+// donc plus besoin de marquer explicitement le rappel comme "fait" après la saisie.
 
 function toggle2027() {
   const label = document.getElementById('pills2027label');
@@ -3514,11 +3513,16 @@ function checkAlerteOuverture() {
     }
   }
 
-  // Assurance santé
-  const assurKey = (state.rappels || {})['assurance_sante_done'];
+  // Assurance santé (même règle que le bandeau : revient chaque année, détection automatique)
+  const todayDate2 = new Date(parseInt(parts[0]), parseInt(parts[1])-1, dayOfMonth);
+  const limiteThisYear2 = new Date(todayDate2.getFullYear(), 6, 8);
+  const anneeCible2 = todayDate2 <= limiteThisYear2 ? todayDate2.getFullYear() : todayDate2.getFullYear() + 1;
+  const periodeCible2 = `${anneeCible2}-07`;
+  const entreesCible2 = (state.entrees && state.entrees[periodeCible2]) || [];
+  const assuranceDejaPayee2 = entreesCible2.some(e => e.type === 'exceptionnel' && /assurance/i.test(e.desc || ''));
+  const assurKey = (state.rappels || {})[`assurance_sante_${anneeCible2}_done`] || assuranceDejaPayee2;
   if (!assurKey) {
-    const todayDate2 = new Date(parseInt(parts[0]), parseInt(parts[1])-1, dayOfMonth);
-    const deadline = new Date('2026-07-09');
+    const deadline = new Date(anneeCible2, 6, 9);
     const jours = Math.ceil((deadline - todayDate2) / 86400000);
     if (jours >= 0 && jours <= 7) {
       messages.push('🏥 <b>Assurance santé internationale</b> à renouveler dans <b>' + jours + ' jour' + (jours>1?'s':'') + '</b> (avant le 8 juillet) !');

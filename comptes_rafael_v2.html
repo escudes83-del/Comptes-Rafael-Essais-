@@ -3106,6 +3106,13 @@ const PREV_LOYER = 300;   // 200$ loyer + 100$ remb. dette (taux standard mensue
 const PREV_METRO = 110;
 const PREV_GYM = 40.80;   // 2 x 20.40
 const PREV_FIDO = 33.96;
+const PREV_NETFLIX = 21.46;
+// Moyenne des 4 paies normales de Rafael (28 mai, 11 juin, 25 juin, 9 juillet) — 900$ de paie de
+// clôture (23 juillet) à saisir à part comme vraie entrée, hors moyenne.
+// Fenêtre d'emploi connue dès le départ (10 mai → dernière paie 23 juillet) : la moyenne s'applique
+// donc aux périodes jun/jul et jul/aoû seulement, puis 0$ de salaire prévu ensuite (fin d'emploi officielle).
+const PREV_SALAIRE_MOYEN = 3198.38;
+const PREV_PERIODES_AVEC_SALAIRE = ['2026-07', '2026-08'];
 const PREV_PERIODE_DEPART = '2026-07';
 
 function calculerPrevisionnel(soldesReels) {
@@ -3122,10 +3129,10 @@ function calculerPrevisionnel(soldesReels) {
     if (solde === null) solde = soldesReels[PREV_PERIODE_DEPART]?.debut ?? 0;
     const nourriture = getBudgetNourriturePourPeriode(p.key);
     const perso = getBudgetPersoPourPeriode(p.key);
-    // Revenus prévisionnels = 0 (pas de salaire ; les "autres revenus" sont occasionnels, non prévus)
-    // Dépenses : loyer+dette, métro, gym, fido, budgets nourriture/perso — pas de bixi/élec/assurance/exceptionnel
-    const depensesPrevues = PREV_LOYER + PREV_METRO + PREV_GYM + PREV_FIDO + nourriture + perso;
-    solde = solde - depensesPrevues;
+    const revenuPrevu = PREV_PERIODES_AVEC_SALAIRE.includes(p.key) ? PREV_SALAIRE_MOYEN : 0;
+    // Dépenses : loyer+dette, métro, gym, fido, netflix, budgets nourriture/perso
+    const depensesPrevues = PREV_LOYER + PREV_METRO + PREV_GYM + PREV_FIDO + PREV_NETFLIX + nourriture + perso;
+    solde = solde + revenuPrevu - depensesPrevues;
     prev[p.key] = solde;
   }
   return prev;

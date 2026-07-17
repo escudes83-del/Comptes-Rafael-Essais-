@@ -3022,6 +3022,7 @@ const PREV_LOYER = 300;   // 200$ loyer + 100$ remb. dette (taux standard mensue
 const PREV_METRO = 110;
 const PREV_GYM = 40.80;   // 2 x 20.40
 const PREV_FIDO = 33.96;
+const PREV_NETFLIX = 21.46;
 const PREV_PERIODE_DEPART = '2027-01';
 
 function calculerPrevisionnel(soldesReels) {
@@ -3037,7 +3038,7 @@ function calculerPrevisionnel(soldesReels) {
     if (solde === null) solde = soldesReels[PREV_PERIODE_DEPART]?.debut ?? 0;
     const nourriture = getBudgetNourriturePourPeriode(p.key);
     const perso = getBudgetPersoPourPeriode(p.key);
-    const depensesPrevues = PREV_LOYER + PREV_METRO + PREV_GYM + PREV_FIDO + nourriture + perso;
+    const depensesPrevues = PREV_LOYER + PREV_METRO + PREV_GYM + PREV_FIDO + PREV_NETFLIX + nourriture + perso;
     solde = solde - depensesPrevues;
     prev[p.key] = solde;
   }

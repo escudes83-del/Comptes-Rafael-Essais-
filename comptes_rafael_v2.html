@@ -1258,10 +1258,15 @@ input, textarea, select { cursor: text; }
       <div style="margin-left:auto;display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
         <div>
           <div class="solde-label">📅 Date référence</div>
-          <input type="date" id="inputDateRef"
-            style="background:var(--bg);border:1px solid var(--border);border-radius:5px;
-                   color:var(--text);font-size:12px;padding:4px 8px;margin-top:3px;"
-            onchange="setDateRef(this.value)">
+          <div style="display:flex;gap:4px;align-items:center;">
+            <input type="date" id="inputDateRef"
+              style="background:var(--bg);border:1px solid var(--border);border-radius:5px;
+                     color:var(--text);font-size:12px;padding:4px 8px;margin-top:3px;"
+              onchange="setDateRef(this.value)">
+            <button onclick="reinitialiserDateRef()" title="Revenir à aujourd'hui"
+              style="background:var(--bg);border:1px solid var(--border);border-radius:5px;
+                     color:var(--text);font-size:12px;padding:4px 7px;margin-top:3px;cursor:pointer;">↺</button>
+          </div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px;" id="labelDateRef">= aujourd'hui</div>
         </div>
         <div>
@@ -1939,6 +1944,7 @@ function isAECPeriode(key) {
 }
 
 function getMetroPeriode(key) {
+  if (hasFixeEntrees('metro', key)) return sommeFixeEntrees('metro', key);
   // Historique réel
   const hist = {
     '2026-01': 0,
@@ -2033,7 +2039,7 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
   const loyerEntrees = (state.loyerEntrees || {})[periodeKey] || [];
   total += loyerEntrees.filter(e => e.date <= dateRef).reduce((s,e) => s+e.montant, 0);
   // Frais fixes manuels (saisis explicitement) : seulement les entrées dont la date est <= dateRef
-  ['electricite','assurance','gym','netflix','fido','bixi'].forEach(fixKey => {
+  ['electricite','assurance','gym','netflix','fido','bixi','metro'].forEach(fixKey => {
     const entrees = getFixeEntreesPeriode(fixKey, periodeKey);
     total += entrees.filter(e => e.date <= dateRef).reduce((s,e) => s+e.montant, 0);
   });
@@ -2041,16 +2047,19 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
   const p = PERIODES.find(x => x.key === periodeKey);
   if (p) {
     const debutPeriode = new Date(p.anneeDebut, p.moisDebut - 1, 16);
-    const milieuPeriode = new Date(debutPeriode); milieuPeriode.setDate(milieuPeriode.getDate() + 15); // ~1er du mois suivant
+    // Gym réellement prélevé le 23 du 1er mois et le 7 du 2e mois de la période (observé sur le relevé)
+    const gymDate1 = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 23);
+    const gymDate2 = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 7);
     const ref = new Date(dateRef);
-    // Gym : 1 prélèvement par demi-période (au début de chaque demi-période)
+    // Gym : 1 prélèvement par demi-période (23 puis 7 du mois suivant)
     if (!hasFixeEntrees('gym', periodeKey)) {
-      if (debutPeriode <= ref) total += GYM_MONTANT;
-      if (milieuPeriode <= ref) total += GYM_MONTANT;
+      if (gymDate1 <= ref) total += GYM_MONTANT;
+      if (gymDate2 <= ref) total += GYM_MONTANT;
     }
-    // Fido : 1ère demi-période seulement
+    // Fido : réellement prélevé le 29 du 1er mois de la période (observé sur le relevé)
     if (!hasFixeEntrees('fido', periodeKey) && state.fixes.fido > 0) {
-      if (debutPeriode <= ref) total += state.fixes.fido;
+      const fidoDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 29);
+      if (fidoDate <= ref) total += state.fixes.fido;
     }
     // Netflix : le 25 du mois
     if (!hasFixeEntrees('netflix', periodeKey) && state.fixes.netflix > 0) {
@@ -2058,7 +2067,7 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
       if (netflixDate >= debutPeriode && netflixDate <= ref) total += state.fixes.netflix;
     }
     // Métro : le 1er du mois suivant le début de période
-    if (!hasFixeEntrees('metro_normal', periodeKey) && !hasFixeEntrees('metro_etudiant', periodeKey)) {
+    if (!hasFixeEntrees('metro', periodeKey)) {
       const metroDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 1);
       if (metroDate <= ref) {
         const isAEC = state.mode === 'aec' && isAECPeriode(periodeKey);
@@ -3089,8 +3098,42 @@ function calculerSoldes2027Visiteur(state2027) {
   return soldes;
 }
 
+// ============================================================
+// PRÉVISIONNEL — scénario fixe indépendant des vraies saisies
+// (pas de salaire tant que Rafael n'a pas le droit de travailler)
+// ============================================================
+const PREV_LOYER = 300;   // 200$ loyer + 100$ remb. dette (taux standard mensuel)
+const PREV_METRO = 110;
+const PREV_GYM = 40.80;   // 2 x 20.40
+const PREV_FIDO = 33.96;
+const PREV_PERIODE_DEPART = '2026-07';
+
+function calculerPrevisionnel(soldesReels) {
+  const prev = {};
+  const idxDepart = getPeriodeIndex(PREV_PERIODE_DEPART);
+  let solde = null;
+  for (const p of PERIODES) {
+    const idx = getPeriodeIndex(p.key);
+    if (idx < idxDepart) {
+      // Avant la période de départ du scénario : on garde le solde réel (déjà connu/passé)
+      prev[p.key] = soldesReels[p.key]?.fin ?? 0;
+      continue;
+    }
+    if (solde === null) solde = soldesReels[PREV_PERIODE_DEPART]?.debut ?? 0;
+    const nourriture = getBudgetNourriturePourPeriode(p.key);
+    const perso = getBudgetPersoPourPeriode(p.key);
+    // Revenus prévisionnels = 0 (pas de salaire ; les "autres revenus" sont occasionnels, non prévus)
+    // Dépenses : loyer+dette, métro, gym, fido, budgets nourriture/perso — pas de bixi/élec/assurance/exceptionnel
+    const depensesPrevues = PREV_LOYER + PREV_METRO + PREV_GYM + PREV_FIDO + nourriture + perso;
+    solde = solde - depensesPrevues;
+    prev[p.key] = solde;
+  }
+  return prev;
+}
+
 function renderPills() {
   const soldes = calculerSoldes();
+  const soldesPrev = calculerPrevisionnel(soldes);
   const curIdx = getCurrentPeriodeIndex();
   const dateRef = getDateRef();
 
@@ -3140,7 +3183,7 @@ function renderPills() {
     const isFuture = idx > curIdx;
     const isSelected = selectedMois === p.key;
     const joJ = soldeJourJ(p.key, idx);
-    const finPrev = soldes[p.key]?.fin ?? 0;
+    const finPrev = soldesPrev[p.key] ?? 0;
     const debut = soldes[p.key]?.debut ?? 0;
     const alert = hasAlerte(p.key, idx);
     const diff = finPrev - debut;
@@ -3273,6 +3316,15 @@ function setDateRef(val) {
   saveState();
   updateDateRefUI();
   renderHero();
+}
+
+// Bouton "↺" : remet le champ à vide (mode automatique = aujourd'hui) et rafraîchit tout l'affichage,
+// pas seulement le bandeau (les pills réel/prévi/dispo en dépendent aussi).
+function reinitialiserDateRef() {
+  state.dateRef = null;
+  document.getElementById('inputDateRef').value = getDateRef();
+  saveState();
+  render();
 }
 
 function setSoldeRef(val) {

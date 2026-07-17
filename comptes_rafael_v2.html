@@ -3234,13 +3234,15 @@ function renderPills() {
     // Disponible = budget restant nourriture + perso - extras dette non planifiés
     const nourritureDepensee = getSommeEntreesAll(p.key, 'nourriture');
     const persoDepense = getSommeEntreesAll(p.key, 'perso');
-    const resteNourr = Math.max(0, getBudgetNourriturePourPeriode(p.key) - nourritureDepensee);
-    const restePerso = Math.max(0, getBudgetPersoPourPeriode(p.key) - persoDepense);
+    const resteNourr = getBudgetNourriturePourPeriode(p.key) - nourritureDepensee;
+    const restePerso = getBudgetPersoPourPeriode(p.key) - persoDepense;
     const extrasDette = ((state.detteExtras || {})[p.key] || []).reduce((s,e) => s+e.montant, 0);
     // Le portefeuille réduit le dispo mais pas le solde du compte
     const portefeuilleEngage = (state.portefeuilleDette || []).filter(v => v.periode === p.key).reduce((s,v) => s+v.montant, 0);
     // extrasDette ne réduit plus le dispo : passe par le loyer (compte), pas par nourriture/perso
-    const dispo = Math.max(0, resteNourr + restePerso - portefeuilleEngage);
+    // Pas de plafond à 0 par catégorie : un dépassement nourriture doit bien réduire le total,
+    // au lieu d'être caché — sinon un dépassement réel peut afficher un faux "dispo" positif.
+    const dispo = resteNourr + restePerso - portefeuilleEngage;
     const colDispo = dispo < 100 ? 'var(--red)' : dispo < 250 ? 'var(--yellow)' : 'var(--green)';
 
     let cls2 = 'pill row2style' + (isSelected?' selected':isCur?' current':isFuture?' future':' past');

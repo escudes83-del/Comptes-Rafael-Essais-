@@ -5279,7 +5279,7 @@ async function restaurerSauvegardeAuto(dateKey) {
 const FIREBASE_URL = 'https://comptes-rafael-default-rtdb.firebaseio.com';
 
 async function rechargerVraiesDonnees() {
-  if (!confirm("Recharger les vraies dépenses/revenus/salaires depuis 2027 Visiteur ?\n\nLe loyer, la dette et les montants propres à cette simulation ne seront PAS touchés.\nRien ne sera jamais écrit dans la vraie app 2027 Visiteur.")) return;
+  if (!confirm("Recharger les vraies dépenses/revenus/salaires depuis 2027 Visiteur ?\n\nLe vrai loyer historique (avant octobre 2026) sera importé tel quel.\nÀ partir d'octobre, le loyer/la dette propres à cette simulation ne seront PAS touchés.\nRien ne sera jamais écrit dans la vraie app 2027 Visiteur.")) return;
   try {
     const res = await fetch(FIREBASE_URL + '/' + VRAI_STORAGE_KEY + '.json');
     const vrai = await res.json();
@@ -5287,6 +5287,14 @@ async function rechargerVraiesDonnees() {
     state.entrees = JSON.parse(JSON.stringify(vrai.entrees || {}));
     state.fixesEntrees = JSON.parse(JSON.stringify(vrai.fixesEntrees || {}));
     if (vrai.budgetHistorique) state.budgetHistorique = JSON.parse(JSON.stringify(vrai.budgetHistorique));
+    const vraiLoyer = vrai.loyerEntrees || {};
+    if (!state.loyerEntrees) state.loyerEntrees = {};
+    for (const key of Object.keys(vraiLoyer)) {
+      const debutPeriode = getDateDebutPeriode(key);
+      if (debutPeriode && debutPeriode < NOUVEAU_LOGEMENT_DEPART) {
+        state.loyerEntrees[key] = JSON.parse(JSON.stringify(vraiLoyer[key]));
+      }
+    }
     saveState();
     render();
     alert("Vraies données rechargées avec succès dans la simulation.");

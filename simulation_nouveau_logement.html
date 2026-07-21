@@ -5397,7 +5397,7 @@ const FIREBASE_URL = 'https://comptes-rafael-default-rtdb.firebaseio.com';
 // en lecture seule — n'écrit JAMAIS rien dans la vraie base. Le loyer, la dette et le
 // portefeuille de LA SIMULATION restent intacts (propres à ce fichier, jamais écrasés).
 async function rechargerVraiesDonnees() {
-  if (!confirm("Recharger les vraies dépenses/revenus/salaires depuis 2026 Visiteur ?\n\nLe loyer, la dette et le 6080$ propres à cette simulation ne seront PAS touchés.\nRien ne sera jamais écrit dans la vraie app 2026 Visiteur.")) return;
+  if (!confirm("Recharger les vraies dépenses/revenus/salaires depuis 2026 Visiteur ?\n\nLe vrai loyer historique (avant octobre 2026) sera importé tel quel.\nÀ partir d'octobre, le loyer/la dette propres à cette simulation ne seront PAS touchés.\nRien ne sera jamais écrit dans la vraie app 2026 Visiteur.")) return;
   try {
     const res = await fetch(FIREBASE_URL + '/' + VRAI_STORAGE_KEY + '.json');
     const vrai = await res.json();
@@ -5408,8 +5408,19 @@ async function rechargerVraiesDonnees() {
     state.fixesEntrees = JSON.parse(JSON.stringify(vrai.fixesEntrees || {}));
     // Les vrais changements de budget nourriture/perso
     if (vrai.budgetHistorique) state.budgetHistorique = JSON.parse(JSON.stringify(vrai.budgetHistorique));
-    // NE PAS toucher : state.loyerEntrees, state.detteExtras, state.portefeuilleDette,
-    // state.dette*, state.fixes.logement — propres à cette simulation.
+    // Loyer réel : importé pour les périodes déjà passées (avant octobre 2026) — c'est de
+    // l'historique réglé, ça ne doit jamais différer. À partir d'octobre, on garde les
+    // saisies propres à la simulation (prépaiement, nouveau logement), sans les écraser.
+    const vraiLoyer = vrai.loyerEntrees || {};
+    if (!state.loyerEntrees) state.loyerEntrees = {};
+    for (const key of Object.keys(vraiLoyer)) {
+      const debutPeriode = getDateDebutPeriode(key);
+      if (debutPeriode && debutPeriode < NOUVEAU_LOGEMENT_DEPART) {
+        state.loyerEntrees[key] = JSON.parse(JSON.stringify(vraiLoyer[key]));
+      }
+    }
+    // NE PAS toucher, à partir d'octobre : state.loyerEntrees, state.detteExtras,
+    // state.portefeuilleDette, state.dette*, state.fixes.logement — propres à cette simulation.
     saveState();
     render();
     alert("Vraies données rechargées avec succès dans la simulation.");

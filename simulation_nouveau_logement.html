@@ -2008,28 +2008,28 @@ function getBixiPeriode(key) {
 
 // ============================================================
 // SIMULATION NOUVEAU LOGEMENT — le loyer d'octobre 2026 à juin 2027 est prépayé en un bloc
-// (6 080$, à saisir comme une vraie entrée dans ce fichier) : donc pas de loyer mensuel
+// (6 080$, saisi comme une vraie entrée dans ce fichier) : donc pas de loyer mensuel
 // pendant cette fenêtre. À partir de juillet 2027, on assume un retour à 865$/mois (à confirmer
 // selon ce qui est décidé avec le colocataire/propriétaire à ce moment-là).
-// Électricité (70$/mois) + assurance habitation (350$/an) s'appliquent dès octobre 2026.
+// Électricité (70$/mois) + assurance habitation (350$/an) s'appliquent dès la période sept/oct
+// (celle qui contient le 1er octobre) — comparaison par PÉRIODE, pas par date brute, pour rester
+// cohérent avec la période où le 6080$ est réellement saisi (2026-10).
 // ============================================================
-const NOUVEAU_LOGEMENT_DEPART = new Date(2026, 9, 1);   // 1er octobre 2026
-const LOYER_PREPAYE_FIN = new Date(2027, 5, 1);          // 1er juin 2027 (fin de la fenêtre prépayée)
+const NOUVEAU_LOGEMENT_PERIODE = '2026-10';   // période sept/oct, qui contient le 1er octobre
+const LOYER_PREPAYE_FIN_PERIODE = '2027-07';  // période jun/jul 2027, reprise du loyer normal
 const NOUVEAU_LOGEMENT_LOYER = 865; // reprend après la fenêtre prépayée (à confirmer)
 const NOUVEAU_LOGEMENT_ELEC = 70;
 const NOUVEAU_LOGEMENT_ASSURANCE = 350 / 12;
 
 function getElectricitePeriode(key) {
   if (hasFixeEntrees('electricite', key)) return sommeFixeEntrees('electricite', key);
-  const debutPeriode = getDateDebutPeriode(key);
-  if (debutPeriode && debutPeriode >= NOUVEAU_LOGEMENT_DEPART) return NOUVEAU_LOGEMENT_ELEC;
+  if (getPeriodeIndex(key) >= getPeriodeIndex(NOUVEAU_LOGEMENT_PERIODE)) return NOUVEAU_LOGEMENT_ELEC;
   return state.fixes.electricite;
 }
 
 function getAssurancePeriode(key) {
   if (hasFixeEntrees('assurance', key)) return sommeFixeEntrees('assurance', key);
-  const debutPeriode = getDateDebutPeriode(key);
-  if (debutPeriode && debutPeriode >= NOUVEAU_LOGEMENT_DEPART) return NOUVEAU_LOGEMENT_ASSURANCE;
+  if (getPeriodeIndex(key) >= getPeriodeIndex(NOUVEAU_LOGEMENT_PERIODE)) return NOUVEAU_LOGEMENT_ASSURANCE;
   return state.fixes.assurance;
 }
 
@@ -2038,10 +2038,12 @@ function getLogementPeriode(key) {
   const entries = (state.loyerEntrees || {})[key] || [];
   if (entries.length > 0) return entries.reduce((s, e) => s + e.montant, 0);
   // Rien saisi encore pour cette période :
-  const debutPeriode = getDateDebutPeriode(key);
-  if (!debutPeriode) return 0;
-  if (debutPeriode >= NOUVEAU_LOGEMENT_DEPART && debutPeriode < LOYER_PREPAYE_FIN) return 0; // couvert par le prépaiement
-  if (debutPeriode >= LOYER_PREPAYE_FIN) return NOUVEAU_LOGEMENT_LOYER; // reprise après juin 2027
+  const idx = getPeriodeIndex(key);
+  if (idx === -1) return 0;
+  const idxDepart = getPeriodeIndex(NOUVEAU_LOGEMENT_PERIODE);
+  const idxFin = getPeriodeIndex(LOYER_PREPAYE_FIN_PERIODE);
+  if (idx >= idxDepart && idx < idxFin) return 0; // couvert par le prépaiement
+  if (idx >= idxFin) return NOUVEAU_LOGEMENT_LOYER; // reprise après juin/juillet 2027
   return 0;
 }
 
@@ -3158,11 +3160,13 @@ function calculerPrevisionnel(soldesReels) {
     const nourriture = getBudgetNourriturePourPeriode(p.key);
     const perso = getBudgetPersoPourPeriode(p.key);
     const revenuPrevu = PREV_PERIODES_AVEC_SALAIRE.includes(p.key) ? PREV_SALAIRE_MOYEN : 0;
-    // Loyer prépayé (0$) d'octobre 2026 à juin 2027 ; reprise à 865$ ensuite (à confirmer) ;
-    // ancien loyer avant octobre. Électricité + assurance dès octobre.
-    const debutP = getDateDebutPeriode(p.key);
-    const dansFenetrePrepayee = debutP && debutP >= NOUVEAU_LOGEMENT_DEPART && debutP < LOYER_PREPAYE_FIN;
-    const apresFenetrePrepayee = debutP && debutP >= LOYER_PREPAYE_FIN;
+    // Loyer prépayé (0$) de sept/oct 2026 à mai/juin 2027 ; reprise à 865$ à partir de jun/jul 2027 ;
+    // ancien loyer avant. Électricité + assurance dès la période sept/oct.
+    const idxP = getPeriodeIndex(p.key);
+    const idxDepart2 = getPeriodeIndex(NOUVEAU_LOGEMENT_PERIODE);
+    const idxFin2 = getPeriodeIndex(LOYER_PREPAYE_FIN_PERIODE);
+    const dansFenetrePrepayee = idxP >= idxDepart2 && idxP < idxFin2;
+    const apresFenetrePrepayee = idxP >= idxFin2;
     const nouveauLogementActif = dansFenetrePrepayee || apresFenetrePrepayee;
     const loyerPrev = dansFenetrePrepayee ? 0 : (apresFenetrePrepayee ? NOUVEAU_LOGEMENT_LOYER : PREV_LOYER_ANCIEN);
     const elecPrev = nouveauLogementActif ? NOUVEAU_LOGEMENT_ELEC : 0;
@@ -5452,8 +5456,8 @@ async function rechargerVraiesDonnees() {
     if (!state.detteCalManuel) state.detteCalManuel = {};
     if (!state.detteExtras) state.detteExtras = {};
     for (const key of new Set([...Object.keys(vraiDetteCal), ...Object.keys(vraiDetteExtras)])) {
-      const debutPeriode = getDateDebutPeriode(key);
-      if (debutPeriode && debutPeriode < NOUVEAU_LOGEMENT_DEPART) {
+      const idxKey = getPeriodeIndex(key);
+      if (idxKey !== -1 && idxKey < getPeriodeIndex(NOUVEAU_LOGEMENT_PERIODE)) {
         if (vraiDetteCal[key] !== undefined) state.detteCalManuel[key] = vraiDetteCal[key];
         if (vraiDetteExtras[key]) state.detteExtras[key] = JSON.parse(JSON.stringify(vraiDetteExtras[key]));
       }

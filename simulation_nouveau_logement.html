@@ -5419,6 +5419,21 @@ async function rechargerVraiesDonnees() {
         state.loyerEntrees[key] = JSON.parse(JSON.stringify(vraiLoyer[key]));
       }
     }
+    // Suivi de la dette (remboursements déjà réellement faits, avant octobre) : sans ça, la
+    // dette resterait affichée au montant plein dans la simulation, alors qu'elle a déjà
+    // été partiellement remboursée dans la vraie vie.
+    const vraiDetteCal = vrai.detteCalManuel || {};
+    const vraiDetteExtras = vrai.detteExtras || {};
+    if (!state.detteCalManuel) state.detteCalManuel = {};
+    if (!state.detteExtras) state.detteExtras = {};
+    for (const key of new Set([...Object.keys(vraiDetteCal), ...Object.keys(vraiDetteExtras)])) {
+      const debutPeriode = getDateDebutPeriode(key);
+      if (debutPeriode && debutPeriode < NOUVEAU_LOGEMENT_DEPART) {
+        if (vraiDetteCal[key] !== undefined) state.detteCalManuel[key] = vraiDetteCal[key];
+        if (vraiDetteExtras[key]) state.detteExtras[key] = JSON.parse(JSON.stringify(vraiDetteExtras[key]));
+      }
+    }
+    if (vrai.detteInitiale !== undefined) state.detteInitiale = vrai.detteInitiale;
     // NE PAS toucher, à partir d'octobre : state.loyerEntrees, state.detteExtras,
     // state.portefeuilleDette, state.dette*, state.fixes.logement — propres à cette simulation.
     saveState();

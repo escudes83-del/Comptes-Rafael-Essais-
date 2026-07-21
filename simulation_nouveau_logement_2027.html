@@ -5284,8 +5284,9 @@ async function rechargerVraiesDonnees() {
     const res = await fetch(FIREBASE_URL + '/' + VRAI_STORAGE_KEY + '.json');
     const vrai = await res.json();
     if (!vrai) { alert("Impossible de lire les vraies données."); return; }
-    state.entrees = JSON.parse(JSON.stringify(vrai.entrees || {}));
-    state.fixesEntrees = JSON.parse(JSON.stringify(vrai.fixesEntrees || {}));
+    // Ce fichier ne couvre que 2027 — toutes ses périodes sont après la transition logement,
+    // donc on n'importe PAS les dépenses/revenus (ça écraserait les saisies propres à la
+    // simulation). Seuls les changements de budget et le loyer historique (s'il y en a) sont pris.
     if (vrai.budgetHistorique) state.budgetHistorique = JSON.parse(JSON.stringify(vrai.budgetHistorique));
     const vraiLoyer = vrai.loyerEntrees || {};
     if (!state.loyerEntrees) state.loyerEntrees = {};

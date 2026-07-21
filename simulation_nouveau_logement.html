@@ -5403,9 +5403,28 @@ async function rechargerVraiesDonnees() {
     const vrai = await res.json();
     if (!vrai) { alert("Impossible de lire les vraies données."); return; }
     // On copie les vraies dépenses/revenus (nourriture, perso, exceptionnel, salaire, autre)
-    state.entrees = JSON.parse(JSON.stringify(vrai.entrees || {}));
-    // Les vrais frais fixes réellement payés (gym, fido, bixi, métro) — pas le loyer/dette
-    state.fixesEntrees = JSON.parse(JSON.stringify(vrai.fixesEntrees || {}));
+    // — seulement pour les périodes AVANT la transition (2026-10), pour ne jamais écraser
+    // une saisie propre à la simulation (ex: le 6080$) ajoutée à partir d'octobre.
+    const idxTransition = getPeriodeIndex('2026-10');
+    if (!state.entrees) state.entrees = {};
+    for (const key of Object.keys(vrai.entrees || {})) {
+      const idx = getPeriodeIndex(key);
+      if (idx === -1 || idx < idxTransition) {
+        state.entrees[key] = JSON.parse(JSON.stringify(vrai.entrees[key]));
+      }
+      // Sinon (octobre 2026 et après) : on ne touche pas, propre à la simulation.
+    }
+    // Les vrais frais fixes réellement payés (gym, fido, bixi, métro) — même règle
+    if (!state.fixesEntrees) state.fixesEntrees = {};
+    for (const cat of Object.keys(vrai.fixesEntrees || {})) {
+      if (!state.fixesEntrees[cat]) state.fixesEntrees[cat] = {};
+      for (const key of Object.keys(vrai.fixesEntrees[cat] || {})) {
+        const idx = getPeriodeIndex(key);
+        if (idx === -1 || idx < idxTransition) {
+          state.fixesEntrees[cat][key] = JSON.parse(JSON.stringify(vrai.fixesEntrees[cat][key]));
+        }
+      }
+    }
     // Les vrais changements de budget nourriture/perso
     if (vrai.budgetHistorique) state.budgetHistorique = JSON.parse(JSON.stringify(vrai.budgetHistorique));
     // Loyer réel : importé pour les périodes déjà passées (avant octobre 2026) — c'est de

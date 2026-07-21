@@ -5290,9 +5290,10 @@ async function rechargerVraiesDonnees() {
     const vraiLoyer = vrai.loyerEntrees || {};
     if (!state.loyerEntrees) state.loyerEntrees = {};
     for (const key of Object.keys(vraiLoyer)) {
-      const debutPeriode = getDateDebutPeriode(key);
-      if (debutPeriode && debutPeriode < NOUVEAU_LOGEMENT_DEPART) {
-        state.loyerEntrees[key] = JSON.parse(JSON.stringify(vraiLoyer[key]));
+      const entriesReels = vraiLoyer[key] || [];
+      const toutAvantOctobre = entriesReels.every(e => e.date < '2026-10-01');
+      if (toutAvantOctobre) {
+        state.loyerEntrees[key] = JSON.parse(JSON.stringify(entriesReels));
       }
     }
     const vraiDetteCal = vrai.detteCalManuel || {};

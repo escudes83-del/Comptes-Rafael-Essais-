@@ -5411,13 +5411,19 @@ async function rechargerVraiesDonnees() {
     // Loyer réel : importé pour les périodes déjà passées (avant octobre 2026) — c'est de
     // l'historique réglé, ça ne doit jamais différer. À partir d'octobre, on garde les
     // saisies propres à la simulation (prépaiement, nouveau logement), sans les écraser.
+    // Loyer réel : importé seulement pour les périodes ENTIÈREMENT avant le 1er octobre 2026.
+    // (La période sept/oct contient le 1er octobre lui-même — on ne l'importe pas du tout,
+    // pour laisser la place aux saisies propres à la simulation à partir de cette date.)
     const vraiLoyer = vrai.loyerEntrees || {};
     if (!state.loyerEntrees) state.loyerEntrees = {};
     for (const key of Object.keys(vraiLoyer)) {
-      const debutPeriode = getDateDebutPeriode(key);
-      if (debutPeriode && debutPeriode < NOUVEAU_LOGEMENT_DEPART) {
-        state.loyerEntrees[key] = JSON.parse(JSON.stringify(vraiLoyer[key]));
+      const entriesReels = vraiLoyer[key] || [];
+      const toutAvantOctobre = entriesReels.every(e => e.date < '2026-10-01');
+      if (toutAvantOctobre) {
+        state.loyerEntrees[key] = JSON.parse(JSON.stringify(entriesReels));
       }
+      // Sinon (période qui contient ou suit le 1er octobre) : on ne touche pas à cette
+      // période, elle reste propre à la simulation.
     }
     // Suivi de la dette (remboursements déjà réellement faits, avant octobre) : sans ça, la
     // dette resterait affichée au montant plein dans la simulation, alors qu'elle a déjà

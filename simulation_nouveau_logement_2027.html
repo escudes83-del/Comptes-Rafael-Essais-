@@ -5295,6 +5295,18 @@ async function rechargerVraiesDonnees() {
         state.loyerEntrees[key] = JSON.parse(JSON.stringify(vraiLoyer[key]));
       }
     }
+    const vraiDetteCal = vrai.detteCalManuel || {};
+    const vraiDetteExtras = vrai.detteExtras || {};
+    if (!state.detteCalManuel) state.detteCalManuel = {};
+    if (!state.detteExtras) state.detteExtras = {};
+    for (const key of new Set([...Object.keys(vraiDetteCal), ...Object.keys(vraiDetteExtras)])) {
+      const debutPeriode = getDateDebutPeriode(key);
+      if (debutPeriode && debutPeriode < NOUVEAU_LOGEMENT_DEPART) {
+        if (vraiDetteCal[key] !== undefined) state.detteCalManuel[key] = vraiDetteCal[key];
+        if (vraiDetteExtras[key]) state.detteExtras[key] = JSON.parse(JSON.stringify(vraiDetteExtras[key]));
+      }
+    }
+    if (vrai.detteInitiale !== undefined) state.detteInitiale = vrai.detteInitiale;
     saveState();
     render();
     alert("Vraies données rechargées avec succès dans la simulation.");

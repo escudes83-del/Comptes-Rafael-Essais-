@@ -1191,6 +1191,7 @@ input, textarea, select { cursor: text; }
       </div>
     </div>
     <div id="rappelBandeau" style="display:none;"></div>
+    <div id="rappelPersoBandeau" style="display:none;"></div>
     <div id="rappelDetteBandeau" style="display:none;"></div>
     <div id="rappelDispoBandeau" style="display:none;"></div>
     <div id="rappelElecBandeau" style="display:none;"></div>
@@ -1202,6 +1203,7 @@ input, textarea, select { cursor: text; }
   <div class="header-right">
     <div style="display:flex;flex-direction:column;gap:6px;">
       <button class="btn btn-purple btn-sm" onclick="openModal('modalSimFrequence')" style="font-size:11px;">🔧 Paramètres</button>
+      <button class="btn btn-secondary btn-sm" onclick="ouvrirModalNouveauRappel()" style="font-size:11px;">🔔 Nouveau rappel</button>
       <button class="btn btn-secondary btn-sm" onclick="openModal('modalSimulation')" style="font-size:11px;">📊 Simuler</button>
       <button class="btn btn-secondary btn-sm" id="btnTableau" onclick="toggleTableau()" style="font-size:11px;">📊 Tableau</button>
     </div>
@@ -1734,6 +1736,7 @@ function defaultState() {
     fixesEntrees: {}, // { 'gym': { '2026-07': [{id,montant,desc,date}] }, ... }
     fixes: {...DEFAUT_FIXES},
     budgetHistorique: { nourriture: [], perso: [] }, // [{date:'YYYY-MM-DD', montant}] — permet au budget de changer sans affecter les périodes déjà passées
+    rappelsPersonnalises: [], // [{id, desc, montant, dateEcheance, categorie, paye}]
     // entrées par période: { '2026-01': [{id, type, montant, desc, date, rembourse, rembDesc}] }
     entrees: {},
     selectedMois: null,
@@ -1751,6 +1754,7 @@ function loadState() {
       if (s.soldeRef === undefined) s.soldeRef = null;
       if (s.dateRef === undefined) s.dateRef = null;
       if (!s.budgetHistorique) s.budgetHistorique = { nourriture: [], perso: [] };
+      if (!s.rappelsPersonnalises) s.rappelsPersonnalises = [];
       return s;
     }
   } catch(e) {}
@@ -2627,6 +2631,26 @@ function renderRappels() {
   if (htmlCarre) { elBandeau.style.display = 'flex'; elBandeau.innerHTML = htmlCarre; }
   else { elBandeau.style.display = 'none'; elBandeau.innerHTML = ''; }
 
+  // Rappels personnalisés créés par l'utilisateur (factures ponctuelles à échéance connue)
+  const elPerso = document.getElementById('rappelPersoBandeau');
+  if (elPerso) {
+    let htmlPerso = '';
+    (state.rappelsPersonnalises || []).forEach(r => {
+      if (r.paye) return;
+      const echeance = new Date(r.dateEcheance + 'T00:00:00');
+      const joursRestants = Math.ceil((echeance - today) / 86400000);
+      if (joursRestants > 37) return; // pas encore assez proche, on n'affiche pas tout de suite
+      const depasse = joursRestants < 0;
+      const joursLabel = depasse ? 'EN RETARD' : joursRestants === 0 ? "AUJ." : `J-${joursRestants}`;
+      htmlPerso += `<div class="rappel-carre" onclick="ouvrirRappelPersonnalise('${r.id}')" style="cursor:pointer;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:38px;animation:pulse-dette 1.8s ease-in-out infinite;">
+        <div style="font-size:10px;font-weight:800;color:var(--red);letter-spacing:.5px;">${depasse ? 'EN RETARD' : 'RAPPEL · ' + joursLabel}</div>
+        <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;">${r.desc} · ${fmt(r.montant)}</div>
+      </div>`;
+    });
+    if (htmlPerso) { elPerso.style.display = 'flex'; elPerso.innerHTML = htmlPerso; }
+    else { elPerso.style.display = 'none'; elPerso.innerHTML = ''; }
+  }
+
   // Bandeau rappel DETTE — non cliquable, visible tant que dette > 0
   const elDette = document.getElementById('rappelDetteBandeau');
   if (elDette) {
@@ -2950,6 +2974,135 @@ function ouvrirSaisieRappel(rappelId, periode, cat, desc) {
   document.getElementById('depRembRow').style.display = 'block';
 }
 
+// ============================================================
+// RAPPELS PERSONNALISÉS — factures ponctuelles à échéance connue,
+// créées par l'utilisateur (ex: "Électricité, 70$, 02/08/2026")
+// ============================================================
+function getPeriodeKeyPourDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  for (const p of PERIODES) {
+    const debut = new Date(p.anneeDebut, p.moisDebut - 1, 16);
+    const fin = new Date(debut.getFullYear(), debut.getMonth() + 1, 15);
+    if (d >= debut && d <= fin) return p.key;
+  }
+  return null;
+}
+
+function ouvrirModalNouveauRappel() {
+  let overlay = document.getElementById('modalNouveauRappel');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modalNouveauRappel';
+    overlay.className = 'modal-overlay';
+    document.body.appendChild(overlay);
+  }
+  const aujourdhui = getDateRef();
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:420px;">
+      <h2>🔔 Nouveau rappel</h2>
+      <div class="form-row">
+        <label>Description</label>
+        <input type="text" id="rappelPersoDesc" placeholder="ex: Électricité">
+      </div>
+      <div class="form-row">
+        <label>Montant ($)</label>
+        <input type="number" id="rappelPersoMontant" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="form-row">
+        <label>Date d'échéance</label>
+        <input type="date" id="rappelPersoDate" value="${aujourdhui}">
+      </div>
+      <div class="form-row">
+        <label>Catégorie (où loger la dépense une fois payée)</label>
+        <select id="rappelPersoCat">
+          <option value="nourriture">🛒 Nourriture</option>
+          <option value="perso">🧴 Perso</option>
+          <option value="exceptionnel">⚡ Exceptionnel</option>
+          <option value="autre_fixe" selected>🔒 Frais fixe ponctuel</option>
+        </select>
+      </div>
+      <div class="form-actions" style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="document.getElementById('modalNouveauRappel').classList.remove('open')">Annuler</button>
+        <button class="btn btn-primary" onclick="enregistrerNouveauRappel()">Créer le rappel</button>
+      </div>
+    </div>`;
+  overlay.classList.add('open');
+}
+
+function enregistrerNouveauRappel() {
+  const desc = document.getElementById('rappelPersoDesc').value.trim();
+  const montant = parseFloat(document.getElementById('rappelPersoMontant').value);
+  const dateEcheance = document.getElementById('rappelPersoDate').value;
+  const categorie = document.getElementById('rappelPersoCat').value;
+  if (!desc) { alert('Entre une description.'); return; }
+  if (!montant || montant <= 0) { alert('Entre un montant valide.'); return; }
+  if (!dateEcheance) { alert('Entre une date d\'échéance.'); return; }
+  if (!state.rappelsPersonnalises) state.rappelsPersonnalises = [];
+  state.rappelsPersonnalises.push({
+    id: uid(), desc, montant, dateEcheance, categorie, paye: false
+  });
+  document.getElementById('modalNouveauRappel').classList.remove('open');
+  saveState();
+  renderRappels();
+}
+
+function ouvrirRappelPersonnalise(id) {
+  const r = (state.rappelsPersonnalises || []).find(x => x.id === id);
+  if (!r) return;
+  const today = new Date(getDateRef());
+  const echeance = new Date(r.dateEcheance + 'T00:00:00');
+  const joursRestants = Math.ceil((echeance - today) / 86400000);
+  const depasse = joursRestants < 0;
+  const dateStr = echeance.toLocaleDateString('fr-CA', {day:'2-digit',month:'long',year:'numeric'});
+  const joursLabel = depasse ? 'EN RETARD !' : joursRestants === 0 ? "Aujourd'hui !" : `J-${joursRestants}`;
+
+  let overlay = document.getElementById('modalRappelPersoInfo');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modalRappelPersoInfo';
+    overlay.className = 'modal-overlay';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:420px;">
+      <h2>🔔 ${r.desc}</h2>
+      <p style="font-size:13px;color:var(--muted);margin:10px 0;">Montant : ${fmt(r.montant)}</p>
+      <p style="font-size:13px;color:${depasse?'var(--red)':'var(--text)'};font-weight:600;">📅 ${dateStr} · ${joursLabel}</p>
+      <div class="form-actions" style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="document.getElementById('modalRappelPersoInfo').classList.remove('open')">Fermer</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('modalRappelPersoInfo').classList.remove('open');supprimerRappelPersonnalise('${r.id}')" style="color:var(--muted);">✕ Supprimer</button>
+        <button class="btn" style="background:var(--red);color:#fff;" onclick="payerRappelPersonnalise('${r.id}')">💳 Payer</button>
+      </div>
+    </div>`;
+  overlay.classList.add('open');
+}
+
+function payerRappelPersonnalise(id) {
+  const r = (state.rappelsPersonnalises || []).find(x => x.id === id);
+  if (!r) return;
+  const aujourdhui = getDateRef();
+  const periodeKey = getPeriodeKeyPourDate(aujourdhui);
+  if (!periodeKey) { alert("Impossible de déterminer la période pour aujourd'hui."); return; }
+  if (!state.entrees) state.entrees = {};
+  if (!state.entrees[periodeKey]) state.entrees[periodeKey] = [];
+  state.entrees[periodeKey].push({
+    id: uid(), type: r.categorie, montant: r.montant, desc: r.desc,
+    date: aujourdhui, rembourse: false, rembDesc: ''
+  });
+  r.paye = true;
+  document.getElementById('modalRappelPersoInfo').classList.remove('open');
+  saveState();
+  render();
+  alert(`${r.desc} (${fmt(r.montant)}) enregistré comme dépense et rappel réglé.`);
+}
+
+function supprimerRappelPersonnalise(id) {
+  if (!confirm('Supprimer ce rappel définitivement (sans créer de dépense) ?')) return;
+  state.rappelsPersonnalises = (state.rappelsPersonnalises || []).filter(x => x.id !== id);
+  saveState();
+  renderRappels();
+}
+
 // Note : la détection de paiement se fait maintenant automatiquement (voir renderRappels),
 // donc plus besoin de marquer explicitement le rappel comme "fait" après la saisie.
 
@@ -3035,67 +3188,6 @@ function fmtShort(n) {
   const abs = Math.abs(n);
   // Toujours en dollars entiers, jamais en k$
   return sign + Math.round(abs).toLocaleString('fr-CA') + ' $';
-}
-
-function getSoldes2027Visiteur() {
-  // Lire les soldes fin de période depuis le localStorage du fichier 2027 visiteur
-  try {
-    const raw = localStorage.getItem('comptes_rafael_2027');
-    if (!raw) return null;
-    const state2027 = JSON.parse(raw);
-    // Recalculer les soldes à partir du state 2027
-    // On utilise juste soldeDepart + entrees pour reconstituer les fins de période
-    // Plus simple : stocker les fins de période dans le state 2027 directement
-    // Pour l'instant on retourne le state pour que renderPills puisse l'utiliser
-    return state2027;
-  } catch(e) { return null; }
-}
-
-function calculerSoldes2027Visiteur(state2027) {
-  if (!state2027) return {};
-  // Recalculer les soldes 2027 avec les données du fichier 2027
-  const soldes = {};
-  const periodes2027 = PERIODES.filter(p => p.annee === 2027 && p.key !== '2026-01');
-  let solde = state2027.soldeDepart || 0;
-  const detteInitiale = state2027.detteInitiale || 1700;
-
-  periodes2027.forEach(p => {
-    const k = p.key;
-    const entrees = state2027.entrees?.[k] || [];
-    const loyerEntrees = state2027.loyerEntrees?.[k] || [];
-    const detteExtras = state2027.detteExtras?.[k] || [];
-    const fixes2027 = state2027.fixes || {};
-
-    const revenus = entrees.filter(e => ['salaire','autre'].includes(e.type)).reduce((s,e) => s+e.montant, 0);
-    const depNourriture = entrees.filter(e => e.type === 'nourriture').reduce((s,e) => s+e.montant, 0) || fixes2027.budget_nourriture || 300;
-    const depPerso = entrees.filter(e => e.type === 'perso').reduce((s,e) => s+e.montant, 0) || fixes2027.budget_perso || 200;
-    const depExceptionnel = entrees.filter(e => e.type === 'exceptionnel').reduce((s,e) => s+e.montant, 0);
-    const loyer = loyerEntrees.reduce((s,e) => s+e.montant, 0);
-
-    // Gym — parser les dates sans décalage fuseau QC
-    const GYM_MONTANT = 20.40;
-    const gymDebutParts = '2025-12-23'.split('-');
-    const GYM_DEBUT = new Date(parseInt(gymDebutParts[0]), parseInt(gymDebutParts[1])-1, parseInt(gymDebutParts[2]));
-    const pDebutParts = (p.anneeDebut + '-' + String(p.moisDebut).padStart(2,'0') + '-16').split('-');
-    const pDebut = new Date(parseInt(pDebutParts[0]), parseInt(pDebutParts[1])-1, parseInt(pDebutParts[2]));
-    const moisFin = String(parseInt(p.key.slice(5))).padStart(2,'0');
-    const pFinParts = (p.annee + '-' + moisFin + '-15').split('-');
-    const pFin = new Date(parseInt(pFinParts[0]), parseInt(pFinParts[1])-1, parseInt(pFinParts[2]));
-    let gymCount = 0, d = new Date(GYM_DEBUT);
-    while (d <= pFin) { if (d >= pDebut) gymCount++; d = new Date(d.getTime() + 14*24*60*60*1000); }
-    const gym = gymCount * GYM_MONTANT;
-
-    const netflix = fixes2027.netflix || 21.46;
-    const metro = 104.50;
-    const fido = fixes2027.fido || 0;
-
-    const totalFixes = loyer + gym + netflix + metro + fido;
-    const depenses = totalFixes + depNourriture + depPerso + depExceptionnel;
-
-    soldes[k] = { debut: solde, fin: solde + revenus - depenses };
-    solde = soldes[k].fin;
-  });
-  return soldes;
 }
 
 // ============================================================
@@ -3261,16 +3353,13 @@ function renderPills() {
     </div>`;
   });
 
-  // Lire les soldes 2027 depuis le fichier 2027 visiteur si disponible
-  const state2027 = getSoldes2027Visiteur();
-  const soldes2027ext = state2027 ? calculerSoldes2027Visiteur(state2027) : null;
-
   periodes2027.forEach((p) => {
     const idx = getPeriodeIndex(p.key);
     const isFuture = idx > curIdx;
     const isSelected = selectedMois === p.key;
-    // Priorité : soldes du fichier 2027 visiteur, sinon projection locale
-    const finPrev = (soldes2027ext && soldes2027ext[p.key]) ? soldes2027ext[p.key].fin : (soldes[p.key]?.fin ?? 0);
+    // Utilise notre calcul prévisionnel actuel (déjà couvert jusqu'à fin 2027), pas l'ancien
+    // mécanisme périmé qui lisait une copie obsolète du fichier 2027 dans le localStorage.
+    const finPrev = soldesPrev[p.key] ?? 0;
     row2027 += makePill(p, finPrev, false, isFuture, isSelected, false);
   });
 

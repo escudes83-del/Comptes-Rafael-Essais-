@@ -480,6 +480,11 @@ async function backupAutomatiqueSiNecessaire() {
 }
 
 setInterval(chargerDepuisFirebase, 10000);
+// Sur mobile, les timers sont souvent suspendus quand l'app est en arrière-plan —
+// on force une resynchro dès qu'elle redevient active pour éviter de travailler sur du périmé.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) chargerDepuisFirebase();
+});
 
 function mettreAJourUI() {
   if (!state) return;
@@ -617,26 +622,34 @@ async function validerEdition() {
   const nouvelleDate = document.getElementById('edit-date-input').value;
   if (!montant || montant<=0) { alert('Entre un montant valide.'); return; }
   if (!nouvelleDate) { alert('Entre une date valide.'); return; }
-  // On retrouve la saisie à jour dans l'état courant (au cas où un sync Firebase serait passé par là entre-temps)
-  const entries = state.entrees?.[periodeKey] || [];
-  const allEntries = Array.isArray(entries) ? entries : Object.values(entries);
-  const entree = allEntries.find(e => e.id === entreeEnEdition);
-  if (!entree) { alert('Cette saisie a été modifiée entre-temps. Réessaie.'); fermerModalEdition(); mettreAJourUI(); return; }
-  entree.montant = montant;
-  entree.desc = desc || entree.desc;
-  entree.date = nouvelleDate;
-  const nouvellePeriode = getPeriodeKeyPourDate(nouvelleDate);
-  if (nouvellePeriode !== periodeKey) {
-    // La nouvelle date change de période budgétaire : on déplace l'entrée
-    state.entrees[periodeKey] = allEntries.filter(e => e.id !== entreeEnEdition);
-    if (!state.entrees[nouvellePeriode]) state.entrees[nouvellePeriode] = [];
-    if (!Array.isArray(state.entrees[nouvellePeriode])) state.entrees[nouvellePeriode] = Object.values(state.entrees[nouvellePeriode]);
-    state.entrees[nouvellePeriode].push(entree);
-  }
-  fermerModalEdition();
-  mettreAJourUI();
   setSyncStatus('loading','⏳ Sauvegarde...');
-  sauvegarderDansFirebase();
+  try {
+    // Repartir de la version la plus fraîche avant de modifier, pour ne jamais écraser
+    // un changement fait ailleurs pendant que cette page était ouverte en arrière-plan.
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    const entries = state.entrees?.[periodeKey] || [];
+    const allEntries = Array.isArray(entries) ? entries : Object.values(entries);
+    const entree = allEntries.find(e => e.id === entreeEnEdition);
+    if (!entree) { alert('Cette saisie a été modifiée entre-temps. Réessaie.'); fermerModalEdition(); mettreAJourUI(); return; }
+    entree.montant = montant;
+    entree.desc = desc || entree.desc;
+    entree.date = nouvelleDate;
+    const nouvellePeriode = getPeriodeKeyPourDate(nouvelleDate);
+    if (nouvellePeriode !== periodeKey) {
+      // La nouvelle date change de période budgétaire : on déplace l'entrée
+      state.entrees[periodeKey] = allEntries.filter(e => e.id !== entreeEnEdition);
+      if (!state.entrees[nouvellePeriode]) state.entrees[nouvellePeriode] = [];
+      if (!Array.isArray(state.entrees[nouvellePeriode])) state.entrees[nouvellePeriode] = Object.values(state.entrees[nouvellePeriode]);
+      state.entrees[nouvellePeriode].push(entree);
+    }
+    fermerModalEdition();
+    mettreAJourUI();
+    await sauvegarderDansFirebase();
+  } catch(e) {
+    setSyncStatus('error','⚠️ Erreur sauvegarde');
+  }
 }
 
 async function supprimerEntreeDepuisModal() {
@@ -646,6 +659,13 @@ async function supprimerEntreeDepuisModal() {
 }
 
 async function supprimerEntree(id) {
+  setSyncStatus('loading','⏳ Vérification...');
+  let fresh;
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+  } catch(e) { /* si le fetch échoue, on continue avec l'état local en dernier recours */ }
   const entries = state.entrees?.[periodeKey] || [];
   const allEntries = Array.isArray(entries) ? entries : Object.values(entries);
   const entree = allEntries.find(e => e.id === id);
@@ -653,7 +673,7 @@ async function supprimerEntree(id) {
   const msg = linked
     ? `Cette saisie est liée à un report (${linked.desc} : ${fmt(linked.montant)}). Supprimer les deux ensemble ?`
     : 'Supprimer cette saisie ?';
-  if (!confirm(msg)) return;
+  if (!confirm(msg)) { setSyncStatus('ok', '✅ Synchronisé'); return; }
   let filtered = allEntries.filter(e => e.id !== id);
   if (linked) filtered = filtered.filter(e => e.id !== linked.id);
   state.entrees[periodeKey] = filtered;
@@ -689,15 +709,25 @@ async function validerSaisie() {
   const descFinale = desc||(type==='nourriture'?'Nourriture':type==='perso'?'Perso':'Exceptionnel');
   const cible = getPeriodeKeyPourDate(dateChoisie);
   const entry = { id:uid(), type, montant, desc:descFinale, date:dateChoisie, rembourse:false, rembDesc:'' };
-  if (!state.entrees) state.entrees={};
-  if (!state.entrees[cible]) state.entrees[cible]=[];
-  if (!Array.isArray(state.entrees[cible])) state.entrees[cible]=Object.values(state.entrees[cible]);
-  state.entrees[cible].push(entry);
   fermerModal();
-  mettreAJourUI();
-  if (cible===periodeKey) flashConfirmCard(type);
   setSyncStatus('loading','⏳ Sauvegarde...');
-  sauvegarderDansFirebase();
+  try {
+    // Toujours repartir de la version la plus fraîche de Firebase avant d'ajouter la saisie,
+    // pour ne jamais écraser un changement fait ailleurs (app principale) pendant que cette
+    // page était restée ouverte en arrière-plan.
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    if (!state.entrees) state.entrees={};
+    if (!state.entrees[cible]) state.entrees[cible]=[];
+    if (!Array.isArray(state.entrees[cible])) state.entrees[cible]=Object.values(state.entrees[cible]);
+    state.entrees[cible].push(entry);
+    mettreAJourUI();
+    if (cible===periodeKey) flashConfirmCard(type);
+    await sauvegarderDansFirebase();
+  } catch(e) {
+    setSyncStatus('error','⚠️ Erreur sauvegarde');
+  }
 }
 
 function flashConfirmCard(type) {

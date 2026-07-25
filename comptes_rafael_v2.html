@@ -3199,8 +3199,9 @@ const PREV_METRO = 110;
 const PREV_GYM = 40.80;   // 2 x 20.40
 const PREV_FIDO = 33.96;
 const PREV_NETFLIX = 21.46;
-// Aucun salaire prévu : le vrai salaire de Rafael (paies + paie de clôture) est maintenant
-// entièrement saisi comme vraies entrées — plus besoin d'hypothèse de moyenne.
+// Le prévisionnel compte le VRAI salaire réellement reçu (peu importe le montant, ça reflète
+// ce qui a vraiment été gagné) — mais jamais les "autres revenus" (aides ponctuelles de PY,
+// Pilou, etc.), pour montrer ce qu'aurait été le solde sans cette aide.
 const PREV_PERIODE_DEPART = '2026-07';
 
 function calculerPrevisionnel(soldesReels) {
@@ -3217,9 +3218,10 @@ function calculerPrevisionnel(soldesReels) {
     if (solde === null) solde = soldesReels[PREV_PERIODE_DEPART]?.debut ?? 0;
     const nourriture = getBudgetNourriturePourPeriode(p.key);
     const perso = getBudgetPersoPourPeriode(p.key);
+    const revenuPrevu = getSommeEntreesAll(p.key, 'salaire'); // vrai salaire, jamais "autre"
     // Dépenses : loyer+dette, métro, gym, fido, netflix, budgets nourriture/perso
     const depensesPrevues = PREV_LOYER + PREV_METRO + PREV_GYM + PREV_FIDO + PREV_NETFLIX + nourriture + perso;
-    solde = solde - depensesPrevues;
+    solde = solde + revenuPrevu - depensesPrevues;
     prev[p.key] = solde;
   }
   return prev;

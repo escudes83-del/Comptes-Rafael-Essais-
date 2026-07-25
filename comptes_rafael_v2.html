@@ -2573,7 +2573,7 @@ function render() {
   renderPortefeuille();
   // Rafraîchir la vue mois si elle est ouverte
   const vueMois = document.getElementById('vueMois');
-  if (vueMois && vueMois.style.display !== 'none' && selectedMois) {
+  if (vueMois && selectedMois) {
     renderVueMois(selectedMois);
   }
 }

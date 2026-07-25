@@ -2057,8 +2057,8 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
     const ref = new Date(dateRef);
     // Gym : 1 prélèvement par demi-période (23 puis 7 du mois suivant)
     if (!hasFixeEntrees('gym', periodeKey)) {
-      if (gymDate1 <= ref) total += GYM_MONTANT;
-      if (gymDate2 <= ref) total += GYM_MONTANT;
+      if (gymDate1 <= ref) total += state.fixes.gym / 2;
+      if (gymDate2 <= ref) total += state.fixes.gym / 2;
     }
     // Fido : réellement prélevé le 29 du 1er mois de la période (observé sur le relevé)
     if (!hasFixeEntrees('fido', periodeKey) && state.fixes.fido > 0) {
@@ -2075,7 +2075,7 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
       const metroDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 1);
       if (metroDate <= ref) {
         const isAEC = state.mode === 'aec' && isAECPeriode(periodeKey);
-        total += isAEC ? METRO_MONTANT_ETUDIANT : METRO_MONTANT_NORMAL;
+        total += isAEC ? state.fixes.metro_etudiant : state.fixes.metro_normal;
       }
     }
   }
@@ -2248,17 +2248,13 @@ let currentYear = 2026;
 
 // ── FRAIS FIXES ────────────────────────────────────────────────────
 
-// Gym : tous les 14 jours depuis le 23/12/2025
+// Gym : tous les 14 jours depuis le 23/12/2025 (montant lu depuis Paramètres, state.fixes.gym)
 const GYM_DEBUT = new Date('2025-12-23');
-const GYM_MONTANT = 20.40;
 
-// Netflix : autour du 25 de chaque mois depuis 24/12/2025
+// Netflix : autour du 25 de chaque mois (montant lu depuis Paramètres, state.fixes.netflix)
 const NETFLIX_DEBUT = new Date('2025-12-24');
-const NETFLIX_MONTANT = 21.46;
 
-// Metro : 1er du mois, 104.50$ normal / 62.50$ étudiant
-const METRO_MONTANT_NORMAL = 104.50;
-const METRO_MONTANT_ETUDIANT = 62.50;
+// Metro : 1er du mois (montants lus depuis Paramètres, state.fixes.metro_normal/metro_etudiant)
 
 function getNextGym(fromDate) {
   // Prochain prélèvement gym (tous les 14j depuis GYM_DEBUT)
@@ -2307,7 +2303,7 @@ function gymMoisCourant() {
     if (d >= debut) count++;
     d.setDate(d.getDate() + 14);
   }
-  return {count, montant: count * GYM_MONTANT};
+  return {count, montant: count * (state.fixes.gym / 2)};
 }
 
 function renderFixesBloc() {
@@ -2319,7 +2315,7 @@ function renderFixesBloc() {
   const nextGym = getNextGym(today);
   const nextNetflix = getNextNetflix(today);
   const nextMetro = getNextMetro(today);
-  const metroMontant = isAEC ? METRO_MONTANT_ETUDIANT : METRO_MONTANT_NORMAL;
+  const metroMontant = isAEC ? state.fixes.metro_etudiant : state.fixes.metro_normal;
 
   const detteFixeMensuelle = (state.detteCalManuel || {})[curKey] !== undefined
     ? (state.detteCalManuel || {})[curKey]
@@ -2333,8 +2329,8 @@ function renderFixesBloc() {
   html += renderLogementFixeCard(curKey, logementMontant, detteFixeMensuelle);
   html += renderFixeEntreeCard('electricite', 'Électricité', '⚡', curKey, fixes.electricite, fixes.electricite === 0 ? 'non actif' : 'mensuel', null);
   html += renderFixeEntreeCard('assurance', 'Assurance log.', '🛡️', curKey, fixes.assurance, fixes.assurance === 0 ? 'non actif' : 'mensuel', null);
-  html += renderFixeEntreeCard('gym', 'Gym', '🏋️', curKey, gym.montant, gym.count + 'x ' + GYM_MONTANT.toFixed(2).replace('.',',')+' $', 'Prochain : ' + fmtDate(nextGym));
-  html += renderFixeEntreeCard('netflix', 'Netflix', '🎬', curKey, fixes.netflix || NETFLIX_MONTANT, '~25 du mois', 'Prochain : ' + fmtDate(nextNetflix));
+  html += renderFixeEntreeCard('gym', 'Gym', '🏋️', curKey, gym.montant, gym.count + 'x ' + (fixes.gym/2).toFixed(2).replace('.',',')+' $', 'Prochain : ' + fmtDate(nextGym));
+  html += renderFixeEntreeCard('netflix', 'Netflix', '🎬', curKey, fixes.netflix, '~25 du mois', 'Prochain : ' + fmtDate(nextNetflix));
   html += renderFixeEntreeCard('fido', 'Fido (tél)', '📱', curKey, fixes.fido, 'irrégulier', null);
   html += renderFixeEntreeCard('metro', 'Métro', '🚇', curKey, metroMontant, isAEC ? 'tarif étudiant' : 'tarif normal', 'Prochain : ' + fmtDate(nextMetro));
   html += renderFixeEntreeCard('bixi', 'Bixi', '🚲', curKey, fixes.bixi, fixes.bixi === 0 ? 'non actif' : '1 mois', null);
@@ -2521,9 +2517,9 @@ function saveFixe(id) {
 
 // Valeur initiale pour le champ édition des postes auto
 function getFixeEditValue(id) {
-  if (id === 'gym') return GYM_MONTANT;
-  if (id === 'netflix') return state.fixes.netflix || NETFLIX_MONTANT;
-  if (id === 'metro') return state.fixes.metro || METRO_MONTANT_NORMAL;
+  if (id === 'gym') return state.fixes.gym / 2;
+  if (id === 'netflix') return state.fixes.netflix;
+  if (id === 'metro') return state.fixes.metro_normal;
   return state.fixes[id] || 0;
 }
 
@@ -3195,10 +3191,6 @@ function fmtShort(n) {
 // (pas de salaire tant que Rafael n'a pas le droit de travailler)
 // ============================================================
 const PREV_LOYER = 300;   // 200$ loyer + 100$ remb. dette (taux standard mensuel)
-const PREV_METRO = 110;
-const PREV_GYM = 40.80;   // 2 x 20.40
-const PREV_FIDO = 33.96;
-const PREV_NETFLIX = 21.46;
 // Le prévisionnel compte le VRAI salaire réellement reçu (peu importe le montant, ça reflète
 // ce qui a vraiment été gagné) — mais jamais les "autres revenus" (aides ponctuelles de PY,
 // Pilou, etc.), pour montrer ce qu'aurait été le solde sans cette aide.
@@ -3219,8 +3211,14 @@ function calculerPrevisionnel(soldesReels) {
     const nourriture = getBudgetNourriturePourPeriode(p.key);
     const perso = getBudgetPersoPourPeriode(p.key);
     const revenuPrevu = getSommeEntreesAll(p.key, 'salaire'); // vrai salaire, jamais "autre"
+    // Métro/gym/fido/netflix lus directement depuis Paramètres (state.fixes) — une seule
+    // source de vérité, pour qu'un changement dans Paramètres se répercute partout.
+    const metroPrev = state.fixes.metro_normal;
+    const gymPrev = state.fixes.gym;
+    const fidoPrev = state.fixes.fido;
+    const netflixPrev = state.fixes.netflix;
     // Dépenses : loyer+dette, métro, gym, fido, netflix, budgets nourriture/perso
-    const depensesPrevues = PREV_LOYER + PREV_METRO + PREV_GYM + PREV_FIDO + PREV_NETFLIX + nourriture + perso;
+    const depensesPrevues = PREV_LOYER + metroPrev + gymPrev + fidoPrev + netflixPrev + nourriture + perso;
     solde = solde + revenuPrevu - depensesPrevues;
     prev[p.key] = solde;
   }

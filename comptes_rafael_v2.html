@@ -1733,6 +1733,7 @@ function defaultState() {
     dernierExtra: null,
     portefeuilleDette: [], // [{id, montant, date, periode}]
     detteIRCC: 2000, // prêt argent reçu de Pilou en juin 2026, à rembourser éventuellement
+    detteLoyerLogement: 6080, // prêt de PY pour le prépaiement du logement (oct 2026 -> jun/jul 2027)
     fixesEntrees: {}, // { 'gym': { '2026-07': [{id,montant,desc,date}] }, ... }
     fixes: {...DEFAUT_FIXES},
     budgetHistorique: { nourriture: [], perso: [] }, // [{date:'YYYY-MM-DD', montant}] — permet au budget de changer sans affecter les périodes déjà passées
@@ -1750,6 +1751,7 @@ function loadState() {
     if (raw) {
       const s = JSON.parse(raw);
       if (s.detteIRCC === undefined) s.detteIRCC = 2000;
+      if (s.detteLoyerLogement === undefined) s.detteLoyerLogement = 6080;
       // Firebase supprime les null — on les restitue
       if (s.soldeRef === undefined) s.soldeRef = null;
       if (s.dateRef === undefined) s.dateRef = null;
@@ -2706,21 +2708,31 @@ function renderRappels() {
     elElec.innerHTML = '';
   }
 
-  // Cadre PRÊT IRCC (Pilou) — cliquable, affiche solde restant à rembourser
+  // Cadre AIDES À SUIVRE (IRCC + Logement) — cliquable, affiche solde restant combiné à rembourser
   const elIRCC = document.getElementById('rappelIRCCBandeau');
   if (elIRCC) {
-    const detteInit = state.detteIRCC || 0;
-    const rembTotal = Object.keys(state.entrees || {}).reduce((s, k) => {
+    const detteInitIRCC = state.detteIRCC || 0;
+    const rembTotalIRCC = Object.keys(state.entrees || {}).reduce((s, k) => {
       return s + (state.entrees[k] || [])
         .filter(e => e.type === 'exceptionnel' && e._irccRemb)
         .reduce((s2, e) => s2 + e.montant, 0);
     }, 0);
-    const resteIRCC = Math.max(0, detteInit - rembTotal);
-    if (resteIRCC > 0) {
+    const resteIRCC = Math.max(0, detteInitIRCC - rembTotalIRCC);
+
+    const detteInitLoyer = state.detteLoyerLogement || 0;
+    const rembTotalLoyer = Object.keys(state.entrees || {}).reduce((s, k) => {
+      return s + (state.entrees[k] || [])
+        .filter(e => e.type === 'exceptionnel' && e._loyerLogementRemb)
+        .reduce((s2, e) => s2 + e.montant, 0);
+    }, 0);
+    const resteLoyer = Math.max(0, detteInitLoyer - rembTotalLoyer);
+
+    const resteTotal = resteIRCC + resteLoyer;
+    if (resteTotal > 0) {
       elIRCC.style.display = 'flex';
-      elIRCC.innerHTML = `<div onclick="ouvrirRemboursementIRCC()" style="cursor:pointer;background:rgba(79,142,247,.10);border:2px solid var(--accent);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:38px;">
-        <div style="font-size:10px;font-weight:800;color:var(--accent);letter-spacing:.5px;">SUIVI · ${fmt(resteIRCC)}</div>
-        <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;">Aide Pilou</div>
+      elIRCC.innerHTML = `<div onclick="ouvrirRemboursementAides()" style="cursor:pointer;background:rgba(79,142,247,.10);border:2px solid var(--accent);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:38px;">
+        <div style="font-size:10px;font-weight:800;color:var(--accent);letter-spacing:.5px;">SUIVI · ${fmt(resteTotal)}</div>
+        <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;">Aides PY</div>
       </div>`;
     } else {
       elIRCC.style.display = 'none';
@@ -2856,15 +2868,26 @@ function comprisAlerteOuverture() {
   }
 }
 
-function ouvrirRemboursementIRCC() {
+function ouvrirRemboursementAides() {
   const keyAffiche = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
-  const detteInit = state.detteIRCC || 0;
-  const rembTotal = Object.keys(state.entrees || {}).reduce((s, k) => {
+
+  const detteInitIRCC = state.detteIRCC || 0;
+  const rembTotalIRCC = Object.keys(state.entrees || {}).reduce((s, k) => {
     return s + (state.entrees[k] || [])
       .filter(e => e.type === 'exceptionnel' && e._irccRemb)
       .reduce((s2, e) => s2 + e.montant, 0);
   }, 0);
-  const reste = Math.max(0, detteInit - rembTotal);
+  const resteIRCC = Math.max(0, detteInitIRCC - rembTotalIRCC);
+
+  const detteInitLoyer = state.detteLoyerLogement || 0;
+  const rembTotalLoyer = Object.keys(state.entrees || {}).reduce((s, k) => {
+    return s + (state.entrees[k] || [])
+      .filter(e => e.type === 'exceptionnel' && e._loyerLogementRemb)
+      .reduce((s2, e) => s2 + e.montant, 0);
+  }, 0);
+  const resteLoyer = Math.max(0, detteInitLoyer - rembTotalLoyer);
+
+  const periodeOptions = (selectedId) => PERIODES.map(p => `<option value="${p.key}" ${p.key===keyAffiche?'selected':''}>${p.label}</option>`).join('');
 
   let overlay = document.getElementById('modalIRCCRemb');
   if (!overlay) {
@@ -2874,21 +2897,44 @@ function ouvrirRemboursementIRCC() {
     document.body.appendChild(overlay);
   }
   overlay.innerHTML = `
-    <div class="modal" style="max-width:380px;">
-      <h2>💵 Aide Pilou — suivi</h2>
-      <p style="font-size:13px;color:var(--muted);margin:10px 0;">Aide financière reçue de Pilou en juin 2026 (2 000 $ initial). Aucune obligation de remboursement — ceci est juste un suivi optionnel si tu souhaites rendre une partie du montant.</p>
-      <p style="font-size:13px;color:var(--accent);font-weight:700;margin-bottom:14px;">Solde suivi : ${fmt(reste)}</p>
-      <div class="form-row">
-        <label>Montant rendu maintenant ($)</label>
-        <input type="number" id="irccRembMontant" step="0.01" min="0" max="${reste}" placeholder="0.00">
-      </div>
-      <div class="form-row">
-        <label>Période</label>
-        <select id="irccRembPeriode">${PERIODES.map(p => `<option value="${p.key}" ${p.key===keyAffiche?'selected':''}>${p.label}</option>`).join('')}</select>
+    <div class="modal" style="max-width:720px;">
+      <h2>💵 Aides PY — suivi</h2>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;">
+        <div style="flex:1;min-width:280px;border:1px solid var(--border);border-radius:10px;padding:14px;">
+          <h3 style="font-size:14px;margin-bottom:6px;">Aide Justification Financière IRCC</h3>
+          <p style="font-size:12px;color:var(--muted);margin:8px 0;">Aide financière reçue de Pilou en juin 2026 (2 000 $ initial), pour justifier les finances auprès d'IRCC. Aucune obligation de remboursement — ceci est juste un suivi optionnel si tu souhaites rendre une partie du montant.</p>
+          <p style="font-size:13px;color:var(--accent);font-weight:700;margin-bottom:12px;">Solde suivi : ${fmt(resteIRCC)}</p>
+          <div class="form-row">
+            <label>Montant rendu maintenant ($)</label>
+            <input type="number" id="irccRembMontant" step="0.01" min="0" max="${resteIRCC}" placeholder="0.00">
+          </div>
+          <div class="form-row">
+            <label>Période</label>
+            <select id="irccRembPeriode">${periodeOptions()}</select>
+          </div>
+          <div class="form-actions" style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+            <button class="btn" style="background:var(--accent);color:#fff;" onclick="confirmerRemboursementIRCC()">Rembourser</button>
+          </div>
+        </div>
+        <div style="flex:1;min-width:280px;border:1px solid var(--border);border-radius:10px;padding:14px;">
+          <h3 style="font-size:14px;margin-bottom:6px;">Aide Loyer Logement Juillet 2027</h3>
+          <p style="font-size:12px;color:var(--muted);margin:8px 0;">Prêt de 6 080 $ pour le prépaiement du logement (oct 2026 → juin/juillet 2027), saisi séparément en Autre revenu. Suivi optionnel si tu souhaites rendre une partie du montant.</p>
+          <p style="font-size:13px;color:var(--accent);font-weight:700;margin-bottom:12px;">Solde suivi : ${fmt(resteLoyer)}</p>
+          <div class="form-row">
+            <label>Montant rendu maintenant ($)</label>
+            <input type="number" id="loyerRembMontant" step="0.01" min="0" max="${resteLoyer}" placeholder="0.00">
+          </div>
+          <div class="form-row">
+            <label>Période</label>
+            <select id="loyerRembPeriode">${periodeOptions()}</select>
+          </div>
+          <div class="form-actions" style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+            <button class="btn" style="background:var(--accent);color:#fff;" onclick="confirmerRemboursementLoyer()">Rembourser</button>
+          </div>
+        </div>
       </div>
       <div class="form-actions" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
-        <button class="btn btn-secondary" onclick="document.getElementById('modalIRCCRemb').classList.remove('open')">Annuler</button>
-        <button class="btn" style="background:var(--accent);color:#fff;" onclick="confirmerRemboursementIRCC()">Rembourser</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('modalIRCCRemb').classList.remove('open')">Fermer</button>
       </div>
     </div>`;
   overlay.classList.add('open');
@@ -2903,9 +2949,27 @@ function confirmerRemboursementIRCC() {
     id: uid(),
     type: 'exceptionnel',
     montant: montant,
-    desc: 'Remboursement Pilou',
+    desc: 'Remboursement Aide Justification Financière IRCC',
     date: getDateRef(),
     _irccRemb: true
+  });
+  saveState();
+  document.getElementById('modalIRCCRemb').classList.remove('open');
+  render();
+}
+
+function confirmerRemboursementLoyer() {
+  const montant = parseFloat(document.getElementById('loyerRembMontant').value);
+  const periode = document.getElementById('loyerRembPeriode').value;
+  if (!montant || montant <= 0) return;
+  if (!state.entrees[periode]) state.entrees[periode] = [];
+  state.entrees[periode].push({
+    id: uid(),
+    type: 'exceptionnel',
+    montant: montant,
+    desc: 'Remboursement Aide Loyer Logement Juillet 2027',
+    date: getDateRef(),
+    _loyerLogementRemb: true
   });
   saveState();
   document.getElementById('modalIRCCRemb').classList.remove('open');

@@ -1205,6 +1205,7 @@ input, textarea, select { cursor: text; }
     <div style="display:flex;flex-direction:column;gap:6px;">
       <button class="btn btn-purple btn-sm" onclick="openModal('modalSimFrequence')" style="font-size:11px;">🔧 Paramètres</button>
       <button class="btn btn-secondary btn-sm" onclick="ouvrirModalNouveauRappel()" style="font-size:11px;">🔔 Nouveau rappel</button>
+      <button class="btn btn-secondary btn-sm" onclick="synchroniserAvec2026()" style="font-size:11px;">🔄 Synchroniser avec 2026</button>
       <button class="btn btn-secondary btn-sm" onclick="openModal('modalSimulation')" style="font-size:11px;">📊 Simuler</button>
       <button class="btn btn-secondary btn-sm" id="btnTableau" onclick="toggleTableau()" style="font-size:11px;">📊 Tableau</button>
     </div>
@@ -1635,6 +1636,7 @@ input, textarea, select { cursor: text; }
 // ============================================================
 
 const STORAGE_KEY = 'comptes_rafael_2027';
+const VRAI_STORAGE_KEY_2026 = 'comptes_rafael_v1'; // pour synchroniser le point de départ depuis 2026 Visiteur
 const DETTE_INITIALE = 1100;
 
 // Périodes : du 16 d'un mois au 15 du suivant
@@ -1732,6 +1734,7 @@ function defaultState() {
     mode: 'visiteur', // 'visiteur' | 'aec'
     aecDepuis: null,  // période key ex '2026-10'
     soldeDepart: 5954.65,
+    prevSoldeDepart: null, // point de départ prévisionnel synchronisé depuis 2026 Visiteur (null = pas encore synchronisé)
     dateRef: null,
     soldeRef: null,
     dettePayments: {},
@@ -1764,6 +1767,7 @@ function loadState() {
       if (s.dateRef === undefined) s.dateRef = null;
       if (!s.budgetHistorique) s.budgetHistorique = { nourriture: [], perso: [] };
       if (!s.rappelsPersonnalises) s.rappelsPersonnalises = [];
+      if (s.prevSoldeDepart === undefined) s.prevSoldeDepart = null;
       // Corriger soldeDepart si encore à la valeur 2026 par erreur
       if (Math.abs((s.soldeDepart || 0) - 616.81) < 0.01) s.soldeDepart = 5954.65;
       // Corriger detteInitiale si encore à 1700 (valeur 2026)
@@ -3170,7 +3174,7 @@ function calculerPrevisionnel(soldesReels) {
       prev[p.key] = soldesReels[p.key]?.fin ?? 0;
       continue;
     }
-    if (solde === null) solde = soldesReels[PREV_PERIODE_DEPART]?.debut ?? 0;
+    if (solde === null) solde = (state.prevSoldeDepart !== undefined && state.prevSoldeDepart !== null) ? state.prevSoldeDepart : (soldesReels[PREV_PERIODE_DEPART]?.debut ?? 0);
     const nourriture = getBudgetNourriturePourPeriode(p.key);
     const perso = getBudgetPersoPourPeriode(p.key);
     const depensesPrevues = PREV_LOYER + PREV_METRO + PREV_GYM + PREV_FIDO + PREV_NETFLIX + nourriture + perso;
@@ -5380,6 +5384,340 @@ async function restaurerSauvegardeAuto(dateKey) {
 // ============================================================
 // FIREBASE REST — Synchro inter-appareils avec protection timestamp
 // ============================================================
+
+// Synchronise le point de départ (réel ET prévisionnel) depuis 2026 Visiteur, en recalculant
+// exactement les mêmes règles que 2026, pour que 2027 continue sans cassure.
+async function synchroniserAvec2026() {
+  if (!confirm("Synchroniser le point de départ de 2027 avec les vraies données de 2026 Visiteur ?\n\nÇa va recalculer le vrai solde ET le prévisionnel de fin décembre 2026, et les utiliser comme point de départ ici.")) return;
+  try {
+    const res = await fetch(FIREBASE_URL + '/' + VRAI_STORAGE_KEY_2026 + '.json');
+    const data2026 = await res.json();
+    if (!data2026) { alert("Impossible de lire les données de 2026 Visiteur."); return; }
+    const calc = v2_creerCalculateur(data2026);
+    const soldes2026 = calc.calculerSoldes();
+    const prev2026 = calc.calculerPrevisionnel(soldes2026);
+    const derniereCle2026 = '2026-12'; // dernière période de 2026 avant le début de ce fichier (2027-01)
+    const finReelle = soldes2026[derniereCle2026]?.fin;
+    const finPrev = prev2026[derniereCle2026];
+    if (finReelle === undefined || finPrev === undefined) {
+      alert("Impossible de calculer la fin décembre 2026 — vérifie que les données de 2026 sont complètes.");
+      return;
+    }
+    state.soldeDepart = finReelle;
+    state.prevSoldeDepart = finPrev;
+    saveState();
+    render();
+    alert(`Synchronisé avec succès !\n\nSolde réel fin déc 2026 : ${fmt(finReelle)}\nPrévisionnel fin déc 2026 : ${fmt(finPrev)}\n\nCes deux valeurs sont maintenant le point de départ de 2027.`);
+  } catch(e) {
+    alert("Erreur lors de la synchronisation : " + e.message);
+  }
+}
+
+function v2_creerCalculateur(d) {
+const PERIODES_V2 = [
+  {key:'2026-01', label:'16/déc→15/jan', annee:2026, moisDebut:12, anneeDebut:2025},
+  {key:'2026-02', label:'16/jan→15/fév', annee:2026, moisDebut:1,  anneeDebut:2026},
+  {key:'2026-03', label:'16/fév→15/mar', annee:2026, moisDebut:2,  anneeDebut:2026},
+  {key:'2026-04', label:'16/mar→15/avr', annee:2026, moisDebut:3,  anneeDebut:2026},
+  {key:'2026-05', label:'16/avr→15/mai', annee:2026, moisDebut:4,  anneeDebut:2026},
+  {key:'2026-06', label:'16/mai→15/jun', annee:2026, moisDebut:5,  anneeDebut:2026},
+  {key:'2026-07', label:'16/jun→15/jul', annee:2026, moisDebut:6,  anneeDebut:2026},
+  {key:'2026-08', label:'16/jul→15/aoû', annee:2026, moisDebut:7,  anneeDebut:2026},
+  {key:'2026-09', label:'16/aoû→15/sep', annee:2026, moisDebut:8,  anneeDebut:2026},
+  {key:'2026-10', label:'16/sep→15/oct', annee:2026, moisDebut:9,  anneeDebut:2026},
+  {key:'2026-11', label:'16/oct→15/nov', annee:2026, moisDebut:10, anneeDebut:2026},
+  {key:'2026-12', label:'16/nov→15/déc', annee:2026, moisDebut:11, anneeDebut:2026},
+  {key:'2027-01', label:'16/déc→15/jan', annee:2027, moisDebut:12, anneeDebut:2026},
+  {key:'2027-02', label:'16/jan→15/fév', annee:2027, moisDebut:1,  anneeDebut:2027},
+  {key:'2027-03', label:'16/fév→15/mar', annee:2027, moisDebut:2,  anneeDebut:2027},
+  {key:'2027-04', label:'16/mar→15/avr', annee:2027, moisDebut:3,  anneeDebut:2027},
+  {key:'2027-05', label:'16/avr→15/mai', annee:2027, moisDebut:4,  anneeDebut:2027},
+  {key:'2027-06', label:'16/mai→15/jun', annee:2027, moisDebut:5,  anneeDebut:2027},
+  {key:'2027-07', label:'16/jun→15/jul', annee:2027, moisDebut:6,  anneeDebut:2027},
+  {key:'2027-08', label:'16/jul→15/aoû', annee:2027, moisDebut:7,  anneeDebut:2027},
+  {key:'2027-09', label:'16/aoû→15/sep', annee:2027, moisDebut:8,  anneeDebut:2027},
+  {key:'2027-10', label:'16/sep→15/oct', annee:2027, moisDebut:9,  anneeDebut:2027},
+  {key:'2027-11', label:'16/oct→15/nov', annee:2027, moisDebut:10, anneeDebut:2027},
+  {key:'2027-12', label:'16/nov→15/déc', annee:2027, moisDebut:11, anneeDebut:2027},
+];
+
+const DEFAUT_FIXES_V2 = {
+  logement: 300,
+  electricite: 0,
+  assurance: 0,
+  gym: 40.80,
+  netflix: 21.46,
+  fido: 34.19,
+  metro_normal: 104.50,
+  metro_etudiant: 62.50,
+  bixi: 0,
+  budget_nourriture: 300,
+  budget_perso: 200,
+};
+
+const PREV_LOYER_V2 = 300;   // 200$ loyer + 100$ remb. dette (taux standard mensuel)
+// Le prévisionnel compte le VRAI salaire réellement reçu (peu importe le montant, ça reflète
+// ce qui a vraiment été gagné) — mais jamais les "autres revenus" (aides ponctuelles de PY,
+// Pilou, etc.), pour montrer ce qu'aurait été le solde sans cette aide.
+const PREV_PERIODE_DEPART_V2 = '2026-07';
+
+function v2_getPeriodeIndex(key) {
+  return PERIODES_V2.findIndex(p => p.key === key);
+}
+
+function v2_getEntreesPeriode(key) {
+  return (d.entrees[key] || []);
+}
+
+function v2_isAECPeriode(key) {
+  if (d.mode !== 'aec' || !d.aecDepuis) return false;
+  return key >= d.aecDepuis;
+}
+
+function v2_getMetroPeriode(key) {
+  if (v2_hasFixeEntrees('metro', key)) return v2_sommeFixeEntrees('metro', key);
+  // Historique réel
+  const hist = {
+    '2026-01': 0,
+    '2026-02': 104.50, // 104.50 seulement — les 3x70 rechargements sont en dépenses exceptionnelles
+    '2026-03': 104.50,
+    '2026-04': 5,
+    '2026-05': 104.50,
+    '2026-06': 104.50,
+    '2026-07': 104.50,
+  };
+  if (hist[key] !== undefined) return hist[key];
+  if (v2_isAECPeriode(key)) return d.fixes.metro_etudiant;
+  return d.fixes.metro_normal;
+}
+
+function v2_getGymPeriode(key) {
+  if (v2_hasFixeEntrees('gym', key)) return v2_sommeFixeEntrees('gym', key);
+  const hist = {
+    '2026-01': 40.80,
+    '2026-02': 40.80,
+    '2026-03': 40.80,
+    '2026-04': 61.20,
+    '2026-05': 40.80,
+    '2026-06': 40.80,
+    '2026-07': 40.80,
+  };
+  if (hist[key] !== undefined) return hist[key];
+  return d.fixes.gym;
+}
+
+function v2_getNetflixPeriode(key) {
+  if (v2_hasFixeEntrees('netflix', key)) return v2_sommeFixeEntrees('netflix', key);
+  return d.fixes.netflix;
+}
+
+function v2_getFidoPeriode(key) {
+  if (v2_hasFixeEntrees('fido', key)) return v2_sommeFixeEntrees('fido', key);
+  const hist = {
+    '2026-01': 0,
+    '2026-02': 34.02,
+    '2026-03': 33.96,
+    '2026-04': 0,
+    '2026-05': 69.79,
+    '2026-06': 34.19,
+    '2026-07': 34.19,
+  };
+  if (hist[key] !== undefined) return hist[key];
+  return d.fixes.fido;
+}
+
+function v2_getElectricitePeriode(key) {
+  if (v2_hasFixeEntrees('electricite', key)) return v2_sommeFixeEntrees('electricite', key);
+  return d.fixes.electricite;
+}
+
+function v2_getAssurancePeriode(key) {
+  if (v2_hasFixeEntrees('assurance', key)) return v2_sommeFixeEntrees('assurance', key);
+  return d.fixes.assurance;
+}
+
+function v2_getLogementPeriode(key) {
+  // Somme des entrées loyer saisies pour la période
+  const entries = (d.loyerEntrees || {})[key] || [];
+  return entries.reduce((s, e) => s + e.montant, 0);
+}
+
+function v2_getBixiPeriode(key) {
+  if (v2_hasFixeEntrees('bixi', key)) return v2_sommeFixeEntrees('bixi', key);
+  if (key === '2026-06') return 27.59;
+  return 0;
+}
+
+function v2_getFixeEntreesPeriode(fixKey, periodeKey) {
+  return (((d.fixesEntrees || {})[fixKey]) || {})[periodeKey] || [];
+}
+
+function v2_hasFixeEntrees(fixKey, periodeKey) {
+  return v2_getFixeEntreesPeriode(fixKey, periodeKey).length > 0;
+}
+
+function v2_sommeFixeEntrees(fixKey, periodeKey) {
+  return v2_getFixeEntreesPeriode(fixKey, periodeKey).reduce((s, e) => s + e.montant, 0);
+}
+
+function v2_getFixesTotauxPeriode(key) {
+  const logement = v2_getLogementPeriode(key);
+  const electricite = v2_getElectricitePeriode(key);
+  const assurance = v2_getAssurancePeriode(key);
+  const gym = v2_getGymPeriode(key);
+  const netflix = v2_getNetflixPeriode(key);
+  const fido = v2_getFidoPeriode(key);
+  const metro = v2_getMetroPeriode(key);
+  const bixi = v2_getBixiPeriode(key);
+  const dette = 0;
+  return {logement, electricite, assurance, gym, netflix, fido, metro, bixi, dette,
+    total: logement+electricite+assurance+gym+netflix+fido+metro+bixi};
+}
+
+function v2_getSommeEntreesAll(key, type) {
+  return v2_getEntreesPeriode(key)
+    .filter(e => e.type === type)
+    .reduce((s,e) => s+e.montant, 0);
+}
+
+function v2_getSommeEntrees(key, type) {
+  return v2_getEntreesPeriode(key)
+    .filter(e => e.type === type && !e.rembourse)
+    .reduce((s,e) => s+e.montant, 0);
+}
+
+function v2_getDateDebutPeriode(periodeKey) {
+  const p = PERIODES_V2.find(x => x.key === periodeKey);
+  if (!p) return null;
+  return new Date(p.anneeDebut, p.moisDebut - 1, 16);
+}
+
+function v2_getBudgetHistoriquePourPeriode(type, periodeKey) {
+  const valeurActuelle = type === 'nourriture' ? d.fixes.budget_nourriture : d.fixes.budget_perso;
+  const hist = (d.budgetHistorique && d.budgetHistorique[type]) || [];
+  if (hist.length === 0) return valeurActuelle;
+  const debutPeriode = v2_getDateDebutPeriode(periodeKey);
+  if (!debutPeriode) return valeurActuelle;
+  const trie = hist.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const applicables = trie.filter(h => new Date(h.date + 'T00:00:00') <= debutPeriode);
+  if (applicables.length === 0) return trie[0].montant; // avant le tout premier changement connu
+  return applicables[applicables.length - 1].montant;
+}
+
+function v2_getBudgetNourriturePourPeriode(periodeKey) { return v2_getBudgetHistoriquePourPeriode('nourriture', periodeKey); }
+
+function v2_getBudgetPersoPourPeriode(periodeKey) { return v2_getBudgetHistoriquePourPeriode('perso', periodeKey); }
+
+function v2_getSalairePeriode(key) {
+  return v2_getSommeEntrees(key, 'salaire');
+}
+
+function v2_getAutresPeriode(key) {
+  return v2_getSommeEntrees(key, 'autre');
+}
+
+function v2_getCurrentPeriodeIndex() {
+  // Parser la date sans problème de fuseau horaire
+  const dr = getDateRef(); // format YYYY-MM-DD
+  const parts = dr.split('-');
+  const y = parseInt(parts[0]);
+  const m = parseInt(parts[1]);
+  const d = parseInt(parts[2]);
+  // période courante : si on est du 16 au fin mois → début période
+  // période : 16/mois-1 → 15/mois
+  // Pour savoir dans quelle période on est :
+  // Si jour >= 16 → on est dans la période qui se termine le 15 du mois suivant
+  // Si jour <= 15 → on est dans la période qui s'est commencée le 16 du mois précédent
+
+  let periodeAnnee, periodeMois;
+  if (d >= 16) {
+    // fin = 15 du mois suivant
+    periodeAnnee = m === 12 ? y+1 : y;
+    periodeMois = m === 12 ? 1 : m+1;
+  } else {
+    // fin = 15 de ce mois
+    periodeAnnee = y;
+    periodeMois = m;
+  }
+
+  const searchKey = `${periodeAnnee}-${String(periodeMois).padStart(2,'0')}`;
+  const idx = PERIODES_V2.findIndex(p => p.key === searchKey);
+  return idx >= 0 ? idx : 0;
+}
+
+function v2_calculerSoldes() {
+  let solde = d.soldeDepart;
+  const soldes = {};
+  
+  for (const p of PERIODES_V2) {
+    const k = p.key;
+    const fixes = v2_getFixesTotauxPeriode(k);
+    // Budget par défaut seulement pour les périodes FUTURES (pas en cours ni passées)
+    const isFuturePeriode = v2_getPeriodeIndex(k) > v2_getCurrentPeriodeIndex();
+    const nourriture = v2_getSommeEntreesAll(k, 'nourriture') ||
+      (isFuturePeriode ? v2_getBudgetNourriturePourPeriode(k) : 0);
+    const perso = v2_getSommeEntreesAll(k, 'perso') ||
+      (isFuturePeriode ? v2_getBudgetPersoPourPeriode(k) : 0);
+    const exceptionnel = v2_getSommeEntreesAll(k, 'exceptionnel');
+    const salaire = v2_getSalairePeriode(k);
+    const autre = v2_getAutresPeriode(k);
+
+    // AEC : salaire estimé si pas saisi
+    const salaireAEC = 0;
+
+    const revenus = salaire + autre + salaireAEC;
+    const depenses = fixes.total + nourriture + perso + exceptionnel;
+
+    soldes[k] = {
+      debut: solde,
+      revenus,
+      salaire,
+      salaireAEC,
+      autre,
+      depenses,
+      nourriture,
+      perso,
+      exceptionnel,
+      fixes,
+      fin: solde + revenus - depenses,
+    };
+    solde = soldes[k].fin;
+  }
+  return soldes;
+}
+
+function v2_calculerPrevisionnel(soldesReels) {
+  const prev = {};
+  const idxDepart = v2_getPeriodeIndex(PREV_PERIODE_DEPART_V2);
+  let solde = null;
+  for (const p of PERIODES_V2) {
+    const idx = v2_getPeriodeIndex(p.key);
+    if (idx < idxDepart) {
+      // Avant la période de départ du scénario : on garde le solde réel (déjà connu/passé)
+      prev[p.key] = soldesReels[p.key]?.fin ?? 0;
+      continue;
+    }
+    if (solde === null) solde = soldesReels[PREV_PERIODE_DEPART_V2]?.debut ?? 0;
+    const nourriture = v2_getBudgetNourriturePourPeriode(p.key);
+    const perso = v2_getBudgetPersoPourPeriode(p.key);
+    const revenuPrevu = v2_getSommeEntreesAll(p.key, 'salaire'); // vrai salaire, jamais "autre"
+    // Métro/gym/fido/netflix lus directement depuis Paramètres (d.fixes) — une seule
+    // source de vérité, pour qu'un changement dans Paramètres se répercute partout.
+    const metroPrev = d.fixes.metro_normal;
+    const gymPrev = d.fixes.gym;
+    const fidoPrev = d.fixes.fido;
+    const netflixPrev = d.fixes.netflix;
+    // Dépenses : loyer+dette, métro, gym, fido, netflix, budgets nourriture/perso
+    const depensesPrevues = PREV_LOYER_V2 + metroPrev + gymPrev + fidoPrev + netflixPrev + nourriture + perso;
+    solde = solde + revenuPrevu - depensesPrevues;
+    prev[p.key] = solde;
+  }
+  return prev;
+}
+
+  return { calculerSoldes: v2_calculerSoldes, calculerPrevisionnel: v2_calculerPrevisionnel, PERIODES_V2: PERIODES_V2 };
+}
+
 const FIREBASE_URL = 'https://comptes-rafael-default-rtdb.firebaseio.com';
 
 async function saveToFirebase() {

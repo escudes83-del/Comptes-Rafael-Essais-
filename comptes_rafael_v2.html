@@ -2118,6 +2118,20 @@ function getDateDebutPeriode(periodeKey) {
   return new Date(p.anneeDebut, p.moisDebut - 1, 16);
 }
 
+// Montant "attendu" au rythme de la période : budget total × (jours écoulés / jours total de la
+// période), sans marge de tolérance — un dépassement de ce montant déclenche l'alerte.
+// Si le lendemain rien n'est dépensé, le rythme moyen redescend automatiquement.
+function getMontantAttenduPourPeriode(budgetTotal, periodeKey, dateRefStr) {
+  const debut = getDateDebutPeriode(periodeKey);
+  if (!debut) return budgetTotal;
+  const fin = new Date(debut.getFullYear(), debut.getMonth() + 1, 15);
+  const ref = new Date(dateRefStr + 'T00:00:00');
+  const joursTotal = Math.round((fin - debut) / 86400000) + 1;
+  let joursEcoules = Math.round((ref - debut) / 86400000) + 1;
+  joursEcoules = Math.max(0, Math.min(joursEcoules, joursTotal));
+  return budgetTotal * (joursEcoules / joursTotal);
+}
+
 function getBudgetHistoriquePourPeriode(type, periodeKey) {
   const valeurActuelle = type === 'nourriture' ? state.fixes.budget_nourriture : state.fixes.budget_perso;
   const hist = (state.budgetHistorique && state.budgetHistorique[type]) || [];
@@ -2759,26 +2773,35 @@ function renderRappels() {
       const deficitProjete = sAlerte ? sAlerte.fin < 0 : false;
 
       const msgs = [];
-      if (idxAffiche === curIdx2 && nourritureReel > nourritureBudget * 0.5) {
-        msgs.push(`Nourriture: ${fmt(nourritureReel)}/${fmt(nourritureBudget)}`);
+      const codes = [];
+      const dateRefAlerte = getDateRef();
+      const nourritureAttendue = getMontantAttenduPourPeriode(nourritureBudget, keyAffiche, dateRefAlerte);
+      const persoAttendu = getMontantAttenduPourPeriode(persoBudget, keyAffiche, dateRefAlerte);
+      if (idxAffiche === curIdx2 && nourritureReel > nourritureAttendue) {
+        msgs.push(`Nourriture: ${fmt(nourritureReel)}/${fmt(nourritureBudget)} (rythme attendu : ${fmt(nourritureAttendue)})`);
+        codes.push('nourriture');
       }
-      if (idxAffiche === curIdx2 && persoReel > persoBudget * 0.5) {
-        msgs.push(`Perso: ${fmt(persoReel)}/${fmt(persoBudget)}`);
+      if (idxAffiche === curIdx2 && persoReel > persoAttendu) {
+        msgs.push(`Perso: ${fmt(persoReel)}/${fmt(persoBudget)} (rythme attendu : ${fmt(persoAttendu)})`);
+        codes.push('perso');
       }
       if (deficitProjete) {
         msgs.push(`Déficit projeté: ${fmt(sAlerte.fin)}`);
+        codes.push('deficit');
       }
 
       if (msgs.length > 0) {
-        // Clé d'acquittement basée sur le contenu exact (se réactive si la situation change)
-        const alerteKey = 'alerte_budget_' + keyAffiche + '_' + msgs.join('|').replace(/[^a-zA-Z0-9]/g, '');
+        // Clé d'acquittement basée sur la date du jour : "Ne plus afficher" ne vaut que pour
+        // aujourd'hui — l'alerte réapparaît fraîche chaque jour tant que le rythme reste dépassé,
+        // pour ne jamais laisser un vrai dépassement se cacher durablement.
+        const alerteKey = 'alerte_budget_' + keyAffiche + '_' + dateRefAlerte + '_' + codes.join('');
         const dejaVue = (state.rappels || {})[alerteKey + '_supprime'];
         const activee = true;
         if (!dejaVue && activee) {
           alerteHtml = `<div style="cursor:default;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:130px;min-height:38px;animation:pulse-dette 1.8s ease-in-out infinite;">
             <div style="font-size:10px;font-weight:800;color:var(--red);letter-spacing:.5px;">🐾 ALERTE BUDGET</div>
             <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;text-align:center;">${msgs.join(' · ')}</div>
-            <button onclick="acquitterAlerteBudget('${alerteKey}')" style="margin-top:3px;background:transparent;border:1px solid rgba(255,255,255,.3);border-radius:4px;color:var(--text);font-size:9px;padding:2px 8px;cursor:pointer;">✕ Ne plus afficher</button>
+            <button onclick="acquitterAlerteBudget('${alerteKey}')" style="margin-top:3px;background:transparent;border:1px solid rgba(255,255,255,.3);border-radius:4px;color:var(--text);font-size:9px;padding:2px 8px;cursor:pointer;">✕ Ne plus afficher aujourd'hui</button>
           </div>`;
         }
       }

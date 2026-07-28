@@ -2970,6 +2970,11 @@ function ouvrirEpargne() {
       <p style="font-size:22px;font-weight:800;color:var(--green);margin:10px 0 2px;">${fmt(soldeEpargne)}</p>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">Intérêts totaux perçus : ${fmt(totalInterets)}</p>
       <div class="form-row">
+        <label>Solde déjà présent avant le suivi (n'affecte jamais le compte courant)</label>
+        <input type="number" id="epargneSoldeDepart" step="0.01" value="${(state.epargne && state.epargne.soldeDepart) || 0}" onchange="modifierSoldeDepartEpargne(this.value)">
+      </div>
+      <div class="divider" style="margin:12px 0;"></div>
+      <div class="form-row">
         <label>Type de mouvement</label>
         <select id="epargneType">
           <option value="depot">⬇️ Dépôt (du compte courant vers l'épargne)</option>
@@ -3000,6 +3005,14 @@ function ouvrirEpargne() {
       </div>
     </div>`;
   overlay.classList.add('open');
+}
+
+function modifierSoldeDepartEpargne(val) {
+  const montant = parseFloat(val) || 0;
+  if (!state.epargne) state.epargne = { soldeDepart: 0, mouvements: [] };
+  state.epargne.soldeDepart = montant;
+  saveState();
+  render();
 }
 
 function ajouterMouvementEpargne() {
@@ -3485,6 +3498,10 @@ function renderPills() {
       val -= entrees.filter(e => ['nourriture','perso','exceptionnel','autre_fixe'].includes(e.type) && !e.rembourse).reduce((a,e)=>a+e.montant,0);
       // Frais fixes manuels (logement + entrées saisies type électricité/assurance/gym/netflix/fido/bixi) déjà engagés à dateRef
       val -= getFraisFixesEngagesAvant(key, dateRef);
+      // Mouvements épargne déjà engagés à dateRef : dépôt sort du courant, retrait y rentre
+      const mouvementsEpargne = getEpargneMouvementsPeriode(key).filter(m => m.date <= dateRef);
+      val -= mouvementsEpargne.filter(m => m.type === 'depot').reduce((a,m)=>a+m.montant,0);
+      val += mouvementsEpargne.filter(m => m.type === 'retrait').reduce((a,m)=>a+m.montant,0);
       return val;
     }
     return s.fin; // futur : projection

@@ -3005,6 +3005,8 @@ function ouvrirEpargne() {
       </div>
     </div>`;
   overlay.classList.add('open');
+  const modalInner = overlay.querySelector('.modal');
+  if (modalInner) makeDraggable(modalInner);
 }
 
 function modifierSoldeDepartEpargne(val) {

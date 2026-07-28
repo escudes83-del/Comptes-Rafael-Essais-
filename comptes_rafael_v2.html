@@ -2813,10 +2813,10 @@ function renderRappels() {
     const dejaVue = (state.rappels || {})[alerteKey + '_supprime'];
     if (actif && !dejaVue) {
       el.style.display = 'flex';
-      el.innerHTML = `<div style="cursor:default;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:38px;animation:pulse-dette 1.8s ease-in-out infinite;">
-        <div style="font-size:10px;font-weight:800;color:var(--red);letter-spacing:.5px;">🐾 ${titre}</div>
+      el.innerHTML = `<div style="cursor:default;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:4px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:130px;min-height:34px;animation:pulse-dette 1.8s ease-in-out infinite;">
+        <div style="font-size:9px;font-weight:800;color:var(--red);letter-spacing:.3px;">🐾 ${titre}</div>
         <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;text-align:center;">${texte}</div>
-        <button onclick="acquitterAlerteBudget('${alerteKey}')" style="margin-top:3px;background:transparent;border:1px solid rgba(255,255,255,.3);border-radius:4px;color:var(--text);font-size:9px;padding:2px 8px;cursor:pointer;">✕ Ne plus afficher aujourd'hui</button>
+        <button onclick="acquitterAlerteBudget('${alerteKey}')" style="margin-top:2px;background:transparent;border:none;color:var(--muted);font-size:8px;cursor:pointer;text-decoration:underline;">Ignorer aujourd'hui</button>
       </div>`;
     } else {
       el.style.display = 'none';
@@ -2843,10 +2843,10 @@ function renderRappels() {
       const persoAttendu = getMontantAttenduPourPeriode(persoBudget, keyAffiche, dateRefAlerte);
 
       nourritureDepasse = nourritureReel > nourritureAttendue;
-      texteNourriture = `Budget moyen journalier dépassé : ${fmt(nourritureReel)} dépensé / rythme attendu ${fmt(nourritureAttendue)} (budget total ${fmt(nourritureBudget)})`;
+      texteNourriture = `Dépassé de ${fmt(nourritureReel - nourritureAttendue)}<br><span style="font-size:8px;color:var(--muted);">Normale: ${fmt(nourritureAttendue)} · Aujourd'hui: ${fmt(nourritureReel)}</span>`;
 
       persoDepasse = persoReel > persoAttendu;
-      textePerso = `Budget moyen journalier dépassé : ${fmt(persoReel)} dépensé / rythme attendu ${fmt(persoAttendu)} (budget total ${fmt(persoBudget)})`;
+      textePerso = `Dépassé de ${fmt(persoReel - persoAttendu)}<br><span style="font-size:8px;color:var(--muted);">Normale: ${fmt(persoAttendu)} · Aujourd'hui: ${fmt(persoReel)}</span>`;
     }
 
     if (!isPeriodePassee) {
@@ -2857,11 +2857,11 @@ function renderRappels() {
     }
 
     renderAlerteBudgetIndependante('rappelAlerteNourritureBandeau', nourritureDepasse,
-      'ALERTE BUDGET NOURRITURE', texteNourriture,
+      'NOURRITURE — Budget journalier dépassé', texteNourriture,
       'alerte_budget_nourriture_' + keyAffiche + '_' + dateRefAlerte);
 
     renderAlerteBudgetIndependante('rappelAlertePersoBandeau', persoDepasse,
-      'ALERTE BUDGET PERSO', textePerso,
+      'PERSO — Budget journalier dépassé', textePerso,
       'alerte_budget_perso_' + keyAffiche + '_' + dateRefAlerte);
 
     renderAlerteBudgetIndependante('rappelAlerteDeficitBandeau', deficitProjete,

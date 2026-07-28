@@ -2813,9 +2813,9 @@ function renderRappels() {
     const dejaVue = (state.rappels || {})[alerteKey + '_supprime'];
     if (actif && !dejaVue) {
       el.style.display = 'flex';
-      el.innerHTML = `<div style="cursor:default;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:4px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:130px;min-height:34px;animation:pulse-dette 1.8s ease-in-out infinite;">
+      el.innerHTML = `<div style="cursor:default;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:44px;animation:pulse-dette 1.8s ease-in-out infinite;">
         <div style="font-size:9px;font-weight:800;color:var(--red);letter-spacing:.3px;">🐾 ${titre}</div>
-        <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;text-align:center;">${texte}</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:2px;text-align:center;">${texte}</div>
         <button onclick="acquitterAlerteBudget('${alerteKey}')" style="margin-top:2px;background:transparent;border:none;color:var(--muted);font-size:8px;cursor:pointer;text-decoration:underline;">Ignorer aujourd'hui</button>
       </div>`;
     } else {
@@ -2843,10 +2843,10 @@ function renderRappels() {
       const persoAttendu = getMontantAttenduPourPeriode(persoBudget, keyAffiche, dateRefAlerte);
 
       nourritureDepasse = nourritureReel > nourritureAttendue;
-      texteNourriture = `Dépassé de ${fmt(nourritureReel - nourritureAttendue)}<br><span style="font-size:8px;color:var(--muted);">Normale: ${fmt(nourritureAttendue)} · Aujourd'hui: ${fmt(nourritureReel)}</span>`;
+      texteNourriture = `Dépassé de ${fmt(nourritureReel - nourritureAttendue)}<br><span style="font-size:10px;color:var(--muted);font-weight:600;">Normale: ${fmt(nourritureAttendue)} · Aujourd'hui: ${fmt(nourritureReel)}</span>`;
 
       persoDepasse = persoReel > persoAttendu;
-      textePerso = `Dépassé de ${fmt(persoReel - persoAttendu)}<br><span style="font-size:8px;color:var(--muted);">Normale: ${fmt(persoAttendu)} · Aujourd'hui: ${fmt(persoReel)}</span>`;
+      textePerso = `Dépassé de ${fmt(persoReel - persoAttendu)}<br><span style="font-size:10px;color:var(--muted);font-weight:600;">Normale: ${fmt(persoAttendu)} · Aujourd'hui: ${fmt(persoReel)}</span>`;
     }
 
     if (!isPeriodePassee) {

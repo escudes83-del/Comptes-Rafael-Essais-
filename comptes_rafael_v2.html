@@ -63,6 +63,7 @@
   /* MODE TOGGLE */
   .mode-toggle {
     display: flex;
+    flex-direction: column;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -2718,9 +2719,9 @@ function renderRappels() {
     const detteRestante = getDetteAuMois(keyAffiche);
     if (detteRestante > 0) {
       elDette.style.display = 'flex';
-      elDette.innerHTML = `<div style="background:rgba(247,197,72,.15);border:2px solid var(--yellow);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:38px;animation:pulse-dette 1.8s ease-in-out infinite;">
+      elDette.innerHTML = `<div style="background:rgba(247,197,72,.15);border:2px solid var(--yellow);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:40px;animation:pulse-dette 1.8s ease-in-out infinite;">
         <div style="font-size:10px;font-weight:800;color:var(--yellow);letter-spacing:.5px;">RAPPEL · ${fmt(detteRestante)}</div>
-        <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;">Dette propriétaire</div>
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-top:4px;">Dette propriétaire</div>
       </div>`;
     } else {
       elDette.style.display = 'none';
@@ -2792,9 +2793,9 @@ function renderRappels() {
     const resteTotal = resteIRCC + resteLoyer;
     if (resteTotal > 0) {
       elIRCC.style.display = 'flex';
-      elIRCC.innerHTML = `<div onclick="ouvrirRemboursementAides()" style="cursor:pointer;background:rgba(79,142,247,.10);border:2px solid var(--accent);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:38px;gap:1px;">
-        <div style="font-size:9px;font-weight:800;color:var(--accent);letter-spacing:.3px;">SUIVI IRCC · ${fmt(resteIRCC)}</div>
-        <div style="font-size:9px;font-weight:800;color:var(--accent);letter-spacing:.3px;">SUIVI LOGEMENT · ${fmt(resteLoyer)}</div>
+      elIRCC.innerHTML = `<div onclick="ouvrirRemboursementAides()" style="cursor:pointer;background:rgba(79,142,247,.10);border:2px solid var(--accent);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:42px;gap:4px;">
+        <div style="font-size:9px;font-weight:800;color:#fff;letter-spacing:.3px;">SUIVI IRCC · ${fmt(resteIRCC)}</div>
+        <div style="font-size:9px;font-weight:800;color:#fff;letter-spacing:.3px;">SUIVI LOGEMENT · ${fmt(resteLoyer)}</div>
       </div>`;
     } else {
       elIRCC.style.display = 'none';
@@ -3600,7 +3601,7 @@ function renderPills() {
     if (dispo <= 0) cls3 += ' neg';
     else if (dispo < 250) cls3 += ' warn';
     row3 += `<div class="${cls3}" onclick="selectMois('${p.key}')">
-      <div class="pill-solde" style="color:${colDispo};">${fmt(dispo)}</div>
+      <div class="pill-solde" style="color:#fff;">${fmt(dispo)}</div>
     </div>`;
   });
 

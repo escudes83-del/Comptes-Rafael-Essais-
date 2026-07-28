@@ -3497,7 +3497,7 @@ function setDateRef(val) {
   state.dateRef = val || null;
   saveState();
   updateDateRefUI();
-  renderHero();
+  render();
 }
 
 // Bouton "↺" : remet le champ à vide (mode automatique = aujourd'hui) et rafraîchit tout l'affichage,

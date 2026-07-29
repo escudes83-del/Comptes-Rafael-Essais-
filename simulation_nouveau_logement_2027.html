@@ -2433,21 +2433,39 @@ function renderFixesBloc() {
   const metroMontant = isAEC ? state.fixes.metro_etudiant : state.fixes.metro_normal;
 
   const detteFixeMensuelle = (state.detteCalManuel || {})[curKey] !== undefined
-    ? (state.detteCalManuel || {})[curKey] : 0;
+    ? (state.detteCalManuel || {})[curKey]
+    : 0;
   const logementMontant = getLogementPeriode(curKey);
 
   const fixesTotaux = getFixesTotauxPeriode(curKey);
   document.getElementById('fixesTotal').textContent = fmt(fixesTotaux.total);
 
+  // Statut "déjà débité" par poste : mêmes règles de date que getFraisFixesEngagesAvant,
+  // pour un repère visuel immédiat de ce qui est déjà compté dans le solde.
+  const debutPeriode = getDateDebutPeriode(curKey);
+  let gymDebite1 = false, gymDebite2 = false, fidoDebite = false, netflixDebite = false, metroDebite = false;
+  if (debutPeriode) {
+    const gymDate1 = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 23);
+    const gymDate2 = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 7);
+    gymDebite1 = gymDate1 <= today;
+    gymDebite2 = gymDate2 <= today;
+    const fidoDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 29);
+    fidoDebite = fidoDate <= today;
+    const netflixDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 25);
+    netflixDebite = netflixDate >= debutPeriode && netflixDate <= today;
+    const metroDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 1);
+    metroDebite = metroDate <= today;
+  }
+
   let html = '';
   html += renderLogementFixeCard(curKey, logementMontant, detteFixeMensuelle);
-  html += renderFixeEntreeCard('electricite', 'Électricité', '⚡', curKey, fixes.electricite, fixes.electricite === 0 ? 'non actif' : 'mensuel', null);
-  html += renderFixeEntreeCard('assurance', 'Assurance log.', '🛡️', curKey, fixes.assurance, fixes.assurance === 0 ? 'non actif' : 'mensuel', null);
-  html += renderFixeEntreeCard('gym', 'Gym', '🏋️', curKey, gym.montant, gym.count + 'x ' + (fixes.gym/2).toFixed(2).replace('.',',')+' $', 'Prochain : ' + fmtDate(nextGym));
-  html += renderFixeEntreeCard('netflix', 'Netflix', '🎬', curKey, fixes.netflix, '~25 du mois', 'Prochain : ' + fmtDate(nextNetflix));
-  html += renderFixeEntreeCard('fido', 'Fido (tél)', '📱', curKey, fixes.fido, 'irrégulier', null);
-  html += renderFixeEntreeCard('metro', 'Métro', '🚇', curKey, metroMontant, isAEC ? 'tarif étudiant' : 'tarif normal', 'Prochain : ' + fmtDate(nextMetro));
-  html += renderFixeEntreeCard('bixi', 'Bixi', '🚲', curKey, fixes.bixi, fixes.bixi === 0 ? 'non actif' : '1 mois', null);
+  html += renderFixeEntreeCard('electricite', 'Électricité', '⚡', curKey, fixes.electricite, fixes.electricite === 0 ? 'non actif' : 'mensuel', null, false);
+  html += renderFixeEntreeCard('assurance', 'Assurance log.', '🛡️', curKey, fixes.assurance, fixes.assurance === 0 ? 'non actif' : 'mensuel', null, false);
+  html += renderGymCard(curKey, gym, nextGym, gymDebite1, gymDebite2);
+  html += renderFixeEntreeCard('netflix', 'Netflix', '🎬', curKey, fixes.netflix, '~25 du mois', 'Prochain : ' + fmtDate(nextNetflix), netflixDebite);
+  html += renderFixeEntreeCard('fido', 'Fido (tél)', '📱', curKey, fixes.fido, 'irrégulier', null, fidoDebite);
+  html += renderFixeEntreeCard('metro', 'Métro', '🚇', curKey, metroMontant, isAEC ? 'tarif étudiant' : 'tarif normal', 'Prochain : ' + fmtDate(nextMetro), metroDebite);
+  html += renderFixeEntreeCard('bixi', 'Bixi', '🚲', curKey, fixes.bixi, fixes.bixi === 0 ? 'non actif' : '1 mois', null, false);
 
   document.getElementById('fixesGrid').innerHTML = html;
 }
@@ -2504,12 +2522,85 @@ function renderLogementFixeCard(curKey, logementMontant, detteFixeMensuelle) {
 }
 
 // ── CRUD GENERIQUE FRAIS FIXES ──────────────────────────────────
-function renderFixeEntreeCard(fixKey, label, icon, curKey, defaultMontant, note, nextInfo) {
+function renderGymCard(curKey, gym, nextGym, gymDebite1, gymDebite2) {
+  const fixKey = 'gym';
+  const entries = getFixeEntreesPeriode(fixKey, curKey);
+  const hasE = entries.length > 0;
+  const montantUnitaire = state.fixes.gym / 2;
+  const cls = (hasE ? sommeFixeEntrees(fixKey, curKey) : gym.montant) > 0 ? 'fixes-item actif' : 'fixes-item inactif';
+  const dateDefault = getDatePourPeriode(curKey);
+
+  let corpsHTML = '';
+  if (!hasE) {
+    // Vue par défaut : les 2 prélèvements côte à côte, chacun avec son propre statut
+    corpsHTML = '<div style="display:flex;gap:14px;margin-top:4px;">'
+      + '<div style="text-align:center;">'
+        + '<div class="fixes-item-montant" style="font-size:15px;">' + fmt(montantUnitaire) + '</div>'
+        + (gymDebite1
+            ? '<div style="font-size:9px;font-weight:700;color:var(--green);">✅ Débité</div>'
+            : '<div style="font-size:9px;font-weight:700;color:var(--muted);">⏳ Pas encore</div>')
+      + '</div>'
+      + '<div style="text-align:center;">'
+        + '<div class="fixes-item-montant" style="font-size:15px;">' + fmt(montantUnitaire) + '</div>'
+        + (gymDebite2
+            ? '<div style="font-size:9px;font-weight:700;color:var(--green);">✅ Débité</div>'
+            : '<div style="font-size:9px;font-weight:700;color:var(--muted);">⏳ Pas encore</div>')
+      + '</div>'
+    + '</div>';
+  } else {
+    let listeHTML = '';
+    [...entries].sort((a,b) => a.date.localeCompare(b.date)).forEach(e => {
+      const rowId = 'fixe_' + fixKey + '_' + e.id;
+      listeHTML += '<div class="vm-tx-wrap" style="margin:0;">'
+        + '<div class="vm-tx" id="' + rowId + '_view" style="font-size:11px;padding:2px 0;">'
+          + '<span class="vm-tx-date" style="font-size:10px;">' + e.date.slice(8) + '/' + e.date.slice(5,7) + '</span>'
+          + '<span class="vm-tx-desc" style="font-size:11px;flex:1;">' + e.desc + '</span>'
+          + '<span class="vm-tx-amt" style="font-size:11px;">' + fmt(e.montant) + '</span>'
+          + '<button onclick="startEditFixeEntree(\'' + rowId + '\',\'' + e.id + '\',\'' + fixKey + '\',\'' + curKey + '\')" title="Modifier" style="background:none;border:none;cursor:pointer;color:#f9a825;font-size:12px;padding:0 2px;"><i class="ti ti-pencil"></i></button>'
+          + '<button class="vm-tx-del" onclick="deleteFixeEntree(\'' + fixKey + '\',\'' + curKey + '\',\'' + e.id + '\')" title="Supprimer" style="font-size:11px;">✕</button>'
+        + '</div>'
+        + '<div class="vm-tx" id="' + rowId + '_edit" style="display:none;flex-wrap:wrap;gap:3px;padding:2px 0;">'
+          + '<input type="date" id="' + rowId + '_date" value="' + e.date + '" style="width:105px;background:var(--bg);border:1px solid var(--accent);border-radius:4px;color:var(--text);font-size:10px;padding:2px 4px;">'
+          + '<input type="text" id="' + rowId + '_desc" value="' + e.desc + '" style="flex:1;min-width:80px;background:var(--bg);border:1px solid var(--accent);border-radius:4px;color:var(--text);font-size:11px;padding:2px 5px;">'
+          + '<input type="number" id="' + rowId + '_amt" value="' + e.montant + '" step="0.01" min="0" style="width:70px;background:var(--bg);border:1px solid var(--accent);border-radius:4px;color:var(--text);font-size:11px;font-family:var(--font-mono);padding:2px 4px;text-align:right;">'
+          + '<button onclick="saveEditFixeEntree(\'' + rowId + '\',\'' + e.id + '\',\'' + fixKey + '\',\'' + curKey + '\')" style="background:var(--green);color:#000;border:none;border-radius:4px;font-size:10px;font-weight:700;padding:2px 6px;cursor:pointer;">✓</button>'
+          + '<button onclick="cancelEditFixeEntree(\'' + rowId + '\')" style="background:var(--border);color:var(--muted);border:none;border-radius:4px;font-size:10px;padding:2px 5px;cursor:pointer;">✕</button>'
+        + '</div>'
+      + '</div>';
+    });
+    corpsHTML = '<div class="fixes-item-montant">' + fmt(sommeFixeEntrees(fixKey, curKey)) + '</div>'
+      + '<div style="margin-top:5px;">' + listeHTML + '</div>';
+  }
+
+  return '<div class="' + cls + '" id="fixes_card_gym">'
+    + '<div class="fixes-item-label">🏋️ Gym</div>'
+    + corpsHTML
+    + '<div class="fixes-item-next">Prochain : ' + fmtDate(nextGym) + '</div>'
+    + '<div style="font-size:9px;color:var(--muted);">' + gym.count + 'x ' + montantUnitaire.toFixed(2).replace('.',',') + ' $</div>'
+    + '<div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap;">'
+      + '<input type="number" id="fixe_gym_amt" placeholder="Montant $" step="0.01" min="0" style="width:75px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;font-family:var(--font-mono);padding:3px 6px;">'
+      + '<input type="text" id="fixe_gym_desc" placeholder="Gym" style="flex:1;min-width:80px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;padding:3px 6px;">'
+      + '<input type="date" id="fixe_gym_date" value="' + dateDefault + '" style="width:115px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;padding:3px 5px;">'
+      + '<button onclick="addFixeEntree(\'gym\',\'' + curKey + '\')" style="background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;padding:3px 10px;cursor:pointer;">+ Ajouter</button>'
+    + '</div>'
+  + '</div>';
+}
+
+function renderFixeEntreeCard(fixKey, label, icon, curKey, defaultMontant, note, nextInfo, dejaDebite) {
   const entries = getFixeEntreesPeriode(fixKey, curKey);
   const hasE = entries.length > 0;
   const total = hasE ? sommeFixeEntrees(fixKey, curKey) : defaultMontant;
   const cls = total > 0 ? 'fixes-item actif' : 'fixes-item inactif';
   const dateDefault = getDatePourPeriode(curKey);
+
+  // Badge visuel : seulement pertinent pour le montant par défaut (pas de saisie manuelle) —
+  // permet de voir d'un coup d'œil si ce frais est déjà compté dans le solde ou pas encore.
+  let badgeHTML = '';
+  if (!hasE && defaultMontant > 0) {
+    badgeHTML = dejaDebite
+      ? '<div style="font-size:9px;font-weight:700;color:var(--green);margin-top:2px;">✅ Débité</div>'
+      : '<div style="font-size:9px;font-weight:700;color:var(--muted);margin-top:2px;">⏳ Pas encore débité</div>';
+  }
 
   let listeHTML = '';
   if (!hasE) {
@@ -2541,6 +2632,7 @@ function renderFixeEntreeCard(fixKey, label, icon, curKey, defaultMontant, note,
   return '<div class="' + cls + '" id="fixes_card_' + fixKey + '">'
     + '<div class="fixes-item-label">' + icon + ' ' + label + '</div>'
     + '<div class="fixes-item-montant">' + (total > 0 ? fmt(total) : '—') + '</div>'
+    + badgeHTML
     + (nextInfo ? '<div class="fixes-item-next">' + nextInfo + '</div>' : '')
     + '<div style="font-size:9px;color:var(--muted);">' + note + '</div>'
     + '<div style="margin-top:5px;">' + listeHTML + '</div>'

@@ -1744,6 +1744,7 @@ function defaultState() {
     budgetHistorique: { nourriture: [], perso: [] }, // [{date:'YYYY-MM-DD', montant}] — permet au budget de changer sans affecter les périodes déjà passées
     rappelsPersonnalises: [], // [{id, desc, montant, dateEcheance, categorie, paye}]
     epargne: { soldeDepart: 0, mouvements: [] }, // [{id, type:'depot'|'retrait'|'interet', montant, date, desc}]
+    reliquatsAppliques: {}, // { periodeKey: {nourriture: X, perso: Y} } — boost ponctuel de budget suite à un reliquat reporté
     // entrées par période: { '2026-01': [{id, type, montant, desc, date, rembourse, rembDesc}] }
     entrees: {},
     selectedMois: null,
@@ -1764,6 +1765,7 @@ function loadState() {
       if (!s.budgetHistorique) s.budgetHistorique = { nourriture: [], perso: [] };
       if (!s.rappelsPersonnalises) s.rappelsPersonnalises = [];
       if (!s.epargne) s.epargne = { soldeDepart: 0, mouvements: [] };
+      if (!s.reliquatsAppliques) s.reliquatsAppliques = {};
       return s;
     }
   } catch(e) {}
@@ -2189,8 +2191,16 @@ function getBudgetHistoriquePourPeriode(type, periodeKey) {
   if (applicables.length === 0) return trie[0].montant; // avant le tout premier changement connu
   return applicables[applicables.length - 1].montant;
 }
-function getBudgetNourriturePourPeriode(periodeKey) { return getBudgetHistoriquePourPeriode('nourriture', periodeKey); }
-function getBudgetPersoPourPeriode(periodeKey) { return getBudgetHistoriquePourPeriode('perso', periodeKey); }
+function getBudgetNourriturePourPeriode(periodeKey) {
+  const base = getBudgetHistoriquePourPeriode('nourriture', periodeKey);
+  const boost = (state.reliquatsAppliques && state.reliquatsAppliques[periodeKey] && state.reliquatsAppliques[periodeKey].nourriture) || 0;
+  return base + boost;
+}
+function getBudgetPersoPourPeriode(periodeKey) {
+  const base = getBudgetHistoriquePourPeriode('perso', periodeKey);
+  const boost = (state.reliquatsAppliques && state.reliquatsAppliques[periodeKey] && state.reliquatsAppliques[periodeKey].perso) || 0;
+  return base + boost;
+}
 
 // Budget nourriture prévu pour la période
 function getBudgetNourriture(key) {
@@ -2794,8 +2804,8 @@ function renderRappels() {
     if (resteTotal > 0) {
       elIRCC.style.display = 'flex';
       elIRCC.innerHTML = `<div onclick="ouvrirRemboursementAides()" style="cursor:pointer;background:rgba(79,142,247,.10);border:2px solid var(--accent);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:42px;gap:4px;">
-        <div style="font-size:9px;font-weight:800;color:#fff;letter-spacing:.3px;">SUIVI IRCC · ${fmt(resteIRCC)}</div>
-        <div style="font-size:9px;font-weight:800;color:#fff;letter-spacing:.3px;">SUIVI LOGEMENT · ${fmt(resteLoyer)}</div>
+        <div style="font-size:9px;font-weight:800;letter-spacing:.3px;"><span style="color:var(--accent);">SUIVI IRCC</span> · <span style="color:#fff;">${fmt(resteIRCC)}</span></div>
+        <div style="font-size:9px;font-weight:800;letter-spacing:.3px;"><span style="color:var(--accent);">SUIVI LOGEMENT</span> · <span style="color:#fff;">${fmt(resteLoyer)}</span></div>
       </div>`;
     } else {
       elIRCC.style.display = 'none';
@@ -2884,24 +2894,31 @@ function renderRappels() {
 
 
   // Cadre RELIQUAT — budget non dépensé de la période précédente, proposer répartition
+  // Visible seulement dans les 10 premiers jours de la nouvelle période, puis disparaît seul.
   const elReliquat = document.getElementById('rappelReliquatBandeau');
   if (elReliquat) {
     const curIdxR = getCurrentPeriodeIndex();
     const prevIdxR = curIdxR - 1;
     let reliquatHtml = '';
     if (prevIdxR >= 0) {
+      const curKeyR = PERIODES[curIdxR].key;
+      const debutCourant = getDateDebutPeriode(curKeyR);
+      const joursDepuisDebut = debutCourant ? Math.floor((new Date(getDateRef()+'T00:00:00') - debutCourant) / 86400000) : 999;
       const prevKeyR = PERIODES[prevIdxR].key;
       const dejaTraite = (state.rappels || {})['reliquat_' + prevKeyR + '_traite'];
-      if (!dejaTraite) {
+      if (!dejaTraite && joursDepuisDebut <= 10) {
         const prevN = getSommeEntreesAll(prevKeyR, 'nourriture');
         const prevP = getSommeEntreesAll(prevKeyR, 'perso');
-        const resteNR = Math.max(0, getBudgetNourriturePourPeriode(prevKeyR) - prevN);
-        const resteSPR = Math.max(0, getBudgetPersoPourPeriode(prevKeyR) - prevP);
+        // Pas de plafond par catégorie avant de sommer : un dépassement nourriture doit bien
+        // réduire le reliquat global (voire le rendre négatif = pas de reliquat du tout).
+        const resteNR = getBudgetNourriturePourPeriode(prevKeyR) - prevN;
+        const resteSPR = getBudgetPersoPourPeriode(prevKeyR) - prevP;
         const resteTotalR = resteNR + resteSPR;
         if (resteTotalR > 5) {
-          reliquatHtml = `<div onclick="ouvrirModalReliquat()" style="cursor:pointer;background:rgba(62,207,142,.12);border:2px solid var(--green);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:38px;">
-            <div style="font-size:10px;font-weight:800;color:var(--green);letter-spacing:.5px;">RELIQUAT · ${fmt(resteTotalR)}</div>
-            <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;">Budget non dépensé</div>
+          reliquatHtml = `<div style="cursor:pointer;background:rgba(62,207,142,.12);border:2px solid var(--green);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:38px;position:relative;">
+            <span onclick="fermerReliquatBandeau('${prevKeyR}')" style="position:absolute;top:2px;right:5px;font-size:11px;color:var(--muted);cursor:pointer;">✕</span>
+            <div onclick="ouvrirModalReliquat()" style="font-size:10px;font-weight:800;color:var(--green);letter-spacing:.5px;">RELIQUAT · ${fmt(resteTotalR)}</div>
+            <div onclick="ouvrirModalReliquat()" style="font-size:9px;font-weight:600;color:var(--text);margin-top:1px;">Budget non dépensé</div>
           </div>`;
         }
       }
@@ -3946,6 +3963,13 @@ function checkAlerteOuverture() {
   saveState();
 }
 
+function fermerReliquatBandeau(prevKey) {
+  if (!state.rappels) state.rappels = {};
+  state.rappels['reliquat_' + prevKey + '_traite'] = true;
+  saveState();
+  renderRappels();
+}
+
 function ouvrirModalReliquat() {
   const curIdx = getCurrentPeriodeIndex();
   // Utiliser la période précédente
@@ -3954,9 +3978,10 @@ function ouvrirModalReliquat() {
   const prevKey = PERIODES[prevIdx].key;
   const nourritureReel = getSommeEntreesAll(prevKey, 'nourriture');
   const persoReel = getSommeEntreesAll(prevKey, 'perso');
-  const resteN = Math.max(0, getBudgetNourriturePourPeriode(prevKey) - nourritureReel);
-  const resteP = Math.max(0, getBudgetPersoPourPeriode(prevKey) - persoReel);
-  const resteTotal = resteN + resteP;
+  // Pas de plafond par catégorie : un dépassement nourriture réduit bien le reliquat global
+  const resteN = getBudgetNourriturePourPeriode(prevKey) - nourritureReel;
+  const resteP = getBudgetPersoPourPeriode(prevKey) - persoReel;
+  const resteTotal = Math.max(0, resteN + resteP);
 
   window._reliquatCtx = { prevKey, resteN, resteP, resteTotal };
 
@@ -3979,14 +4004,6 @@ function getReliquatMontant() {
   return Math.min(parseFloat(el.value) || 0, ctx.resteTotal);
 }
 
-function reliquatVersPortefeuille() {
-  const montant = getReliquatMontant();
-  const ctx = window._reliquatCtx;
-  if (!montant || !ctx) return;
-  proposerPortefeuille(montant);
-  closeModal('modalReliquat');
-}
-
 function reliquatVersDettte() {
   const montant = getReliquatMontant();
   const ctx = window._reliquatCtx;
@@ -4002,25 +4019,50 @@ function reliquatVersDettte() {
   renderDette();
 }
 
-function proposerPortefeuille(montant) {
+function reliquatVersEpargne() {
+  const montant = getReliquatMontant();
+  const ctx = window._reliquatCtx;
+  if (!montant || !ctx) return;
+  if (!state.epargne) state.epargne = { soldeDepart: 0, mouvements: [] };
+  if (!state.epargne.mouvements) state.epargne.mouvements = [];
+  state.epargne.mouvements.push({ id: uid(), type: 'depot', montant, desc: 'Reliquat budget ' + ctx.prevKey, date: getDateRef() });
+  if (!state.rappels) state.rappels = {};
+  state.rappels['reliquat_' + ctx.prevKey + '_traite'] = true;
+  saveState();
+  closeModal('modalReliquat');
+  render();
+}
+
+function reliquatVersBudgetNourriture() {
+  const montant = getReliquatMontant();
+  const ctx = window._reliquatCtx;
+  if (!montant || !ctx) return;
   const curKey = PERIODES[getCurrentPeriodeIndex()]?.key;
   if (!curKey) return;
-  if (!state.portefeuilleDette) state.portefeuilleDette = [];
-  // Créer entrée dans perso et nourriture proportionnellement
-  const nourr = getSommeEntreesAll(curKey, 'nourriture');
-  const perso = getSommeEntreesAll(curKey, 'perso');
-  const resteN = Math.max(0, getBudgetNourriturePourPeriode(curKey) - nourr);
-  const resteP = Math.max(0, getBudgetPersoPourPeriode(curKey) - perso);
-  // Le portefeuille ne crée pas d'entrées réelles — l'argent reste sur le compte
-  if (resteN > 0) {
-    state.portefeuilleDette.push({id:uid(), montant:resteN, date:getDateRef(), periode:curKey, budget:'nourriture'});
-  }
-  if (resteP > 0) {
-    state.portefeuilleDette.push({id:uid(), montant:resteP, date:getDateRef(), periode:curKey, budget:'perso'});
-  }
+  if (!state.reliquatsAppliques) state.reliquatsAppliques = {};
+  if (!state.reliquatsAppliques[curKey]) state.reliquatsAppliques[curKey] = {};
+  state.reliquatsAppliques[curKey].nourriture = (state.reliquatsAppliques[curKey].nourriture || 0) + montant;
+  if (!state.rappels) state.rappels = {};
+  state.rappels['reliquat_' + ctx.prevKey + '_traite'] = true;
   saveState();
+  closeModal('modalReliquat');
   render();
-  renderPortefeuille();
+}
+
+function reliquatVersBudgetPerso() {
+  const montant = getReliquatMontant();
+  const ctx = window._reliquatCtx;
+  if (!montant || !ctx) return;
+  const curKey = PERIODES[getCurrentPeriodeIndex()]?.key;
+  if (!curKey) return;
+  if (!state.reliquatsAppliques) state.reliquatsAppliques = {};
+  if (!state.reliquatsAppliques[curKey]) state.reliquatsAppliques[curKey] = {};
+  state.reliquatsAppliques[curKey].perso = (state.reliquatsAppliques[curKey].perso || 0) + montant;
+  if (!state.rappels) state.rappels = {};
+  state.rappels['reliquat_' + ctx.prevKey + '_traite'] = true;
+  saveState();
+  closeModal('modalReliquat');
+  render();
 }
 
 function renderTable() {
@@ -5829,12 +5871,17 @@ window.addEventListener('storage', function(e) {
 <!-- Modal reliquat budget fin de période -->
 <div class="modal-overlay" id="modalReliquat">
   <div class="modal">
-    <h2>💡 Budget restant de la période précédente</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">💡 Budget restant de la période précédente</h2>
+      <span onclick="closeModal('modalReliquat')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+    </div>
     <div id="modalReliquatContenu" style="font-size:13px;line-height:1.7;margin-bottom:16px;"></div>
     <div class="form-actions" style="flex-wrap:wrap;gap:8px;">
       <button class="btn btn-secondary" onclick="closeModal('modalReliquat')">✓ Laisser sur le compte</button>
-      <button class="btn btn-accent" onclick="reliquatVersPortefeuille()" style="background:var(--accent);">💰 Mettre au portefeuille</button>
+      <button class="btn btn-accent" onclick="reliquatVersEpargne()" style="background:var(--accent);">💰 Compte Épargne</button>
       <button class="btn btn-yellow" onclick="reliquatVersDettte()">🏠 Rembourser la dette</button>
+      <button class="btn" style="background:rgba(62,207,142,.15);color:var(--green);border:1px solid var(--green);" onclick="reliquatVersBudgetNourriture()">🛒 Ajouter au budget Nourriture (prochaine période)</button>
+      <button class="btn" style="background:rgba(62,207,142,.15);color:var(--green);border:1px solid var(--green);" onclick="reliquatVersBudgetPerso()">🧴 Ajouter au budget Perso (prochaine période)</button>
     </div>
   </div>
 </div>

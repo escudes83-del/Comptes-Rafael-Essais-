@@ -2821,7 +2821,8 @@ function renderRappels() {
     const resteTotal = resteIRCC + resteLoyer;
     if (resteTotal > 0) {
       elIRCC.style.display = 'flex';
-      elIRCC.innerHTML = `<div onclick="ouvrirRemboursementAides()" style="cursor:pointer;background:rgba(79,142,247,.10);border:2px solid var(--accent);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:42px;gap:4px;">
+      elIRCC.innerHTML = `<div onclick="ouvrirRemboursementAides()" style="cursor:pointer;background:rgba(79,142,247,.10);border:2px solid var(--accent);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:56px;gap:4px;">
+        <div style="font-size:10px;font-weight:800;color:var(--accent);letter-spacing:.5px;">💵 AIDE PILOU</div>
         <div style="font-size:9px;font-weight:800;letter-spacing:.3px;"><span style="color:var(--accent);">SUIVI IRCC</span> · <span style="color:#fff;">${fmt(resteIRCC)}</span></div>
         <div style="font-size:9px;font-weight:800;letter-spacing:.3px;"><span style="color:var(--accent);">SUIVI LOGEMENT</span> · <span style="color:#fff;">${fmt(resteLoyer)}</span></div>
       </div>`;
@@ -2842,10 +2843,10 @@ function renderRappels() {
     const dejaVue = (state.rappels || {})[alerteKey + '_supprime'];
     if (actif && !dejaVue) {
       el.style.display = 'flex';
-      el.innerHTML = `<div style="cursor:default;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:44px;animation:pulse-dette 1.8s ease-in-out infinite;">
+      el.innerHTML = `<div style="cursor:default;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:52px;animation:pulse-dette 1.8s ease-in-out infinite;">
         <div style="font-size:9px;font-weight:800;color:var(--red);letter-spacing:.3px;">🐾 ${titre}</div>
         <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:2px;text-align:center;">${texte}</div>
-        <button onclick="acquitterAlerteBudget('${alerteKey}')" style="margin-top:2px;background:transparent;border:none;color:var(--muted);font-size:8px;cursor:pointer;text-decoration:underline;">Ignorer aujourd'hui</button>
+        <button onclick="acquitterAlerteBudget('${alerteKey}')" style="margin-top:8px;background:transparent;border:none;color:var(--muted);font-size:10px;font-weight:700;cursor:pointer;text-decoration:underline;">Ignorer aujourd'hui</button>
       </div>`;
     } else {
       el.style.display = 'none';

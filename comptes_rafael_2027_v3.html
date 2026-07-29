@@ -5668,9 +5668,17 @@ function v2_getBudgetHistoriquePourPeriode(type, periodeKey) {
   return applicables[applicables.length - 1].montant;
 }
 
-function v2_getBudgetNourriturePourPeriode(periodeKey) { return v2_getBudgetHistoriquePourPeriode('nourriture', periodeKey); }
+function v2_getBudgetNourriturePourPeriode(periodeKey) {
+  const base = v2_getBudgetHistoriquePourPeriode('nourriture', periodeKey);
+  const boost = (d.reliquatsAppliques && d.reliquatsAppliques[periodeKey] && d.reliquatsAppliques[periodeKey].nourriture) || 0;
+  return base + boost;
+}
 
-function v2_getBudgetPersoPourPeriode(periodeKey) { return v2_getBudgetHistoriquePourPeriode('perso', periodeKey); }
+function v2_getBudgetPersoPourPeriode(periodeKey) {
+  const base = v2_getBudgetHistoriquePourPeriode('perso', periodeKey);
+  const boost = (d.reliquatsAppliques && d.reliquatsAppliques[periodeKey] && d.reliquatsAppliques[periodeKey].perso) || 0;
+  return base + boost;
+}
 
 function v2_getSalairePeriode(key) {
   return v2_getSommeEntrees(key, 'salaire');
@@ -5725,12 +5733,15 @@ function v2_calculerSoldes() {
     const exceptionnel = v2_getSommeEntreesAll(k, 'exceptionnel');
     const salaire = v2_getSalairePeriode(k);
     const autre = v2_getAutresPeriode(k);
+    // Dépôt vers l'épargne = sortie du compte courant ; retrait de l'épargne = rentrée
+    const depotsEpargne = v2_getDepotsPeriode(k);
+    const retraitsEpargne = v2_getRetraitsPeriode(k);
 
     // AEC : salaire estimé si pas saisi
     const salaireAEC = 0;
 
-    const revenus = salaire + autre + salaireAEC;
-    const depenses = fixes.total + nourriture + perso + exceptionnel;
+    const revenus = salaire + autre + salaireAEC + retraitsEpargne;
+    const depenses = fixes.total + nourriture + perso + exceptionnel + depotsEpargne;
 
     soldes[k] = {
       debut: solde,
@@ -5779,8 +5790,211 @@ function v2_calculerPrevisionnel(soldesReels) {
   return prev;
 }
 
+function v2_getEpargneMouvements() {
+  return (d.epargne && d.epargne.mouvements) || [];
+}
+
+function v2_getEpargneMouvementsPeriode(key) {
+  const debut = v2_getDateDebutPeriode(key);
+  if (!debut) return [];
+  const fin = new Date(debut.getFullYear(), debut.getMonth() + 1, 15);
+  return v2_getEpargneMouvements().filter(m => {
+    const d = new Date(m.date + 'T00:00:00');
+    return d >= debut && d <= fin;
+  });
+}
+
+function v2_getDepotsPeriode(key) {
+  return v2_getEpargneMouvementsPeriode(key).filter(m => m.type === 'depot').reduce((s, m) => s + m.montant, 0);
+}
+
+function v2_getRetraitsPeriode(key) {
+  return v2_getEpargneMouvementsPeriode(key).filter(m => m.type === 'retrait').reduce((s, m) => s + m.montant, 0);
+}
+
   return { calculerSoldes: v2_calculerSoldes, calculerPrevisionnel: v2_calculerPrevisionnel, PERIODES_V2: PERIODES_V2 };
 }
+
+function v2_getEntreesPeriode(key) {
+  return (d.entrees[key] || []);
+}
+
+function v2_isAECPeriode(key) {
+  if (d.mode !== 'aec' || !d.aecDepuis) return false;
+  return key >= d.aecDepuis;
+}
+
+function v2_getMetroPeriode(key) {
+  if (v2_hasFixeEntrees('metro', key)) return v2_sommeFixeEntrees('metro', key);
+  // Historique réel
+  const hist = {
+    '2026-01': 0,
+    '2026-02': 104.50, // 104.50 seulement — les 3x70 rechargements sont en dépenses exceptionnelles
+    '2026-03': 104.50,
+    '2026-04': 5,
+    '2026-05': 104.50,
+    '2026-06': 104.50,
+    '2026-07': 104.50,
+  };
+  if (hist[key] !== undefined) return hist[key];
+  if (v2_isAECPeriode(key)) return d.fixes.metro_etudiant;
+  return d.fixes.metro_normal;
+}
+
+function v2_getGymPeriode(key) {
+  if (v2_hasFixeEntrees('gym', key)) return v2_sommeFixeEntrees('gym', key);
+  const hist = {
+    '2026-01': 40.80,
+    '2026-02': 40.80,
+    '2026-03': 40.80,
+    '2026-04': 61.20,
+    '2026-05': 40.80,
+    '2026-06': 40.80,
+    '2026-07': 40.80,
+  };
+  if (hist[key] !== undefined) return hist[key];
+  return d.fixes.gym;
+}
+
+function v2_getNetflixPeriode(key) {
+  if (v2_hasFixeEntrees('netflix', key)) return v2_sommeFixeEntrees('netflix', key);
+  return d.fixes.netflix;
+}
+
+function v2_getFidoPeriode(key) {
+  if (v2_hasFixeEntrees('fido', key)) return v2_sommeFixeEntrees('fido', key);
+  const hist = {
+    '2026-01': 0,
+    '2026-02': 34.02,
+    '2026-03': 33.96,
+    '2026-04': 0,
+    '2026-05': 69.79,
+    '2026-06': 34.19,
+    '2026-07': 34.19,
+  };
+  if (hist[key] !== undefined) return hist[key];
+  return d.fixes.fido;
+}
+
+function v2_getElectricitePeriode(key) {
+  if (v2_hasFixeEntrees('electricite', key)) return v2_sommeFixeEntrees('electricite', key);
+  return d.fixes.electricite;
+}
+
+function v2_getAssurancePeriode(key) {
+  if (v2_hasFixeEntrees('assurance', key)) return v2_sommeFixeEntrees('assurance', key);
+  return d.fixes.assurance;
+}
+
+function v2_getLogementPeriode(key) {
+  // Somme des entrées loyer saisies pour la période
+  const entries = (d.loyerEntrees || {})[key] || [];
+  return entries.reduce((s, e) => s + e.montant, 0);
+}
+
+function v2_getBixiPeriode(key) {
+  if (v2_hasFixeEntrees('bixi', key)) return v2_sommeFixeEntrees('bixi', key);
+  if (key === '2026-06') return 27.59;
+  return 0;
+}
+
+function v2_getFixeEntreesPeriode(fixKey, periodeKey) {
+  return (((d.fixesEntrees || {})[fixKey]) || {})[periodeKey] || [];
+}
+
+function v2_hasFixeEntrees(fixKey, periodeKey) {
+  return v2_getFixeEntreesPeriode(fixKey, periodeKey).length > 0;
+}
+
+function v2_sommeFixeEntrees(fixKey, periodeKey) {
+  return v2_getFixeEntreesPeriode(fixKey, periodeKey).reduce((s, e) => s + e.montant, 0);
+}
+
+function v2_getFixesTotauxPeriode(key) {
+  const logement = v2_getLogementPeriode(key);
+  const electricite = v2_getElectricitePeriode(key);
+  const assurance = v2_getAssurancePeriode(key);
+  const gym = v2_getGymPeriode(key);
+  const netflix = v2_getNetflixPeriode(key);
+  const fido = v2_getFidoPeriode(key);
+  const metro = v2_getMetroPeriode(key);
+  const bixi = v2_getBixiPeriode(key);
+  const dette = 0;
+  return {logement, electricite, assurance, gym, netflix, fido, metro, bixi, dette,
+    total: logement+electricite+assurance+gym+netflix+fido+metro+bixi};
+}
+
+function v2_getSommeEntreesAll(key, type) {
+  return v2_getEntreesPeriode(key)
+    .filter(e => e.type === type)
+    .reduce((s,e) => s+e.montant, 0);
+}
+
+function v2_getSommeEntrees(key, type) {
+  return v2_getEntreesPeriode(key)
+    .filter(e => e.type === type && !e.rembourse)
+    .reduce((s,e) => s+e.montant, 0);
+}
+
+function v2_getDateDebutPeriode(periodeKey) {
+  const p = PERIODES_V2.find(x => x.key === periodeKey);
+  if (!p) return null;
+  return new Date(p.anneeDebut, p.moisDebut - 1, 16);
+}
+
+function v2_getBudgetHistoriquePourPeriode(type, periodeKey) {
+  const valeurActuelle = type === 'nourriture' ? d.fixes.budget_nourriture : d.fixes.budget_perso;
+  const hist = (d.budgetHistorique && d.budgetHistorique[type]) || [];
+  if (hist.length === 0) return valeurActuelle;
+  const debutPeriode = v2_getDateDebutPeriode(periodeKey);
+  if (!debutPeriode) return valeurActuelle;
+  const trie = hist.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const applicables = trie.filter(h => new Date(h.date + 'T00:00:00') <= debutPeriode);
+  if (applicables.length === 0) return trie[0].montant; // avant le tout premier changement connu
+  return applicables[applicables.length - 1].montant;
+}
+
+function v2_getBudgetNourriturePourPeriode(periodeKey) { return v2_getBudgetHistoriquePourPeriode('nourriture', periodeKey); }
+
+function v2_getBudgetPersoPourPeriode(periodeKey) { return v2_getBudgetHistoriquePourPeriode('perso', periodeKey); }
+
+function v2_getSalairePeriode(key) {
+  return v2_getSommeEntrees(key, 'salaire');
+}
+
+function v2_getAutresPeriode(key) {
+  return v2_getSommeEntrees(key, 'autre');
+}
+
+function v2_getCurrentPeriodeIndex() {
+  // Parser la date sans problème de fuseau horaire
+  const dr = getDateRef(); // format YYYY-MM-DD
+  const parts = dr.split('-');
+  const y = parseInt(parts[0]);
+  const m = parseInt(parts[1]);
+  const d = parseInt(parts[2]);
+  // période courante : si on est du 16 au fin mois → début période
+  // période : 16/mois-1 → 15/mois
+  // Pour savoir dans quelle période on est :
+  // Si jour >= 16 → on est dans la période qui se termine le 15 du mois suivant
+  // Si jour <= 15 → on est dans la période qui s'est commencée le 16 du mois précédent
+
+  let periodeAnnee, periodeMois;
+  if (d >= 16) {
+    // fin = 15 du mois suivant
+    periodeAnnee = m === 12 ? y+1 : y;
+    periodeMois = m === 12 ? 1 : m+1;
+  } else {
+    // fin = 15 de ce mois
+    periodeAnnee = y;
+    periodeMois = m;
+  }
+
+  const searchKey = `${periodeAnnee}-${String(periodeMois).padStart(2,'0')}`;
+  const idx = PERIODES_V2.findIndex(p => p.key === searchKey);
+  return idx >= 0 ? idx : 0;
+}
+
 
 const FIREBASE_URL = 'https://comptes-rafael-default-rtdb.firebaseio.com';
 

@@ -2418,15 +2418,31 @@ function renderFixesBloc() {
   const fixesTotaux = getFixesTotauxPeriode(curKey);
   document.getElementById('fixesTotal').textContent = fmt(fixesTotaux.total);
 
+  // Statut "déjà débité" par poste : mêmes règles de date que getFraisFixesEngagesAvant,
+  // pour un repère visuel immédiat de ce qui est déjà compté dans le solde.
+  const debutPeriode = getDateDebutPeriode(curKey);
+  let gymDebite = false, fidoDebite = false, netflixDebite = false, metroDebite = false;
+  if (debutPeriode) {
+    const gymDate1 = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 23);
+    const gymDate2 = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 7);
+    gymDebite = gymDate1 <= today || gymDate2 <= today;
+    const fidoDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 29);
+    fidoDebite = fidoDate <= today;
+    const netflixDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 25);
+    netflixDebite = netflixDate >= debutPeriode && netflixDate <= today;
+    const metroDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 1);
+    metroDebite = metroDate <= today;
+  }
+
   let html = '';
   html += renderLogementFixeCard(curKey, logementMontant, detteFixeMensuelle);
-  html += renderFixeEntreeCard('electricite', 'Électricité', '⚡', curKey, fixes.electricite, fixes.electricite === 0 ? 'non actif' : 'mensuel', null);
-  html += renderFixeEntreeCard('assurance', 'Assurance log.', '🛡️', curKey, fixes.assurance, fixes.assurance === 0 ? 'non actif' : 'mensuel', null);
-  html += renderFixeEntreeCard('gym', 'Gym', '🏋️', curKey, gym.montant, gym.count + 'x ' + (fixes.gym/2).toFixed(2).replace('.',',')+' $', 'Prochain : ' + fmtDate(nextGym));
-  html += renderFixeEntreeCard('netflix', 'Netflix', '🎬', curKey, fixes.netflix, '~25 du mois', 'Prochain : ' + fmtDate(nextNetflix));
-  html += renderFixeEntreeCard('fido', 'Fido (tél)', '📱', curKey, fixes.fido, 'irrégulier', null);
-  html += renderFixeEntreeCard('metro', 'Métro', '🚇', curKey, metroMontant, isAEC ? 'tarif étudiant' : 'tarif normal', 'Prochain : ' + fmtDate(nextMetro));
-  html += renderFixeEntreeCard('bixi', 'Bixi', '🚲', curKey, fixes.bixi, fixes.bixi === 0 ? 'non actif' : '1 mois', null);
+  html += renderFixeEntreeCard('electricite', 'Électricité', '⚡', curKey, fixes.electricite, fixes.electricite === 0 ? 'non actif' : 'mensuel', null, false);
+  html += renderFixeEntreeCard('assurance', 'Assurance log.', '🛡️', curKey, fixes.assurance, fixes.assurance === 0 ? 'non actif' : 'mensuel', null, false);
+  html += renderFixeEntreeCard('gym', 'Gym', '🏋️', curKey, gym.montant, gym.count + 'x ' + (fixes.gym/2).toFixed(2).replace('.',',')+' $', 'Prochain : ' + fmtDate(nextGym), gymDebite);
+  html += renderFixeEntreeCard('netflix', 'Netflix', '🎬', curKey, fixes.netflix, '~25 du mois', 'Prochain : ' + fmtDate(nextNetflix), netflixDebite);
+  html += renderFixeEntreeCard('fido', 'Fido (tél)', '📱', curKey, fixes.fido, 'irrégulier', null, fidoDebite);
+  html += renderFixeEntreeCard('metro', 'Métro', '🚇', curKey, metroMontant, isAEC ? 'tarif étudiant' : 'tarif normal', 'Prochain : ' + fmtDate(nextMetro), metroDebite);
+  html += renderFixeEntreeCard('bixi', 'Bixi', '🚲', curKey, fixes.bixi, fixes.bixi === 0 ? 'non actif' : '1 mois', null, false);
 
   document.getElementById('fixesGrid').innerHTML = html;
 }
@@ -2483,12 +2499,21 @@ function renderLogementFixeCard(curKey, logementMontant, detteFixeMensuelle) {
 }
 
 // ── CRUD GENERIQUE FRAIS FIXES ──────────────────────────────────
-function renderFixeEntreeCard(fixKey, label, icon, curKey, defaultMontant, note, nextInfo) {
+function renderFixeEntreeCard(fixKey, label, icon, curKey, defaultMontant, note, nextInfo, dejaDebite) {
   const entries = getFixeEntreesPeriode(fixKey, curKey);
   const hasE = entries.length > 0;
   const total = hasE ? sommeFixeEntrees(fixKey, curKey) : defaultMontant;
   const cls = total > 0 ? 'fixes-item actif' : 'fixes-item inactif';
   const dateDefault = getDatePourPeriode(curKey);
+
+  // Badge visuel : seulement pertinent pour le montant par défaut (pas de saisie manuelle) —
+  // permet de voir d'un coup d'œil si ce frais est déjà compté dans le solde ou pas encore.
+  let badgeHTML = '';
+  if (!hasE && defaultMontant > 0) {
+    badgeHTML = dejaDebite
+      ? '<div style="font-size:9px;font-weight:700;color:var(--green);margin-top:2px;">✅ Débité</div>'
+      : '<div style="font-size:9px;font-weight:700;color:var(--muted);margin-top:2px;">⏳ Pas encore débité</div>';
+  }
 
   let listeHTML = '';
   if (!hasE) {
@@ -2520,6 +2545,7 @@ function renderFixeEntreeCard(fixKey, label, icon, curKey, defaultMontant, note,
   return '<div class="' + cls + '" id="fixes_card_' + fixKey + '">'
     + '<div class="fixes-item-label">' + icon + ' ' + label + '</div>'
     + '<div class="fixes-item-montant">' + (total > 0 ? fmt(total) : '—') + '</div>'
+    + badgeHTML
     + (nextInfo ? '<div class="fixes-item-next">' + nextInfo + '</div>' : '')
     + '<div style="font-size:9px;color:var(--muted);">' + note + '</div>'
     + '<div style="margin-top:5px;">' + listeHTML + '</div>'

@@ -5698,7 +5698,7 @@ async function restaurerSauvegardeAuto(dateKey) {
 // Synchronise le point de départ (réel ET prévisionnel) depuis 2026 Visiteur, en recalculant
 // exactement les mêmes règles que 2026, pour que 2027 continue sans cassure.
 async function synchroniserAvec2026() {
-  if (!confirm("Synchroniser le point de départ de 2027 avec les vraies données de 2026 Visiteur ?\n\nÇa va recalculer le vrai solde ET le prévisionnel de fin décembre 2026, et les utiliser comme point de départ ici.")) return;
+  if (!confirm("Synchroniser le point de départ de 2027 avec les vraies données de 2026 Visiteur ?\n\nÇa va recalculer le vrai solde ET le prévisionnel de fin décembre 2026, ainsi que le solde épargne actuel, et les utiliser comme point de départ ici.")) return;
   try {
     const res = await fetch(FIREBASE_URL + '/' + VRAI_STORAGE_KEY_2026 + '.json');
     const data2026 = await res.json();
@@ -5713,11 +5713,21 @@ async function synchroniserAvec2026() {
       alert("Impossible de calculer la fin décembre 2026 — vérifie que les données de 2026 sont complètes.");
       return;
     }
+    // Épargne : c'est un seul et même compte réel, on synchronise aussi son solde total
+    const epargne2026 = data2026.epargne || { soldeDepart: 0, mouvements: [] };
+    const mouvements2026 = epargne2026.mouvements || [];
+    const depots2026 = mouvements2026.filter(m => m.type === 'depot').reduce((s,m)=>s+m.montant, 0);
+    const retraits2026 = mouvements2026.filter(m => m.type === 'retrait').reduce((s,m)=>s+m.montant, 0);
+    const interets2026 = mouvements2026.filter(m => m.type === 'interet').reduce((s,m)=>s+m.montant, 0);
+    const soldeEpargne2026 = (epargne2026.soldeDepart || 0) + depots2026 - retraits2026 + interets2026;
+
     state.soldeDepart = finReelle;
     state.prevSoldeDepart = finPrev;
+    if (!state.epargne) state.epargne = { soldeDepart: 0, mouvements: [] };
+    state.epargne.soldeDepart = soldeEpargne2026;
     saveState();
     render();
-    alert(`Synchronisé avec succès !\n\nSolde réel fin déc 2026 : ${fmt(finReelle)}\nPrévisionnel fin déc 2026 : ${fmt(finPrev)}\n\nCes deux valeurs sont maintenant le point de départ de 2027.`);
+    alert(`Synchronisé avec succès !\n\nSolde réel fin déc 2026 : ${fmt(finReelle)}\nPrévisionnel fin déc 2026 : ${fmt(finPrev)}\nSolde épargne : ${fmt(soldeEpargne2026)}\n\nCes valeurs sont maintenant le point de départ de 2027.`);
   } catch(e) {
     alert("Erreur lors de la synchronisation : " + e.message);
   }

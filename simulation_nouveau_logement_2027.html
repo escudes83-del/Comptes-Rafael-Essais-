@@ -1438,7 +1438,10 @@ input, textarea, select { cursor: text; }
 <!-- Dépense -->
 <div class="modal-overlay" id="modalDepense">
   <div class="modal">
-    <h2>➕ Ajouter une dépense</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">➕ Ajouter une dépense</h2>
+      <span onclick="closeModal('modalDepense')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+    </div>
     <div class="form-row">
       <label>Catégorie</label>
       <select id="depCat">
@@ -1478,7 +1481,10 @@ input, textarea, select { cursor: text; }
 <!-- Autre source -->
 <div class="modal-overlay" id="modalAutreSource">
   <div class="modal">
-    <h2>💵 Autre source de revenu</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">💵 Autre source de revenu</h2>
+      <span onclick="closeModal('modalAutreSource')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+    </div>
     <div class="form-row">
       <label>Montant ($)</label>
       <input type="number" id="asMontant" step="0.01" placeholder="0.00">
@@ -1501,7 +1507,10 @@ input, textarea, select { cursor: text; }
 <!-- Salaire -->
 <div class="modal-overlay" id="modalSalaire">
   <div class="modal">
-    <h2>💰 Ajouter un salaire</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">💰 Ajouter un salaire</h2>
+      <span onclick="closeModal('modalSalaire')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+    </div>
     <div class="form-row">
       <label>Montant net ($)</label>
       <input type="number" id="salMontant" step="0.01" placeholder="0.00">
@@ -1524,7 +1533,10 @@ input, textarea, select { cursor: text; }
 <!-- Paramètres fixes -->
 <div class="modal-overlay" id="modalSimFrequence">
   <div class="modal">
-    <h2>🔧 Paramètres frais fixes</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">🔧 Paramètres frais fixes</h2>
+      <span onclick="closeModal('modalSimFrequence')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+    </div>
     <p style="font-size:11px;color:var(--muted);margin-bottom:14px;">Modifiable à tout moment. Metro : tarif étudiant automatique en mode AEC.</p>
     <div class="sim-grid" id="simFixesGrid"><!-- injecté --></div>
     <div class="form-actions">
@@ -1604,7 +1616,10 @@ input, textarea, select { cursor: text; }
 <!-- Détail dette -->
 <div class="modal-overlay" id="modalDetteDetail">
   <div class="modal">
-    <h2>🏠 Remboursement dette propriétaire</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">🏠 Remboursement dette propriétaire</h2>
+      <span onclick="closeModal('modalDetteDetail')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+    </div>
     <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Dette initiale : 1 100 $ (solde restant début 2027). Remb. : 100$/mois, saisie manuelle par période.</p>
     <div id="detteDetailTable"><!-- injecté --></div>
     <div class="form-actions">
@@ -1616,7 +1631,10 @@ input, textarea, select { cursor: text; }
 <!-- Confirm AEC -->
 <div class="modal-overlay" id="modalConfirmAEC">
   <div class="modal">
-    <h2>🎓 Passer en mode AEC Étudiant ?</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">🎓 Passer en mode AEC Étudiant ?</h2>
+      <span onclick="closeModal('modalConfirmAEC')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+    </div>
     <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Toutes les données existantes sont conservées. À partir du mois suivant :</p>
     <ul style="font-size:12px;color:var(--text);margin-left:18px;line-height:1.8;">
       <li>Abonnement métro → <strong>62,50 $</strong> (tarif étudiant)</li>
@@ -3041,7 +3059,10 @@ function ouvrirEpargne() {
 
   overlay.innerHTML = `
     <div class="modal" style="max-width:460px;">
-      <h2>💰 Compte Épargne</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">💰 Compte Épargne</h2>
+        <span onclick="document.getElementById('modalEpargne').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+      </div>
       <p style="font-size:22px;font-weight:800;color:var(--green);margin:10px 0 2px;">${fmt(soldeEpargne)}</p>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">Intérêts totaux perçus : ${fmt(totalInterets)}</p>
       <div class="form-row">
@@ -3171,7 +3192,10 @@ function ouvrirRemboursementAides() {
   }
   overlay.innerHTML = `
     <div class="modal" style="max-width:720px;">
-      <h2>💵 Aides PY — suivi</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">💵 AIDE PILOU</h2>
+        <span onclick="document.getElementById('modalIRCCRemb').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+      </div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;">
         <div style="flex:1;min-width:280px;border:1px solid var(--border);border-radius:10px;padding:14px;">
           <h3 style="font-size:14px;margin-bottom:6px;">Aide Justification Financière IRCC</h3>
@@ -3267,7 +3291,10 @@ function ouvrirRappelModal(id) {
   }
   overlay.innerHTML = `
     <div class="modal" style="max-width:420px;">
-      <h2>🏥 ${r.titre}</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">🏥 ${r.titre}</h2>
+        <span onclick="document.getElementById('modalRappelInfo').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+      </div>
       <p style="font-size:13px;color:var(--muted);margin:10px 0;">${r.detail}</p>
       <p style="font-size:13px;color:${depasse?'var(--red)':'var(--text)'};font-weight:600;">📅 ${dateStr} · ${joursLabel}</p>
       <div class="form-actions" style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end;">
@@ -3308,7 +3335,10 @@ function ouvrirModalNouveauRappel() {
   const aujourdhui = getDateRef();
   overlay.innerHTML = `
     <div class="modal" style="max-width:420px;">
-      <h2>🔔 Nouveau rappel</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">🔔 Nouveau rappel</h2>
+        <span onclick="document.getElementById('modalNouveauRappel').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+      </div>
       <div class="form-row">
         <label>Description</label>
         <input type="text" id="rappelPersoDesc" placeholder="ex: Électricité">
@@ -3374,7 +3404,10 @@ function ouvrirRappelPersonnalise(id) {
   }
   overlay.innerHTML = `
     <div class="modal" style="max-width:420px;">
-      <h2>🔔 ${r.desc}</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">🔔 ${r.desc}</h2>
+        <span onclick="document.getElementById('modalRappelPersoInfo').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+      </div>
       <p style="font-size:13px;color:var(--muted);margin:10px 0;">Montant : ${fmt(r.montant)}</p>
       <p style="font-size:13px;color:${depasse?'var(--red)':'var(--text)'};font-weight:600;">📅 ${dateStr} · ${joursLabel}</p>
       <div class="form-actions" style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
@@ -5835,7 +5868,10 @@ window.addEventListener('scroll', function() {
 <!-- Modal alerte ouverture -->
 <div class="modal-overlay" id="modalAlerteOuverture">
   <div class="modal">
-    <h2>👋 Bonjour Rafael !</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">👋 Bonjour Rafael !</h2>
+      <span onclick="closeModal('modalAlerteOuverture')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+    </div>
     <div id="modalAlerteContenu" style="font-size:13px;line-height:1.7;margin-bottom:16px;"></div>
     <div class="form-actions">
       <button class="btn btn-yellow" onclick="comprisAlerteOuverture()">✓ Compris !</button>
@@ -5864,7 +5900,10 @@ window.addEventListener('scroll', function() {
 <!-- Modal alerte consommation -->
 <div class="modal-overlay" id="modalAlerteConso">
   <div class="modal">
-    <h2>🐾 Attention budget</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">🐾 Attention budget</h2>
+      <span onclick="closeModal('modalAlerteConso')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+    </div>
     <div id="modalAlerteConsoContenu" style="font-size:13px;line-height:1.7;margin-bottom:16px;"></div>
     <div class="form-actions">
       <button class="btn btn-yellow" onclick="closeModal('modalAlerteConso')">✓ Compris</button>
@@ -5875,7 +5914,10 @@ window.addEventListener('scroll', function() {
 <!-- Modal confirmation extra dette -->
 <div class="modal-overlay" id="modalExtraConfirm">
   <div class="modal">
-    <h2>🐾 Vérification budget</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">🐾 Vérification budget</h2>
+      <span onclick="closeModal('modalExtraConfirm')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+    </div>
     <div id="extraConfirmContent" style="font-size:13px;line-height:1.6;margin-bottom:16px;"></div>
     <div class="form-actions" style="gap:8px;flex-wrap:wrap;">
       <button class="btn btn-secondary" onclick="annulerExtra()">✕ Annuler</button>
@@ -5888,7 +5930,10 @@ window.addEventListener('scroll', function() {
 
 <div class="modal-overlay" id="modalRemiseCompte">
   <div class="modal">
-    <h2>↩ Remettre sur le compte</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">↩ Remettre sur le compte</h2>
+      <span onclick="closeModal('modalRemiseCompte')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+    </div>
     <p style="font-size:12px;color:var(--muted);margin-bottom:16px;">Modifiez le montant si vous voulez retirer partiellement.</p>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
       <label style="font-size:12px;color:var(--muted);">Montant ($)</label>

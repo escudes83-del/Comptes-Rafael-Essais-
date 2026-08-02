@@ -3100,13 +3100,16 @@ function renderRappels() {
     }
   }
 
-  // Cadre ÉPARGNE INSUFFISANTE (à venir) — avertit à l'avance si la projection montre que
-  // l'épargne ne suffira plus à maintenir le compte à 100$ à un moment donné dans le futur.
+  // Cadre ÉPARGNE INSUFFISANTE (à venir) — avertit seulement si la rupture est prévue dans les
+  // 3 prochaines périodes (~3 mois), pour ne pas alerter inutilement trop longtemps à l'avance.
   const elEpargneInsuffisante = document.getElementById('rappelEpargneInsuffisanteBandeau');
   if (elEpargneInsuffisante) {
     const projection = calculerProjectionEpargne();
     const pointRupture = projection.find(r => r.epuise);
-    if (pointRupture) {
+    const idxActuelEI = getCurrentPeriodeIndex();
+    const idxRuptureEI = pointRupture ? getPeriodeIndex(pointRupture.periode) : -1;
+    const dansLes3Mois = pointRupture && idxRuptureEI !== -1 && (idxRuptureEI - idxActuelEI) <= 3;
+    if (dansLes3Mois) {
       elEpargneInsuffisante.style.display = 'flex';
       elEpargneInsuffisante.innerHTML = `<div onclick="ouvrirEpargne();setTimeout(ouvrirProjectionEpargne,30);" style="cursor:pointer;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:44px;">
         <div style="font-size:10px;font-weight:800;color:var(--red);letter-spacing:.5px;">⚠️ ÉPARGNE INSUFFISANTE</div>

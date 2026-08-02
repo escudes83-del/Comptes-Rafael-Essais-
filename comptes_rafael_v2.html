@@ -2030,6 +2030,20 @@ function getSoldeEpargne() {
   return depart + depots - retraits + interets;
 }
 
+// Solde épargne tel qu'il était (ou sera) à la fin de la période donnée — pour affichage
+// historiquement exact selon l'onglet sélectionné (pas toujours le total d'aujourd'hui).
+function getSoldeEpargneAPeriode(periodeKey) {
+  const depart = (state.epargne && state.epargne.soldeDepart) || 0;
+  const debut = getDateDebutPeriode(periodeKey);
+  if (!debut) return getSoldeEpargne();
+  const finPeriode = new Date(debut.getFullYear(), debut.getMonth() + 1, 15);
+  const mouvements = getEpargneMouvements().filter(m => new Date(m.date + 'T00:00:00') <= finPeriode);
+  const depots = mouvements.filter(m => m.type === 'depot').reduce((s, m) => s + m.montant, 0);
+  const retraits = mouvements.filter(m => m.type === 'retrait').reduce((s, m) => s + m.montant, 0);
+  const interets = mouvements.filter(m => m.type === 'interet').reduce((s, m) => s + m.montant, 0);
+  return depart + depots - retraits + interets;
+}
+
 function getTotalInteretsEpargne() {
   return getEpargneMouvements().filter(m => m.type === 'interet').reduce((s, m) => s + m.montant, 0);
 }
@@ -3064,14 +3078,17 @@ function renderRappels() {
       'alerte_deficit_' + keyAffiche + '_' + dateRefAlerte);
   }
 
-  // Cadre SUGGESTION VIREMENT — si le solde jour J passe sous 100$ et qu'il y a de l'épargne
-  // disponible, propose un virement pour ramener le compte à au moins 100$.
+  // Cadre SUGGESTION VIREMENT — dès le début de la période, si la période en cours est projetée
+  // pour finir sous 100$ (même avant que ça arrive vraiment), propose un virement. Disparaît
+  // dès qu'un vrai virement suffisant est saisi (le solde projeté remonte au-dessus de 100$).
   const elSuggestion = document.getElementById('rappelSuggestionVirementBandeau');
   if (elSuggestion) {
-    const soldeActuel = getSoldeJourJActuel();
+    const curKeySuggestion = PERIODES[getCurrentPeriodeIndex()]?.key;
+    const soldesSuggestion = calculerSoldes();
+    const soldeProjetePeriode = curKeySuggestion ? soldesSuggestion[curKeySuggestion]?.fin : null;
     const soldeEpargneActuel = getSoldeEpargne();
-    if (soldeActuel < 100 && soldeEpargneActuel > 0) {
-      const montantSuggere = Math.min(Math.ceil(100 - soldeActuel), soldeEpargneActuel);
+    if (soldeProjetePeriode !== null && soldeProjetePeriode < 100 && soldeEpargneActuel > 0) {
+      const montantSuggere = Math.min(Math.ceil(100 - soldeProjetePeriode), soldeEpargneActuel);
       elSuggestion.style.display = 'flex';
       elSuggestion.innerHTML = `<div onclick="ouvrirSuggestionVirement(${montantSuggere})" style="cursor:pointer;background:rgba(247,162,79,.12);border:2px solid var(--accent2);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:44px;animation:pulse-dette 1.8s ease-in-out infinite;">
         <div style="font-size:10px;font-weight:800;color:var(--accent2);letter-spacing:.5px;">💡 SUGGESTION</div>
@@ -3103,10 +3120,12 @@ function renderRappels() {
 
 
 
-  // Cadre ÉPARGNE — toujours visible, ouvre la gestion des dépôts/retraits/intérêts
+  // Cadre ÉPARGNE — reflète le solde tel qu'il était à la fin de la période sélectionnée
+  // (pas toujours le total d'aujourd'hui), pour rester historiquement exact.
   const elEpargne = document.getElementById('rappelEpargneBandeau');
   if (elEpargne) {
-    const soldeEpargne = getSoldeEpargne();
+    const keyAfficheEpargne = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
+    const soldeEpargne = keyAfficheEpargne ? getSoldeEpargneAPeriode(keyAfficheEpargne) : getSoldeEpargne();
     elEpargne.style.display = 'flex';
     elEpargne.innerHTML = `<div onclick="ouvrirEpargne()" style="cursor:pointer;background:rgba(62,207,142,.10);border:2px solid var(--green);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:130px;min-height:38px;">
       <div style="font-size:10px;font-weight:800;color:var(--green);letter-spacing:.5px;">💰 ÉPARGNE</div>

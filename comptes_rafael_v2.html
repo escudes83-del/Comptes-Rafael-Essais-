@@ -1211,6 +1211,7 @@ input, textarea, select { cursor: text; }
     <div style="display:flex;flex-direction:column;gap:6px;">
       <button class="btn btn-purple btn-sm" onclick="openModal('modalSimFrequence')" style="font-size:11px;">🔧 Paramètres</button>
       <button class="btn btn-secondary btn-sm" onclick="ouvrirModalNouveauRappel()" style="font-size:11px;">🔔 Nouveau rappel</button>
+      <button class="btn btn-secondary btn-sm" onclick="ouvrirCorrectionBudget()" style="font-size:11px;">🔧 Corriger budget période</button>
       <button class="btn btn-secondary btn-sm" onclick="openModal('modalSimulation')" style="font-size:11px;">📊 Simuler</button>
       <button class="btn btn-secondary btn-sm" id="btnTableau" onclick="toggleTableau()" style="font-size:11px;">📊 Tableau</button>
     </div>
@@ -1765,6 +1766,7 @@ function defaultState() {
     rappelsPersonnalises: [], // [{id, desc, montant, dateEcheance, categorie, paye}]
     epargne: { soldeDepart: 0, mouvements: [] }, // [{id, type:'depot'|'retrait'|'interet', montant, date, desc}]
     reliquatsAppliques: {}, // { periodeKey: {nourriture: X, perso: Y} } — boost ponctuel de budget suite à un reliquat reporté
+    budgetOverrides: {}, // { periodeKey: {nourriture: X, perso: Y} } — remplace complètement le budget pour UNE période précise, même passée
     // entrées par période: { '2026-01': [{id, type, montant, desc, date, rembourse, rembDesc}] }
     entrees: {},
     selectedMois: null,
@@ -1786,6 +1788,7 @@ function loadState() {
       if (!s.rappelsPersonnalises) s.rappelsPersonnalises = [];
       if (!s.epargne) s.epargne = { soldeDepart: 0, mouvements: [] };
       if (!s.reliquatsAppliques) s.reliquatsAppliques = {};
+      if (!s.budgetOverrides) s.budgetOverrides = {};
       return s;
     }
   } catch(e) {}
@@ -2293,11 +2296,15 @@ function getBudgetHistoriquePourPeriode(type, periodeKey) {
   return applicables[applicables.length - 1].montant;
 }
 function getBudgetNourriturePourPeriode(periodeKey) {
+  const override = state.budgetOverrides && state.budgetOverrides[periodeKey] && state.budgetOverrides[periodeKey].nourriture;
+  if (override !== undefined && override !== null) return override;
   const base = getBudgetHistoriquePourPeriode('nourriture', periodeKey);
   const boost = (state.reliquatsAppliques && state.reliquatsAppliques[periodeKey] && state.reliquatsAppliques[periodeKey].nourriture) || 0;
   return base + boost;
 }
 function getBudgetPersoPourPeriode(periodeKey) {
+  const override = state.budgetOverrides && state.budgetOverrides[periodeKey] && state.budgetOverrides[periodeKey].perso;
+  if (override !== undefined && override !== null) return override;
   const base = getBudgetHistoriquePourPeriode('perso', periodeKey);
   const boost = (state.reliquatsAppliques && state.reliquatsAppliques[periodeKey] && state.reliquatsAppliques[periodeKey].perso) || 0;
   return base + boost;
@@ -3615,6 +3622,81 @@ function getPeriodeKeyPourDate(dateStr) {
     if (d >= debut && d <= fin) return p.key;
   }
   return null;
+}
+
+function ouvrirCorrectionBudget() {
+  const keyAffiche = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
+  const optionsHtml = PERIODES.map(p => `<option value="${p.key}" ${p.key===keyAffiche?'selected':''}>${p.label} ${p.annee}</option>`).join('');
+
+  let overlay = document.getElementById('modalCorrectionBudget');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modalCorrectionBudget';
+    overlay.className = 'modal-overlay';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:420px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">🔧 Corriger le budget d'une période</h2>
+        <span onclick="document.getElementById('modalCorrectionBudget').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:10px 0;">Remplace le budget de la période choisie (même passée), sans affecter les autres périodes. Laisser vide pour revenir au budget normal.</p>
+      <div class="form-row">
+        <label>Période</label>
+        <select id="corrBudgetPeriode" onchange="rafraichirCorrectionBudgetPlaceholder()">${optionsHtml}</select>
+      </div>
+      <div class="form-row">
+        <label>Budget Nourriture ($)</label>
+        <input type="number" id="corrBudgetNourriture" step="0.01" min="0" placeholder="">
+      </div>
+      <div class="form-row">
+        <label>Budget Perso ($)</label>
+        <input type="number" id="corrBudgetPerso" step="0.01" min="0" placeholder="">
+      </div>
+      <div class="form-actions" style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="reinitialiserCorrectionBudget()">↺ Revenir au budget normal</button>
+        <button class="btn btn-primary" onclick="enregistrerCorrectionBudget()">Enregistrer</button>
+      </div>
+    </div>`;
+  overlay.classList.add('open');
+  rafraichirCorrectionBudgetPlaceholder();
+}
+
+function rafraichirCorrectionBudgetPlaceholder() {
+  const key = document.getElementById('corrBudgetPeriode').value;
+  const override = state.budgetOverrides && state.budgetOverrides[key];
+  const inN = document.getElementById('corrBudgetNourriture');
+  const inP = document.getElementById('corrBudgetPerso');
+  inN.value = override && override.nourriture !== undefined ? override.nourriture : '';
+  inP.value = override && override.perso !== undefined ? override.perso : '';
+  inN.placeholder = 'Normal : ' + fmt(getBudgetHistoriquePourPeriode('nourriture', key));
+  inP.placeholder = 'Normal : ' + fmt(getBudgetHistoriquePourPeriode('perso', key));
+}
+
+function enregistrerCorrectionBudget() {
+  const key = document.getElementById('corrBudgetPeriode').value;
+  const n = document.getElementById('corrBudgetNourriture').value;
+  const p = document.getElementById('corrBudgetPerso').value;
+  if (!state.budgetOverrides) state.budgetOverrides = {};
+  if (n === '' && p === '') {
+    delete state.budgetOverrides[key];
+  } else {
+    state.budgetOverrides[key] = {};
+    if (n !== '') state.budgetOverrides[key].nourriture = parseFloat(n);
+    if (p !== '') state.budgetOverrides[key].perso = parseFloat(p);
+  }
+  saveState();
+  document.getElementById('modalCorrectionBudget').classList.remove('open');
+  render();
+}
+
+function reinitialiserCorrectionBudget() {
+  const key = document.getElementById('corrBudgetPeriode').value;
+  if (state.budgetOverrides) delete state.budgetOverrides[key];
+  saveState();
+  document.getElementById('modalCorrectionBudget').classList.remove('open');
+  render();
 }
 
 function ouvrirModalNouveauRappel() {

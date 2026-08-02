@@ -1982,7 +1982,11 @@ function getSoldeJourJActuel() {
 function calculerProjectionEpargne() {
   const soldes = calculerSoldes();
   const curIdx = getCurrentPeriodeIndex();
-  let soldeSimule = getSoldeJourJActuel();
+  const curKey = PERIODES[curIdx]?.key;
+  // Point de départ : le "fin" de la période en cours calculé comme les autres (période
+  // entièrement écoulée), pour rester cohérent avec le reste de la projection — plutôt que le
+  // Solde Jour J réel, qui varie d'un jour à l'autre selon les dates de prélèvement déjà passées.
+  let soldeSimule = curKey ? soldes[curKey].fin : getSoldeJourJActuel();
   let epargneRestante = getSoldeEpargne();
   const resultats = [];
   let epuisementAtteint = false;

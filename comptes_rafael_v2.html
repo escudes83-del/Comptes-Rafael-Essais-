@@ -1969,8 +1969,10 @@ function getSoldeJourJActuel() {
   val += entrees.filter(e => ['salaire','autre'].includes(e.type)).reduce((a,e)=>a+e.montant,0);
   val -= entrees.filter(e => ['nourriture','perso','exceptionnel','autre_fixe'].includes(e.type) && !e.rembourse).reduce((a,e)=>a+e.montant,0);
   val -= getFraisFixesEngagesAvant(key, dateRef);
-  // Dépôts et retraits épargne sont déjà comptés ci-dessus via leurs vraies entrées liées
-  // (Exceptionnel / Autre revenu) — pas besoin de les rajouter ici.
+  // Mouvements épargne sans entrée liée (créés avant l'ajout de la traçabilité) — rétrocompatibilité
+  const mvEpargneLegacy = getEpargneMouvementsPeriode(key).filter(m => m.date <= dateRef && !m._linkedEntreeId);
+  val -= mvEpargneLegacy.filter(m => m.type === 'depot').reduce((a,m)=>a+m.montant,0);
+  val += mvEpargneLegacy.filter(m => m.type === 'retrait').reduce((a,m)=>a+m.montant,0);
   return val;
 }
 
@@ -2328,14 +2330,18 @@ function calculerSoldes() {
     const exceptionnel = getSommeEntreesAll(k, 'exceptionnel');
     const salaire = getSalairePeriode(k);
     const autre = getAutresPeriode(k);
-    // Dépôts et retraits épargne sont maintenant comptés via de vraies entrées liées
-    // (Exceptionnel / Autre revenu, traçables) — pas ici, pour éviter un double comptage.
+    // Dépôts/retraits épargne créés APRÈS l'ajout de la traçabilité ont une entrée liée
+    // (Exceptionnel / Autre revenu) déjà comptée ci-dessus. Les mouvements plus anciens
+    // (créés avant, sans entrée liée) sont comptés ici pour rester rétrocompatibles.
+    const mouvementsEpargneK = getEpargneMouvementsPeriode(k);
+    const depotsNonLies = mouvementsEpargneK.filter(m => m.type === 'depot' && !m._linkedEntreeId).reduce((s,m)=>s+m.montant,0);
+    const retraitsNonLies = mouvementsEpargneK.filter(m => m.type === 'retrait' && !m._linkedEntreeId).reduce((s,m)=>s+m.montant,0);
 
     // AEC : salaire estimé si pas saisi
     const salaireAEC = 0;
 
-    const revenus = salaire + autre + salaireAEC;
-    const depenses = fixes.total + nourriture + perso + exceptionnel;
+    const revenus = salaire + autre + salaireAEC + retraitsNonLies;
+    const depenses = fixes.total + nourriture + perso + exceptionnel + depotsNonLies;
 
     soldes[k] = {
       debut: solde,
@@ -3827,8 +3833,10 @@ function renderPills() {
       val -= entrees.filter(e => ['nourriture','perso','exceptionnel','autre_fixe'].includes(e.type) && !e.rembourse).reduce((a,e)=>a+e.montant,0);
       // Frais fixes manuels (logement + entrées saisies type électricité/assurance/gym/netflix/fido/bixi) déjà engagés à dateRef
       val -= getFraisFixesEngagesAvant(key, dateRef);
-      // Dépôts et retraits épargne sont déjà comptés ci-dessus via leurs vraies entrées liées
-      // (Exceptionnel / Autre revenu) — pas besoin de les rajouter ici.
+      // Mouvements épargne sans entrée liée (créés avant l'ajout de la traçabilité) — rétrocompatibilité
+      const mvEpargneLegacy = getEpargneMouvementsPeriode(key).filter(m => m.date <= dateRef && !m._linkedEntreeId);
+      val -= mvEpargneLegacy.filter(m => m.type === 'depot').reduce((a,m)=>a+m.montant,0);
+      val += mvEpargneLegacy.filter(m => m.type === 'retrait').reduce((a,m)=>a+m.montant,0);
       return val;
     }
     return s.fin; // futur : projection

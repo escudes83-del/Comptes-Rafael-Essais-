@@ -3098,7 +3098,7 @@ function renderRappels() {
         const montantSuggereDeficit = Math.min(Math.ceil(100 - sAlerte.fin), soldeEpargneDispo);
         const peutVirer = soldeEpargneDispo > 0;
         elDeficit.style.display = 'flex';
-        elDeficit.innerHTML = `<div ${peutVirer ? `onclick="ouvrirSuggestionVirement(${montantSuggereDeficit})"` : ''} style="cursor:${peutVirer?'pointer':'default'};background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:52px;animation:pulse-dette 1.8s ease-in-out infinite;">
+        elDeficit.innerHTML = `<div ${peutVirer ? `onclick="ouvrirSuggestionVirement(${montantSuggereDeficit},'${keyAffiche}')"` : ''} style="cursor:${peutVirer?'pointer':'default'};background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:52px;animation:pulse-dette 1.8s ease-in-out infinite;">
           <div style="font-size:9px;font-weight:800;color:var(--red);letter-spacing:.3px;">🐾 DÉFICIT PROJETÉ</div>
           <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:2px;text-align:center;">${texteDeficit}</div>
           ${peutVirer ? `<div style="font-size:10px;font-weight:700;color:var(--accent2);margin-top:6px;">💡 Cliquer pour virer ${fmt(montantSuggereDeficit)} de l'épargne</div>` : ''}
@@ -3122,7 +3122,7 @@ function renderRappels() {
     if (soldeProjetePeriode !== null && soldeProjetePeriode < 100 && soldeEpargneActuel > 0) {
       const montantSuggere = Math.min(Math.ceil(100 - soldeProjetePeriode), soldeEpargneActuel);
       elSuggestion.style.display = 'flex';
-      elSuggestion.innerHTML = `<div onclick="ouvrirSuggestionVirement(${montantSuggere})" style="cursor:pointer;background:rgba(247,162,79,.12);border:2px solid var(--accent2);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:44px;animation:pulse-dette 1.8s ease-in-out infinite;">
+      elSuggestion.innerHTML = `<div onclick="ouvrirSuggestionVirement(${montantSuggere},'${curKeySuggestion}')" style="cursor:pointer;background:rgba(247,162,79,.12);border:2px solid var(--accent2);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:44px;animation:pulse-dette 1.8s ease-in-out infinite;">
         <div style="font-size:10px;font-weight:800;color:var(--accent2);letter-spacing:.5px;">💡 SUGGESTION</div>
         <div style="font-size:11px;font-weight:700;color:#fff;margin-top:2px;text-align:center;">Virer ${fmt(montantSuggere)} de l'épargne</div>
       </div>`;
@@ -3368,15 +3368,28 @@ function ouvrirProjectionEpargne() {
   if (modalInner) makeDraggable(modalInner);
 }
 
-function ouvrirSuggestionVirement(montant) {
+function ouvrirSuggestionVirement(montant, periodeKey) {
   ouvrirEpargne();
   setTimeout(() => {
     const typeEl = document.getElementById('epargneType');
     const montantEl = document.getElementById('epargneMontant');
     const descEl = document.getElementById('epargneDesc');
+    const dateEl = document.getElementById('epargneDate');
     if (typeEl) typeEl.value = 'retrait';
     if (montantEl) montantEl.value = montant.toFixed(2);
     if (descEl) descEl.value = 'Pour garder le compte positif';
+    if (dateEl && periodeKey) {
+      // Date par défaut : le 1er du 2e mois de la période (nourriture/perso déjà entamés,
+      // mais avant le métro du 1er du mois suivant) — laisse l'argent en épargne le plus longtemps possible.
+      const debutPeriode = getDateDebutPeriode(periodeKey);
+      if (debutPeriode) {
+        const dateDefaut = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 1);
+        const yyyy = dateDefaut.getFullYear();
+        const mm = String(dateDefaut.getMonth() + 1).padStart(2, '0');
+        const dd = String(dateDefaut.getDate()).padStart(2, '0');
+        dateEl.value = `${yyyy}-${mm}-${dd}`;
+      }
+    }
   }, 30);
 }
 

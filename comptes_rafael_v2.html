@@ -3057,6 +3057,7 @@ function renderRappels() {
 
     let nourritureDepasse = false, persoDepasse = false, deficitProjete = false;
     let texteNourriture = '', textePerso = '', texteDeficit = '';
+    let sAlerte = null;
 
     if (!isPeriodePassee && idxAffiche === curIdx2) {
       const nourritureBudget = getBudgetNourriturePourPeriode(keyAffiche);
@@ -3075,7 +3076,7 @@ function renderRappels() {
 
     if (!isPeriodePassee) {
       const soldesAlerte = calculerSoldes();
-      const sAlerte = soldesAlerte[keyAffiche];
+      sAlerte = soldesAlerte[keyAffiche];
       deficitProjete = sAlerte ? sAlerte.fin < 0 : false;
       texteDeficit = deficitProjete ? `Solde de fin de période projeté négatif : ${fmt(sAlerte.fin)}` : '';
     }
@@ -3088,9 +3089,25 @@ function renderRappels() {
       'PERSO — Budget journalier dépassé', textePerso,
       'alerte_budget_perso_' + keyAffiche + '_' + dateRefAlerte);
 
-    renderAlerteBudgetIndependante('rappelAlerteDeficitBandeau', deficitProjete,
-      'DÉFICIT PROJETÉ', texteDeficit,
-      'alerte_deficit_' + keyAffiche + '_' + dateRefAlerte);
+    // Bulle DÉFICIT PROJETÉ — cliquable : propose directement le virement épargne→courant
+    // nécessaire pour ramener CETTE période à 100$, plutôt qu'un simple constat.
+    const elDeficit = document.getElementById('rappelAlerteDeficitBandeau');
+    if (elDeficit) {
+      if (deficitProjete) {
+        const soldeEpargneDispo = getSoldeEpargne();
+        const montantSuggereDeficit = Math.min(Math.ceil(100 - sAlerte.fin), soldeEpargneDispo);
+        const peutVirer = soldeEpargneDispo > 0;
+        elDeficit.style.display = 'flex';
+        elDeficit.innerHTML = `<div ${peutVirer ? `onclick="ouvrirSuggestionVirement(${montantSuggereDeficit})"` : ''} style="cursor:${peutVirer?'pointer':'default'};background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:52px;animation:pulse-dette 1.8s ease-in-out infinite;">
+          <div style="font-size:9px;font-weight:800;color:var(--red);letter-spacing:.3px;">🐾 DÉFICIT PROJETÉ</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:2px;text-align:center;">${texteDeficit}</div>
+          ${peutVirer ? `<div style="font-size:10px;font-weight:700;color:var(--accent2);margin-top:6px;">💡 Cliquer pour virer ${fmt(montantSuggereDeficit)} de l'épargne</div>` : ''}
+        </div>`;
+      } else {
+        elDeficit.style.display = 'none';
+        elDeficit.innerHTML = '';
+      }
+    }
   }
 
   // Cadre SUGGESTION VIREMENT — dès le début de la période, si la période en cours est projetée

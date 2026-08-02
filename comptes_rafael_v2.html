@@ -1202,6 +1202,7 @@ input, textarea, select { cursor: text; }
     <div id="rappelAlertePersoBandeau" style="display:none;"></div>
     <div id="rappelAlerteDeficitBandeau" style="display:none;"></div>
     <div id="rappelEpargneBandeau" style="display:none;"></div>
+    <div id="rappelSuggestionVirementBandeau" style="display:none;"></div>
     <div id="rappelReliquatBandeau" style="display:none;"></div>
     <div id="rappelPortefeuilleBandeau" style="display:none;"></div>
   </div>
@@ -1952,6 +1953,67 @@ function getRetraitsPeriode(key) {
   return getEpargneMouvementsPeriode(key).filter(m => m.type === 'retrait').reduce((s, m) => s + m.montant, 0);
 }
 
+// Solde jour J de la période courante, calculé indépendamment du rendu des pilules — utilisé
+// pour la suggestion de virement épargne.
+function getSoldeJourJActuel() {
+  const curIdx = getCurrentPeriodeIndex();
+  const key = PERIODES[curIdx]?.key;
+  if (!key) return 0;
+  if (state.soldeRef !== null && state.soldeRef !== undefined) return state.soldeRef;
+  const soldes = calculerSoldes();
+  const s = soldes[key];
+  if (!s) return 0;
+  let val = s.debut;
+  const dateRef = getDateRef();
+  const entrees = getEntreesPeriode(key).filter(e => e.date <= dateRef);
+  val += entrees.filter(e => ['salaire','autre'].includes(e.type)).reduce((a,e)=>a+e.montant,0);
+  val -= entrees.filter(e => ['nourriture','perso','exceptionnel','autre_fixe'].includes(e.type) && !e.rembourse).reduce((a,e)=>a+e.montant,0);
+  val -= getFraisFixesEngagesAvant(key, dateRef);
+  // Dépôts et retraits épargne sont déjà comptés ci-dessus via leurs vraies entrées liées
+  // (Exceptionnel / Autre revenu) — pas besoin de les rajouter ici.
+  return val;
+}
+
+// Projection : pour chaque période à venir, simule un maintien du compte courant à au moins
+// 100$ en puisant dans l'épargne au besoin, et indique jusqu'à quand c'est possible.
+function calculerProjectionEpargne() {
+  const soldes = calculerSoldes();
+  const curIdx = getCurrentPeriodeIndex();
+  let soldeSimule = getSoldeJourJActuel();
+  let epargneRestante = getSoldeEpargne();
+  const resultats = [];
+  let epuisementAtteint = false;
+
+  for (let idx = curIdx + 1; idx < PERIODES.length; idx++) {
+    const p = PERIODES[idx];
+    const s = soldes[p.key];
+    if (!s) continue;
+    const delta = s.fin - s.debut;
+    soldeSimule += delta;
+    const soldeSansAide = soldeSimule;
+    let montantPuise = 0;
+    if (soldeSimule < 100 && !epuisementAtteint) {
+      const besoin = 100 - soldeSimule;
+      if (epargneRestante >= besoin) {
+        montantPuise = besoin;
+        epargneRestante -= besoin;
+        soldeSimule = 100;
+      } else {
+        montantPuise = epargneRestante;
+        soldeSimule += epargneRestante;
+        epargneRestante = 0;
+        epuisementAtteint = true;
+      }
+    }
+    resultats.push({
+      periode: p.key, label: p.label, soldeSansAide, montantPuise,
+      soldeApres: soldeSimule, epargneRestante, epuise: epuisementAtteint
+    });
+    if (epuisementAtteint) break;
+  }
+  return resultats;
+}
+
 function getSoldeEpargne() {
   const depart = (state.epargne && state.epargne.soldeDepart) || 0;
   const mouvements = getEpargneMouvements();
@@ -2266,15 +2328,14 @@ function calculerSoldes() {
     const exceptionnel = getSommeEntreesAll(k, 'exceptionnel');
     const salaire = getSalairePeriode(k);
     const autre = getAutresPeriode(k);
-    // Dépôt vers l'épargne = sortie du compte courant ; retrait de l'épargne = rentrée
-    const depotsEpargne = getDepotsPeriode(k);
-    const retraitsEpargne = getRetraitsPeriode(k);
+    // Dépôts et retraits épargne sont maintenant comptés via de vraies entrées liées
+    // (Exceptionnel / Autre revenu, traçables) — pas ici, pour éviter un double comptage.
 
     // AEC : salaire estimé si pas saisi
     const salaireAEC = 0;
 
-    const revenus = salaire + autre + salaireAEC + retraitsEpargne;
-    const depenses = fixes.total + nourriture + perso + exceptionnel + depotsEpargne;
+    const revenus = salaire + autre + salaireAEC;
+    const depenses = fixes.total + nourriture + perso + exceptionnel;
 
     soldes[k] = {
       debut: solde,
@@ -2992,6 +3053,26 @@ function renderRappels() {
       'alerte_deficit_' + keyAffiche + '_' + dateRefAlerte);
   }
 
+  // Cadre SUGGESTION VIREMENT — si le solde jour J passe sous 100$ et qu'il y a de l'épargne
+  // disponible, propose un virement pour ramener le compte à au moins 100$.
+  const elSuggestion = document.getElementById('rappelSuggestionVirementBandeau');
+  if (elSuggestion) {
+    const soldeActuel = getSoldeJourJActuel();
+    const soldeEpargneActuel = getSoldeEpargne();
+    if (soldeActuel < 100 && soldeEpargneActuel > 0) {
+      const montantSuggere = Math.min(Math.ceil(100 - soldeActuel), soldeEpargneActuel);
+      elSuggestion.style.display = 'flex';
+      elSuggestion.innerHTML = `<div onclick="ouvrirSuggestionVirement(${montantSuggere})" style="cursor:pointer;background:rgba(247,162,79,.12);border:2px solid var(--accent2);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:44px;animation:pulse-dette 1.8s ease-in-out infinite;">
+        <div style="font-size:10px;font-weight:800;color:var(--accent2);letter-spacing:.5px;">💡 SUGGESTION</div>
+        <div style="font-size:11px;font-weight:700;color:#fff;margin-top:2px;text-align:center;">Virer ${fmt(montantSuggere)} de l'épargne</div>
+      </div>`;
+    } else {
+      elSuggestion.style.display = 'none';
+      elSuggestion.innerHTML = '';
+    }
+  }
+
+
   // Cadre ÉPARGNE — toujours visible, ouvre la gestion des dépôts/retraits/intérêts
   const elEpargne = document.getElementById('rappelEpargneBandeau');
   if (elEpargne) {
@@ -3134,6 +3215,7 @@ function ouvrirEpargne() {
       <h3 style="font-size:13px;margin-bottom:8px;">Historique</h3>
       <div style="max-height:220px;overflow-y:auto;">${historiqueHtml}</div>
       <div class="form-actions" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn" style="background:var(--accent2);color:#fff;" onclick="ouvrirProjectionEpargne()">📊 Voir la projection</button>
         <button class="btn btn-secondary" onclick="document.getElementById('modalEpargne').classList.remove('open')">Fermer</button>
       </div>
     </div>`;
@@ -3150,6 +3232,70 @@ function modifierSoldeDepartEpargne(val) {
   render();
 }
 
+function ouvrirProjectionEpargne() {
+  const resultats = calculerProjectionEpargne();
+  const epargneDepart = getSoldeEpargne();
+
+  let lignesHtml = resultats.map(r => {
+    const couleurSolde = r.soldeApres < 0 ? 'var(--red)' : (r.montantPuise > 0 ? 'var(--yellow)' : 'var(--green)');
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;">
+      <span style="min-width:70px;font-weight:700;">${r.label}</span>
+      <span style="color:var(--muted);">sans aide : ${fmt(r.soldeSansAide)}</span>
+      ${r.montantPuise > 0
+        ? `<span style="color:var(--accent2);">puisé : ${fmt(r.montantPuise)}</span>`
+        : `<span style="color:var(--muted);">—</span>`}
+      <span style="font-weight:700;color:${couleurSolde};">${fmt(r.soldeApres)}</span>
+      <span style="color:var(--muted);font-size:11px;">épargne restante : ${fmt(r.epargneRestante)}</span>
+    </div>`;
+  }).join('');
+
+  const dernierResultat = resultats[resultats.length - 1];
+  let messageFinal = '';
+  if (dernierResultat && dernierResultat.epuise) {
+    messageFinal = `<p style="font-size:13px;color:var(--red);font-weight:700;margin-top:12px;">⚠️ L'épargne ne suffit plus à partir de ${dernierResultat.label} — le compte passerait sous 100$ malgré le dernier retrait possible.</p>`;
+  } else if (resultats.length > 0) {
+    messageFinal = `<p style="font-size:13px;color:var(--green);font-weight:700;margin-top:12px;">✅ L'épargne suffit à maintenir le compte à 100$ ou plus sur toute la période visible.</p>`;
+  } else {
+    messageFinal = `<p style="font-size:13px;color:var(--muted);margin-top:12px;">Aucune période future à projeter.</p>`;
+  }
+
+  let overlay = document.getElementById('modalProjectionEpargne');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modalProjectionEpargne';
+    overlay.className = 'modal-overlay';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:600px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">📊 Projection épargne</h2>
+        <span onclick="document.getElementById('modalProjectionEpargne').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:10px 0;">Simule un maintien du compte courant à au moins 100$ chaque période, en puisant dans l'épargne (${fmt(epargneDepart)} actuellement) selon les vrais soldes prévus.</p>
+      <div style="max-height:340px;overflow-y:auto;">${lignesHtml}</div>
+      ${messageFinal}
+      <div class="form-actions" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="document.getElementById('modalProjectionEpargne').classList.remove('open')">Fermer</button>
+      </div>
+    </div>`;
+  overlay.classList.add('open');
+  const modalInner = overlay.querySelector('.modal');
+  if (modalInner) makeDraggable(modalInner);
+}
+
+function ouvrirSuggestionVirement(montant) {
+  ouvrirEpargne();
+  setTimeout(() => {
+    const typeEl = document.getElementById('epargneType');
+    const montantEl = document.getElementById('epargneMontant');
+    const descEl = document.getElementById('epargneDesc');
+    if (typeEl) typeEl.value = 'retrait';
+    if (montantEl) montantEl.value = montant.toFixed(2);
+    if (descEl) descEl.value = 'Pour garder le compte positif';
+  }, 30);
+}
+
 function ajouterMouvementEpargne() {
   const type = document.getElementById('epargneType').value;
   const montant = parseFloat(document.getElementById('epargneMontant').value);
@@ -3159,7 +3305,38 @@ function ajouterMouvementEpargne() {
   if (!date) { alert('Entre une date valide.'); return; }
   if (!state.epargne) state.epargne = { soldeDepart: 0, mouvements: [] };
   if (!state.epargne.mouvements) state.epargne.mouvements = [];
-  state.epargne.mouvements.push({ id: uid(), type, montant, desc, date });
+  const mouvementId = uid();
+  const mouvement = { id: mouvementId, type, montant, desc, date };
+  if (type === 'retrait') {
+    // Un retrait doit créditer le compte courant de façon visible et traçable : on crée une
+    // vraie entrée "Autre revenu" liée, plutôt qu'un crédit invisible calculé en coulisses.
+    const periodeKey = getPeriodeKeyPourDate(date);
+    if (periodeKey) {
+      const entreeId = uid();
+      if (!state.entrees[periodeKey]) state.entrees[periodeKey] = [];
+      state.entrees[periodeKey].push({
+        id: entreeId, type: 'autre', montant, desc: 'Retrait épargne' + (desc ? ' — ' + desc : ''),
+        date, rembourse: false, rembDesc: '', _linkedEpargneId: mouvementId
+      });
+      mouvement._linkedEntreeId = entreeId;
+      mouvement._linkedPeriode = periodeKey;
+    }
+  } else if (type === 'depot') {
+    // Symétrique : un dépôt doit débiter le compte courant de façon visible et traçable — une
+    // vraie dépense "Exceptionnel" liée, plutôt qu'une déduction invisible.
+    const periodeKey = getPeriodeKeyPourDate(date);
+    if (periodeKey) {
+      const entreeId = uid();
+      if (!state.entrees[periodeKey]) state.entrees[periodeKey] = [];
+      state.entrees[periodeKey].push({
+        id: entreeId, type: 'exceptionnel', montant, desc: 'Dépôt épargne' + (desc ? ' — ' + desc : ''),
+        date, rembourse: false, rembDesc: '', _linkedEpargneId: mouvementId
+      });
+      mouvement._linkedEntreeId = entreeId;
+      mouvement._linkedPeriode = periodeKey;
+    }
+  }
+  state.epargne.mouvements.push(mouvement);
   saveState();
   render();
   ouvrirEpargne();
@@ -3167,6 +3344,11 @@ function ajouterMouvementEpargne() {
 
 function supprimerMouvementEpargne(id) {
   if (!confirm('Supprimer ce mouvement ?')) return;
+  const mouvement = (state.epargne.mouvements || []).find(m => m.id === id);
+  if (mouvement && mouvement._linkedEntreeId && mouvement._linkedPeriode) {
+    const arr = state.entrees[mouvement._linkedPeriode] || [];
+    state.entrees[mouvement._linkedPeriode] = arr.filter(e => e.id !== mouvement._linkedEntreeId);
+  }
   state.epargne.mouvements = (state.epargne.mouvements || []).filter(m => m.id !== id);
   saveState();
   render();
@@ -3645,10 +3827,8 @@ function renderPills() {
       val -= entrees.filter(e => ['nourriture','perso','exceptionnel','autre_fixe'].includes(e.type) && !e.rembourse).reduce((a,e)=>a+e.montant,0);
       // Frais fixes manuels (logement + entrées saisies type électricité/assurance/gym/netflix/fido/bixi) déjà engagés à dateRef
       val -= getFraisFixesEngagesAvant(key, dateRef);
-      // Mouvements épargne déjà engagés à dateRef : dépôt sort du courant, retrait y rentre
-      const mouvementsEpargne = getEpargneMouvementsPeriode(key).filter(m => m.date <= dateRef);
-      val -= mouvementsEpargne.filter(m => m.type === 'depot').reduce((a,m)=>a+m.montant,0);
-      val += mouvementsEpargne.filter(m => m.type === 'retrait').reduce((a,m)=>a+m.montant,0);
+      // Dépôts et retraits épargne sont déjà comptés ci-dessus via leurs vraies entrées liées
+      // (Exceptionnel / Autre revenu) — pas besoin de les rajouter ici.
       return val;
     }
     return s.fin; // futur : projection

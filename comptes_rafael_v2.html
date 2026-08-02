@@ -2945,8 +2945,12 @@ function renderRappels() {
     const resteNourr = getBudgetNourriturePourPeriode(keyAffiche) - nourritureDepensee;
     const restePerso = getBudgetPersoPourPeriode(keyAffiche) - persoDepense;
     const total = resteNourr + restePerso;
-    const colNourr = resteNourr < 0 ? 'var(--red)' : 'var(--green)';
-    const colPerso = restePerso < 0 ? 'var(--red)' : 'var(--green)';
+    // Si l'enveloppe combinée est épuisée (total négatif), ne plus afficher de "dispo" positif
+    // dans une catégorie individuelle — ce serait trompeur (l'argent est déjà absorbé par l'autre).
+    const resteNourrAffiche = total < 0 ? Math.min(resteNourr, 0) : resteNourr;
+    const restePersoAffiche = total < 0 ? Math.min(restePerso, 0) : restePerso;
+    const colNourr = resteNourrAffiche < 0 ? 'var(--red)' : 'var(--green)';
+    const colPerso = restePersoAffiche < 0 ? 'var(--red)' : 'var(--green)';
     const colTotal = total < 0 ? 'var(--red)' : 'var(--green)';
     elDispo.style.display = 'flex';
     elDispo.innerHTML = `<div style="background:rgba(62,207,142,.10);border:2px solid var(--green);border-radius:10px;padding:5px 14px;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:38px;justify-content:center;">
@@ -2954,12 +2958,12 @@ function renderRappels() {
       <div style="display:flex;align-items:center;gap:10px;">
       <div style="display:flex;flex-direction:column;align-items:center;">
         <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Nourriture</div>
-        <div style="font-size:13px;font-weight:700;color:${colNourr};">${fmt(resteNourr)}</div>
+        <div style="font-size:13px;font-weight:700;color:${colNourr};">${fmt(resteNourrAffiche)}</div>
       </div>
       <div style="width:1px;height:28px;background:var(--border);"></div>
       <div style="display:flex;flex-direction:column;align-items:center;">
         <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Perso</div>
-        <div style="font-size:13px;font-weight:700;color:${colPerso};">${fmt(restePerso)}</div>
+        <div style="font-size:13px;font-weight:700;color:${colPerso};">${fmt(restePersoAffiche)}</div>
       </div>
       <div style="width:1px;height:28px;background:var(--border);"></div>
       <div style="display:flex;flex-direction:column;align-items:center;">

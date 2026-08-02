@@ -524,12 +524,15 @@ function mettreAJourUI() {
   document.getElementById('except-amount').textContent = fmt(totalExcept);
 
   const dispoNourrEl = document.getElementById('dispo-nourr-amount');
-  dispoNourrEl.textContent = fmt(resteNourr);
-  dispoNourrEl.className = 'dispo-amount '+(resteNourr<0?'danger':resteNourr<20?'warn':'ok');
-
   const dispoPersoEl = document.getElementById('dispo-perso-amount');
-  dispoPersoEl.textContent = fmt(restePerso);
-  dispoPersoEl.className = 'dispo-amount '+(restePerso<0?'danger':restePerso<20?'warn':'ok');
+  // Si l'enveloppe combinée (nourriture+perso) est épuisée, ne plus afficher de "dispo" positif
+  // dans une catégorie individuelle — trompeur si l'autre catégorie a tout absorbé.
+  const resteNourrAffiche = dispo < 0 ? Math.min(resteNourr, 0) : resteNourr;
+  const restePersoAffiche = dispo < 0 ? Math.min(restePerso, 0) : restePerso;
+  dispoNourrEl.textContent = fmt(resteNourrAffiche);
+  dispoNourrEl.className = 'dispo-amount '+(resteNourrAffiche<0?'danger':resteNourrAffiche<20?'warn':'ok');
+  dispoPersoEl.textContent = fmt(restePersoAffiche);
+  dispoPersoEl.className = 'dispo-amount '+(restePersoAffiche<0?'danger':restePersoAffiche<20?'warn':'ok');
 
   const alerte = document.getElementById('alerte');
   const alerteText = document.getElementById('alerte-text');

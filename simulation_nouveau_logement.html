@@ -1212,6 +1212,7 @@ input, textarea, select { cursor: text; }
     <div style="display:flex;flex-direction:column;gap:6px;">
       <button class="btn btn-purple btn-sm" onclick="openModal('modalSimFrequence')" style="font-size:11px;">🔧 Paramètres</button>
       <button class="btn btn-secondary btn-sm" onclick="ouvrirModalNouveauRappel()" style="font-size:11px;">🔔 Nouveau rappel</button>
+      <button class="btn btn-secondary btn-sm" onclick="ouvrirCorrectionBudget()" style="font-size:11px;">🔧 Corriger budget période</button>
       <button class="btn btn-secondary btn-sm" onclick="rechargerVraiesDonnees()" style="font-size:11px;">🔄 Recharger les vraies données</button>
       <button class="btn btn-secondary btn-sm" onclick="openModal('modalSimulation')" style="font-size:11px;">📊 Simuler</button>
       <button class="btn btn-secondary btn-sm" id="btnTableau" onclick="toggleTableau()" style="font-size:11px;">📊 Tableau</button>
@@ -1236,6 +1237,8 @@ input, textarea, select { cursor: text; }
           <button class="btn-toggle-2027" id="btn2027toggle" onclick="toggle2027()" style="font-size:10px;padding:3px 10px;opacity:0.7;">▶ Afficher simulation 2027</button>
         </div>
         <!-- Rangée 2027 dans le même grid pour alignement parfait -->
+        <div id="pillsReel2027label" class="tl-label" style="display:none;border-color:rgba(62,207,142,.3);background:rgba(62,207,142,.05);"><b style="color:var(--green);">réel</b><span style="font-size:8px;color:var(--muted);">2027</span></div>
+        <div class="tl-pills" id="pillsReel2027row" style="gap:6px;flex-wrap:nowrap;display:none;"></div>
         <div id="pills2027label" class="tl-label purple" style="display:none;"><b>simu.</b>fin pér.</div>
         <div class="tl-pills" id="pills2027row" style="gap:6px;flex-wrap:nowrap;display:none;"></div>
       </div>
@@ -1764,6 +1767,7 @@ function defaultState() {
     detteLoyerLogement: 6080, // prêt de PY pour le prépaiement du logement (oct 2026 -> jun/jul 2027)
     epargne: { soldeDepart: 0, mouvements: [] }, // [{id, type:'depot'|'retrait'|'interet', montant, date, desc}]
     reliquatsAppliques: {}, // { periodeKey: {nourriture: X, perso: Y} } — boost ponctuel de budget suite à un reliquat reporté
+    budgetOverrides: {}, // { periodeKey: {nourriture: X, perso: Y} } — remplace complètement le budget pour UNE période précise, même passée
     detteLoyerLogement: 6080, // prêt de PY pour le prépaiement du logement (oct 2026 -> jun/jul 2027)
     fixesEntrees: {}, // { 'gym': { '2026-07': [{id,montant,desc,date}] }, ... }
     fixes: {...DEFAUT_FIXES},
@@ -1785,6 +1789,7 @@ function loadState() {
       if (s.detteLoyerLogement === undefined) s.detteLoyerLogement = 6080;
       if (!s.epargne) s.epargne = { soldeDepart: 0, mouvements: [] };
       if (!s.reliquatsAppliques) s.reliquatsAppliques = {};
+      if (!s.budgetOverrides) s.budgetOverrides = {};
       if (s.detteLoyerLogement === undefined) s.detteLoyerLogement = 6080;
       // Firebase supprime les null — on les restitue
       if (s.soldeRef === undefined) s.soldeRef = null;
@@ -1962,6 +1967,81 @@ function getSoldeEpargne() {
   const retraits = mouvements.filter(m => m.type === 'retrait').reduce((s, m) => s + m.montant, 0);
   const interets = mouvements.filter(m => m.type === 'interet').reduce((s, m) => s + m.montant, 0);
   return depart + depots - retraits + interets;
+}
+
+function getSoldeEpargneAPeriode(periodeKey) {
+  const depart = (state.epargne && state.epargne.soldeDepart) || 0;
+  const debut = getDateDebutPeriode(periodeKey);
+  if (!debut) return getSoldeEpargne();
+  const finPeriode = new Date(debut.getFullYear(), debut.getMonth() + 1, 15);
+  const mouvements = getEpargneMouvements().filter(m => new Date(m.date + 'T00:00:00') <= finPeriode);
+  const depots = mouvements.filter(m => m.type === 'depot').reduce((s, m) => s + m.montant, 0);
+  const retraits = mouvements.filter(m => m.type === 'retrait').reduce((s, m) => s + m.montant, 0);
+  const interets = mouvements.filter(m => m.type === 'interet').reduce((s, m) => s + m.montant, 0);
+  return depart + depots - retraits + interets;
+}
+
+function getSoldeJourJActuel() {
+  const curIdx = getCurrentPeriodeIndex();
+  const key = PERIODES[curIdx]?.key;
+  if (!key) return 0;
+  if (state.soldeRef !== null && state.soldeRef !== undefined) return state.soldeRef;
+  const soldes = calculerSoldes();
+  const s = soldes[key];
+  if (!s) return 0;
+  let val = s.debut;
+  const dateRef = getDateRef();
+  const entrees = getEntreesPeriode(key).filter(e => e.date <= dateRef);
+  val += entrees.filter(e => ['salaire','autre'].includes(e.type)).reduce((a,e)=>a+e.montant,0);
+  val -= entrees.filter(e => ['nourriture','perso','exceptionnel','autre_fixe'].includes(e.type) && !e.rembourse).reduce((a,e)=>a+e.montant,0);
+  val -= getFraisFixesEngagesAvant(key, dateRef);
+  // Mouvements épargne sans entrée liée (créés avant l'ajout de la traçabilité) — rétrocompatibilité
+  const mvEpargneLegacy = getEpargneMouvementsPeriode(key).filter(m => m.date <= dateRef && !m._linkedEntreeId);
+  val -= mvEpargneLegacy.filter(m => m.type === 'depot').reduce((a,m)=>a+m.montant,0);
+  val += mvEpargneLegacy.filter(m => m.type === 'retrait').reduce((a,m)=>a+m.montant,0);
+  return val;
+}
+
+function calculerProjectionEpargne() {
+  const soldes = calculerSoldes();
+  const curIdx = getCurrentPeriodeIndex();
+  const curKey = PERIODES[curIdx]?.key;
+  // Point de départ : le "fin" de la période en cours calculé comme les autres (période
+  // entièrement écoulée), pour rester cohérent avec le reste de la projection — plutôt que le
+  // Solde Jour J réel, qui varie d'un jour à l'autre selon les dates de prélèvement déjà passées.
+  let soldeSimule = curKey ? soldes[curKey].fin : getSoldeJourJActuel();
+  let epargneRestante = getSoldeEpargne();
+  const resultats = [];
+  let epuisementAtteint = false;
+
+  for (let idx = curIdx + 1; idx < PERIODES.length; idx++) {
+    const p = PERIODES[idx];
+    const s = soldes[p.key];
+    if (!s) continue;
+    const delta = s.fin - s.debut;
+    soldeSimule += delta;
+    const soldeSansAide = soldeSimule;
+    let montantPuise = 0;
+    if (soldeSimule < 100 && !epuisementAtteint) {
+      const besoin = 100 - soldeSimule;
+      if (epargneRestante >= besoin) {
+        montantPuise = besoin;
+        epargneRestante -= besoin;
+        soldeSimule = 100;
+      } else {
+        montantPuise = epargneRestante;
+        soldeSimule += epargneRestante;
+        epargneRestante = 0;
+        epuisementAtteint = true;
+      }
+    }
+    resultats.push({
+      periode: p.key, label: p.label, annee: p.annee, soldeSansAide, montantPuise,
+      soldeApres: soldeSimule, epargneRestante, epuise: epuisementAtteint
+    });
+    if (epuisementAtteint) break;
+  }
+  return resultats;
 }
 
 function getTotalInteretsEpargne() {
@@ -2236,11 +2316,15 @@ function getBudgetHistoriquePourPeriode(type, periodeKey) {
   return applicables[applicables.length - 1].montant;
 }
 function getBudgetNourriturePourPeriode(periodeKey) {
+  const override = state.budgetOverrides && state.budgetOverrides[periodeKey] && state.budgetOverrides[periodeKey].nourriture;
+  if (override !== undefined && override !== null) return override;
   const base = getBudgetHistoriquePourPeriode('nourriture', periodeKey);
   const boost = (state.reliquatsAppliques && state.reliquatsAppliques[periodeKey] && state.reliquatsAppliques[periodeKey].nourriture) || 0;
   return base + boost;
 }
 function getBudgetPersoPourPeriode(periodeKey) {
+  const override = state.budgetOverrides && state.budgetOverrides[periodeKey] && state.budgetOverrides[periodeKey].perso;
+  if (override !== undefined && override !== null) return override;
   const base = getBudgetHistoriquePourPeriode('perso', periodeKey);
   const boost = (state.reliquatsAppliques && state.reliquatsAppliques[periodeKey] && state.reliquatsAppliques[periodeKey].perso) || 0;
   return base + boost;
@@ -2293,15 +2377,18 @@ function calculerSoldes() {
     const exceptionnel = getSommeEntreesAll(k, 'exceptionnel');
     const salaire = getSalairePeriode(k);
     const autre = getAutresPeriode(k);
-    // Dépôt vers l'épargne = sortie du compte courant ; retrait de l'épargne = rentrée
-    const depotsEpargne = getDepotsPeriode(k);
-    const retraitsEpargne = getRetraitsPeriode(k);
+    // Dépôts/retraits épargne créés APRÈS l'ajout de la traçabilité ont une entrée liée
+    // (Exceptionnel / Autre revenu) déjà comptée ci-dessus. Les mouvements plus anciens
+    // (créés avant, sans entrée liée) sont comptés ici pour rester rétrocompatibles.
+    const mouvementsEpargneK = getEpargneMouvementsPeriode(k);
+    const depotsNonLies = mouvementsEpargneK.filter(m => m.type === 'depot' && !m._linkedEntreeId).reduce((s,m)=>s+m.montant,0);
+    const retraitsNonLies = mouvementsEpargneK.filter(m => m.type === 'retrait' && !m._linkedEntreeId).reduce((s,m)=>s+m.montant,0);
 
     // AEC : salaire estimé si pas saisi
     const salaireAEC = 0;
 
-    const revenus = salaire + autre + salaireAEC + retraitsEpargne;
-    const depenses = fixes.total + nourriture + perso + exceptionnel + depotsEpargne;
+    const revenus = salaire + autre + salaireAEC + retraitsNonLies;
+    const depenses = fixes.total + nourriture + perso + exceptionnel + depotsNonLies;
 
     soldes[k] = {
       debut: solde,
@@ -2888,21 +2975,29 @@ function renderRappels() {
     const resteNourr = getBudgetNourriturePourPeriode(keyAffiche) - nourritureDepensee;
     const restePerso = getBudgetPersoPourPeriode(keyAffiche) - persoDepense;
     const total = resteNourr + restePerso;
-    const colNourr = resteNourr < 0 ? 'var(--red)' : 'var(--green)';
-    const colPerso = restePerso < 0 ? 'var(--red)' : 'var(--green)';
+    // Si l'enveloppe combinée est épuisée (total négatif), ne plus afficher de "dispo" positif
+    // dans une catégorie individuelle — ce serait trompeur (l'argent est déjà absorbé par l'autre).
+    const resteNourrAffiche = total < 0 ? Math.min(resteNourr, 0) : resteNourr;
+    const restePersoAffiche = total < 0 ? Math.min(restePerso, 0) : restePerso;
+    const colNourr = resteNourrAffiche < 0 ? 'var(--red)' : 'var(--green)';
+    const colPerso = restePersoAffiche < 0 ? 'var(--red)' : 'var(--green)';
     const colTotal = total < 0 ? 'var(--red)' : 'var(--green)';
+    const depasse = total < 0;
+    const styleFond = depasse
+      ? 'background:rgba(242,92,92,.15);border:2px solid var(--red);animation:pulse-dette 1.8s ease-in-out infinite;'
+      : 'background:rgba(62,207,142,.10);border:2px solid var(--green);';
     elDispo.style.display = 'flex';
-    elDispo.innerHTML = `<div style="background:rgba(62,207,142,.10);border:2px solid var(--green);border-radius:10px;padding:5px 14px;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:38px;justify-content:center;">
-      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Dispo</div>
+    elDispo.innerHTML = `<div style="${styleFond}border-radius:10px;padding:5px 14px;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:38px;justify-content:center;">
+      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Dispo${depasse ? ' · BUDGET DÉPASSÉ' : ''}</div>
       <div style="display:flex;align-items:center;gap:10px;">
       <div style="display:flex;flex-direction:column;align-items:center;">
         <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Nourriture</div>
-        <div style="font-size:13px;font-weight:700;color:${colNourr};">${fmt(resteNourr)}</div>
+        <div style="font-size:13px;font-weight:700;color:${colNourr};">${fmt(resteNourrAffiche)}</div>
       </div>
       <div style="width:1px;height:28px;background:var(--border);"></div>
       <div style="display:flex;flex-direction:column;align-items:center;">
         <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Perso</div>
-        <div style="font-size:13px;font-weight:700;color:${colPerso};">${fmt(restePerso)}</div>
+        <div style="font-size:13px;font-weight:700;color:${colPerso};">${fmt(restePersoAffiche)}</div>
       </div>
       <div style="width:1px;height:28px;background:var(--border);"></div>
       <div style="display:flex;flex-direction:column;align-items:center;">
@@ -2985,6 +3080,7 @@ function renderRappels() {
 
     let nourritureDepasse = false, persoDepasse = false, deficitProjete = false;
     let texteNourriture = '', textePerso = '', texteDeficit = '';
+    let sAlerte = null;
 
     if (!isPeriodePassee && idxAffiche === curIdx2) {
       const nourritureBudget = getBudgetNourriturePourPeriode(keyAffiche);
@@ -3003,7 +3099,7 @@ function renderRappels() {
 
     if (!isPeriodePassee) {
       const soldesAlerte = calculerSoldes();
-      const sAlerte = soldesAlerte[keyAffiche];
+      sAlerte = soldesAlerte[keyAffiche];
       deficitProjete = sAlerte ? sAlerte.fin < 0 : false;
       texteDeficit = deficitProjete ? `Solde de fin de période projeté négatif : ${fmt(sAlerte.fin)}` : '';
     }
@@ -3016,15 +3112,78 @@ function renderRappels() {
       'PERSO — Budget journalier dépassé', textePerso,
       'alerte_budget_perso_' + keyAffiche + '_' + dateRefAlerte);
 
-    renderAlerteBudgetIndependante('rappelAlerteDeficitBandeau', deficitProjete,
-      'DÉFICIT PROJETÉ', texteDeficit,
-      'alerte_deficit_' + keyAffiche + '_' + dateRefAlerte);
+    // Bulle DÉFICIT PROJETÉ — cliquable : propose directement le virement épargne→courant
+    // nécessaire pour ramener CETTE période à 100$, plutôt qu'un simple constat.
+    const elDeficit = document.getElementById('rappelAlerteDeficitBandeau');
+    if (elDeficit) {
+      if (deficitProjete) {
+        const soldeEpargneDispo = getSoldeEpargne();
+        const montantSuggereDeficit = Math.min(Math.ceil(100 - sAlerte.fin), soldeEpargneDispo);
+        const peutVirer = soldeEpargneDispo > 0;
+        elDeficit.style.display = 'flex';
+        elDeficit.innerHTML = `<div ${peutVirer ? `onclick="ouvrirSuggestionVirement(${montantSuggereDeficit},'${keyAffiche}')"` : ''} style="cursor:${peutVirer?'pointer':'default'};background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:52px;animation:pulse-dette 1.8s ease-in-out infinite;">
+          <div style="font-size:9px;font-weight:800;color:var(--red);letter-spacing:.3px;">🐾 DÉFICIT PROJETÉ</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:2px;text-align:center;">${texteDeficit}</div>
+          ${peutVirer ? `<div style="font-size:10px;font-weight:700;color:var(--accent2);margin-top:6px;">💡 Cliquer pour virer ${fmt(montantSuggereDeficit)} de l'épargne</div>` : ''}
+        </div>`;
+      } else {
+        elDeficit.style.display = 'none';
+        elDeficit.innerHTML = '';
+      }
+    }
   }
 
-  // Cadre ÉPARGNE — toujours visible, ouvre la gestion des dépôts/retraits/intérêts
+  // Cadre SUGGESTION VIREMENT — dès le début de la période, si la période en cours est projetée
+  // pour finir sous 100$ (même avant que ça arrive vraiment), propose un virement. Disparaît
+  // dès qu'un vrai virement suffisant est saisi (le solde projeté remonte au-dessus de 100$).
+  const elSuggestion = document.getElementById('rappelSuggestionVirementBandeau');
+  if (elSuggestion) {
+    const curKeySuggestion = PERIODES[getCurrentPeriodeIndex()]?.key;
+    const soldesSuggestion = calculerSoldes();
+    const soldeProjetePeriode = curKeySuggestion ? soldesSuggestion[curKeySuggestion]?.fin : null;
+    const soldeEpargneActuel = getSoldeEpargne();
+    if (soldeProjetePeriode !== null && soldeProjetePeriode < 100 && soldeEpargneActuel > 0) {
+      const montantSuggere = Math.min(Math.ceil(100 - soldeProjetePeriode), soldeEpargneActuel);
+      elSuggestion.style.display = 'flex';
+      elSuggestion.innerHTML = `<div onclick="ouvrirSuggestionVirement(${montantSuggere},'${curKeySuggestion}')" style="cursor:pointer;background:rgba(247,162,79,.12);border:2px solid var(--accent2);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:44px;animation:pulse-dette 1.8s ease-in-out infinite;">
+        <div style="font-size:10px;font-weight:800;color:var(--accent2);letter-spacing:.5px;">💡 SUGGESTION</div>
+        <div style="font-size:11px;font-weight:700;color:#fff;margin-top:2px;text-align:center;">Virer ${fmt(montantSuggere)} de l'épargne</div>
+      </div>`;
+    } else {
+      elSuggestion.style.display = 'none';
+      elSuggestion.innerHTML = '';
+    }
+  }
+
+  // Cadre ÉPARGNE INSUFFISANTE (à venir) — avertit seulement si la rupture est prévue dans les
+  // 3 prochaines périodes (~3 mois), pour ne pas alerter inutilement trop longtemps à l'avance.
+  const elEpargneInsuffisante = document.getElementById('rappelEpargneInsuffisanteBandeau');
+  if (elEpargneInsuffisante) {
+    const projection = calculerProjectionEpargne();
+    const pointRupture = projection.find(r => r.epuise);
+    const idxActuelEI = getCurrentPeriodeIndex();
+    const idxRuptureEI = pointRupture ? getPeriodeIndex(pointRupture.periode) : -1;
+    const dansLes3Mois = pointRupture && idxRuptureEI !== -1 && (idxRuptureEI - idxActuelEI) <= 3;
+    if (dansLes3Mois) {
+      elEpargneInsuffisante.style.display = 'flex';
+      elEpargneInsuffisante.innerHTML = `<div onclick="ouvrirEpargne();setTimeout(ouvrirProjectionEpargne,30);" style="cursor:pointer;background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:44px;">
+        <div style="font-size:10px;font-weight:800;color:var(--red);letter-spacing:.5px;">⚠️ ÉPARGNE INSUFFISANTE</div>
+        <div style="font-size:11px;font-weight:700;color:#fff;margin-top:2px;text-align:center;">Prévue en ${pointRupture.label} ${pointRupture.annee}</div>
+      </div>`;
+    } else {
+      elEpargneInsuffisante.style.display = 'none';
+      elEpargneInsuffisante.innerHTML = '';
+    }
+  }
+
+
+
+  // Cadre ÉPARGNE — reflète le solde tel qu'il était à la fin de la période sélectionnée
+  // (pas toujours le total d'aujourd'hui), pour rester historiquement exact.
   const elEpargne = document.getElementById('rappelEpargneBandeau');
   if (elEpargne) {
-    const soldeEpargne = getSoldeEpargne();
+    const keyAfficheEpargne = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
+    const soldeEpargne = keyAfficheEpargne ? getSoldeEpargneAPeriode(keyAfficheEpargne) : getSoldeEpargne();
     elEpargne.style.display = 'flex';
     elEpargne.innerHTML = `<div onclick="ouvrirEpargne()" style="cursor:pointer;background:rgba(62,207,142,.10);border:2px solid var(--green);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:130px;min-height:38px;">
       <div style="font-size:10px;font-weight:800;color:var(--green);letter-spacing:.5px;">💰 ÉPARGNE</div>
@@ -3174,7 +3333,7 @@ function ouvrirEpargne() {
       }).join('');
 
   overlay.innerHTML = `
-    <div class="modal" style="max-width:460px;">
+    <div class="modal" style="width:460px;max-width:95vw;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <h2 style="margin:0;">💰 Compte Épargne</h2>
         <span onclick="document.getElementById('modalEpargne').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
@@ -3213,6 +3372,7 @@ function ouvrirEpargne() {
       <h3 style="font-size:13px;margin-bottom:8px;">Historique</h3>
       <div style="max-height:220px;overflow-y:auto;">${historiqueHtml}</div>
       <div class="form-actions" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn" style="background:var(--accent2);color:#fff;" onclick="ouvrirProjectionEpargne()">📊 Voir la projection</button>
         <button class="btn btn-secondary" onclick="document.getElementById('modalEpargne').classList.remove('open')">Fermer</button>
       </div>
     </div>`;
@@ -3230,7 +3390,38 @@ function ajouterMouvementEpargne() {
   if (!date) { alert('Entre une date valide.'); return; }
   if (!state.epargne) state.epargne = { soldeDepart: 0, mouvements: [] };
   if (!state.epargne.mouvements) state.epargne.mouvements = [];
-  state.epargne.mouvements.push({ id: uid(), type, montant, desc, date });
+  const mouvementId = uid();
+  const mouvement = { id: mouvementId, type, montant, desc, date };
+  if (type === 'retrait') {
+    // Un retrait doit créditer le compte courant de façon visible et traçable : on crée une
+    // vraie entrée "Autre revenu" liée, plutôt qu'un crédit invisible calculé en coulisses.
+    const periodeKey = getPeriodeKeyPourDate(date);
+    if (periodeKey) {
+      const entreeId = uid();
+      if (!state.entrees[periodeKey]) state.entrees[periodeKey] = [];
+      state.entrees[periodeKey].push({
+        id: entreeId, type: 'autre', montant, desc: 'Retrait épargne' + (desc ? ' — ' + desc : ''),
+        date, rembourse: false, rembDesc: '', _linkedEpargneId: mouvementId
+      });
+      mouvement._linkedEntreeId = entreeId;
+      mouvement._linkedPeriode = periodeKey;
+    }
+  } else if (type === 'depot') {
+    // Symétrique : un dépôt doit débiter le compte courant de façon visible et traçable — une
+    // vraie dépense "Exceptionnel" liée, plutôt qu'une déduction invisible.
+    const periodeKey = getPeriodeKeyPourDate(date);
+    if (periodeKey) {
+      const entreeId = uid();
+      if (!state.entrees[periodeKey]) state.entrees[periodeKey] = [];
+      state.entrees[periodeKey].push({
+        id: entreeId, type: 'exceptionnel', montant, desc: 'Dépôt épargne' + (desc ? ' — ' + desc : ''),
+        date, rembourse: false, rembDesc: '', _linkedEpargneId: mouvementId
+      });
+      mouvement._linkedEntreeId = entreeId;
+      mouvement._linkedPeriode = periodeKey;
+    }
+  }
+  state.epargne.mouvements.push(mouvement);
   saveState();
   render();
   ouvrirEpargne();
@@ -3249,6 +3440,158 @@ function modifierSoldeDepartEpargne(val) {
   if (!state.epargne) state.epargne = { soldeDepart: 0, mouvements: [] };
   state.epargne.soldeDepart = montant;
   saveState();
+  render();
+}
+
+function ouvrirProjectionEpargne() {
+  const resultats = calculerProjectionEpargne();
+  const epargneDepart = getSoldeEpargne();
+
+  let lignesHtml = resultats.map(r => {
+    const couleurSolde = r.soldeApres < 0 ? 'var(--red)' : (r.montantPuise > 0 ? 'var(--yellow)' : 'var(--green)');
+    return `<div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px;">
+      <div style="font-size:14px;font-weight:800;color:var(--accent);margin-bottom:5px;">${r.label} ${r.annee}${r.epuise ? ' ⚠️' : ''}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;">
+        <div><span style="color:var(--muted);">Sans aide :</span> <b>${fmt(r.soldeSansAide)}</b></div>
+        <div><span style="color:var(--muted);">Puisé :</span> <b style="color:var(--accent2);">${r.montantPuise > 0 ? fmt(r.montantPuise) : '—'}</b></div>
+        <div><span style="color:var(--muted);">Après :</span> <b style="color:${couleurSolde};">${fmt(r.soldeApres)}</b></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;">Épargne restante : <b style="color:var(--text);">${fmt(r.epargneRestante)}</b></div>
+    </div>`;
+  }).join('');
+
+  const dernierResultat = resultats[resultats.length - 1];
+  let messageFinal = '';
+  if (dernierResultat && dernierResultat.epuise) {
+    messageFinal = `<p style="font-size:13px;color:var(--red);font-weight:700;margin-top:12px;">⚠️ L'épargne ne suffit plus à partir de ${dernierResultat.label} — le compte passerait sous 100$ malgré le dernier retrait possible.</p>`;
+  } else if (resultats.length > 0) {
+    messageFinal = `<p style="font-size:13px;color:var(--green);font-weight:700;margin-top:12px;">✅ L'épargne suffit à maintenir le compte à 100$ ou plus sur toute la période visible.</p>`;
+  } else {
+    messageFinal = `<p style="font-size:13px;color:var(--muted);margin-top:12px;">Aucune période future à projeter.</p>`;
+  }
+
+  let overlay = document.getElementById('modalProjectionEpargne');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modalProjectionEpargne';
+    overlay.className = 'modal-overlay';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div class="modal" style="width:560px;max-width:95vw;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">📊 Projection épargne</h2>
+        <span onclick="document.getElementById('modalProjectionEpargne').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:10px 0;">Simule un maintien du compte courant à au moins 100$ chaque période, en puisant dans l'épargne (${fmt(epargneDepart)} actuellement) selon les vrais soldes prévus.</p>
+      <div style="max-height:340px;overflow-y:auto;">${lignesHtml}</div>
+      ${messageFinal}
+      <div class="form-actions" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="document.getElementById('modalProjectionEpargne').classList.remove('open')">Fermer</button>
+      </div>
+    </div>`;
+  overlay.classList.add('open');
+  const modalInner = overlay.querySelector('.modal');
+  if (modalInner) makeDraggable(modalInner);
+}
+
+function ouvrirSuggestionVirement(montant, periodeKey) {
+  ouvrirEpargne();
+  setTimeout(() => {
+    const typeEl = document.getElementById('epargneType');
+    const montantEl = document.getElementById('epargneMontant');
+    const descEl = document.getElementById('epargneDesc');
+    const dateEl = document.getElementById('epargneDate');
+    if (typeEl) typeEl.value = 'retrait';
+    if (montantEl) montantEl.value = montant.toFixed(2);
+    if (descEl) descEl.value = 'Pour garder le compte positif';
+    if (dateEl && periodeKey) {
+      // Date par défaut : le 1er du 2e mois de la période (nourriture/perso déjà entamés,
+      // mais avant le métro du 1er du mois suivant) — laisse l'argent en épargne le plus longtemps possible.
+      const debutPeriode = getDateDebutPeriode(periodeKey);
+      if (debutPeriode) {
+        const dateDefaut = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 1);
+        const yyyy = dateDefaut.getFullYear();
+        const mm = String(dateDefaut.getMonth() + 1).padStart(2, '0');
+        const dd = String(dateDefaut.getDate()).padStart(2, '0');
+        dateEl.value = `${yyyy}-${mm}-${dd}`;
+      }
+    }
+  }, 30);
+}
+
+function ouvrirCorrectionBudget() {
+  const keyAffiche = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
+  const optionsHtml = PERIODES.map(p => `<option value="${p.key}" ${p.key===keyAffiche?'selected':''}>${p.label} ${p.annee}</option>`).join('');
+
+  let overlay = document.getElementById('modalCorrectionBudget');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modalCorrectionBudget';
+    overlay.className = 'modal-overlay';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:420px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">🔧 Corriger le budget d'une période</h2>
+        <span onclick="document.getElementById('modalCorrectionBudget').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:10px 0;">Remplace le budget de la période choisie (même passée), sans affecter les autres périodes. Laisser vide pour revenir au budget normal.</p>
+      <div class="form-row">
+        <label>Période</label>
+        <select id="corrBudgetPeriode" onchange="rafraichirCorrectionBudgetPlaceholder()">${optionsHtml}</select>
+      </div>
+      <div class="form-row">
+        <label>Budget Nourriture ($)</label>
+        <input type="number" id="corrBudgetNourriture" step="0.01" min="0" placeholder="">
+      </div>
+      <div class="form-row">
+        <label>Budget Perso ($)</label>
+        <input type="number" id="corrBudgetPerso" step="0.01" min="0" placeholder="">
+      </div>
+      <div class="form-actions" style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="reinitialiserCorrectionBudget()">↺ Revenir au budget normal</button>
+        <button class="btn btn-primary" onclick="enregistrerCorrectionBudget()">Enregistrer</button>
+      </div>
+    </div>`;
+  overlay.classList.add('open');
+  rafraichirCorrectionBudgetPlaceholder();
+}
+
+function rafraichirCorrectionBudgetPlaceholder() {
+  const key = document.getElementById('corrBudgetPeriode').value;
+  const override = state.budgetOverrides && state.budgetOverrides[key];
+  const inN = document.getElementById('corrBudgetNourriture');
+  const inP = document.getElementById('corrBudgetPerso');
+  inN.value = override && override.nourriture !== undefined ? override.nourriture : '';
+  inP.value = override && override.perso !== undefined ? override.perso : '';
+  inN.placeholder = 'Normal : ' + fmt(getBudgetHistoriquePourPeriode('nourriture', key));
+  inP.placeholder = 'Normal : ' + fmt(getBudgetHistoriquePourPeriode('perso', key));
+}
+
+function enregistrerCorrectionBudget() {
+  const key = document.getElementById('corrBudgetPeriode').value;
+  const n = document.getElementById('corrBudgetNourriture').value;
+  const p = document.getElementById('corrBudgetPerso').value;
+  if (!state.budgetOverrides) state.budgetOverrides = {};
+  if (n === '' && p === '') {
+    delete state.budgetOverrides[key];
+  } else {
+    state.budgetOverrides[key] = {};
+    if (n !== '') state.budgetOverrides[key].nourriture = parseFloat(n);
+    if (p !== '') state.budgetOverrides[key].perso = parseFloat(p);
+  }
+  saveState();
+  document.getElementById('modalCorrectionBudget').classList.remove('open');
+  render();
+}
+
+function reinitialiserCorrectionBudget() {
+  const key = document.getElementById('corrBudgetPeriode').value;
+  if (state.budgetOverrides) delete state.budgetOverrides[key];
+  saveState();
+  document.getElementById('modalCorrectionBudget').classList.remove('open');
   render();
 }
 
@@ -3578,10 +3921,14 @@ function ouvrirSaisieRappel(rappelId, periode, cat, desc) {
 function toggle2027() {
   const label = document.getElementById('pills2027label');
   const row = document.getElementById('pills2027row');
+  const labelReel = document.getElementById('pillsReel2027label');
+  const rowReel = document.getElementById('pillsReel2027row');
   const btn = document.getElementById('btn2027toggle');
   const open = label.style.display === 'none';
   label.style.display = open ? '' : 'none';
   row.style.display = open ? '' : 'none';
+  if (labelReel) labelReel.style.display = open ? '' : 'none';
+  if (rowReel) rowReel.style.display = open ? '' : 'none';
   const wrap = { style: { display: open ? 'block' : 'none' } }; // compat
   btn.textContent = open ? '▼ Masquer simulation 2027' : '▶ Afficher simulation 2027';
   btn.className = open ? 'btn-toggle-2027 open' : 'btn-toggle-2027';
@@ -3729,10 +4076,10 @@ function renderPills() {
       val -= entrees.filter(e => ['nourriture','perso','exceptionnel','autre_fixe'].includes(e.type) && !e.rembourse).reduce((a,e)=>a+e.montant,0);
       // Frais fixes manuels (logement + entrées saisies type électricité/assurance/gym/netflix/fido/bixi) déjà engagés à dateRef
       val -= getFraisFixesEngagesAvant(key, dateRef);
-      // Mouvements épargne déjà engagés à dateRef : dépôt sort du courant, retrait y rentre
-      const mouvementsEpargne = getEpargneMouvementsPeriode(key).filter(m => m.date <= dateRef);
-      val -= mouvementsEpargne.filter(m => m.type === 'depot').reduce((a,m)=>a+m.montant,0);
-      val += mouvementsEpargne.filter(m => m.type === 'retrait').reduce((a,m)=>a+m.montant,0);
+      // Mouvements épargne sans entrée liée (créés avant l'ajout de la traçabilité) — rétrocompatibilité
+      const mvEpargneLegacy = getEpargneMouvementsPeriode(key).filter(m => m.date <= dateRef && !m._linkedEntreeId);
+      val -= mvEpargneLegacy.filter(m => m.type === 'depot').reduce((a,m)=>a+m.montant,0);
+      val += mvEpargneLegacy.filter(m => m.type === 'retrait').reduce((a,m)=>a+m.montant,0);
       return val;
     }
     return s.fin; // futur : projection
@@ -3754,7 +4101,7 @@ function renderPills() {
   const periodes2026 = PERIODES.filter(p => p.annee === 2026 || p.key === '2026-01');
   const periodes2027 = PERIODES.filter(p => p.annee === 2027 && p.key !== '2026-01');
 
-  let row0='', row1='', row2='', row3='', row2027='';
+  let row0='', row1='', row2='', row3='', row2027='', rowReel2027='';
 
   periodes2026.forEach((p) => {
     const idx = getPeriodeIndex(p.key);
@@ -3841,7 +4188,11 @@ function renderPills() {
     // mécanisme périmé qui lisait une copie obsolète du fichier 2027 dans le localStorage.
     const finPrev = soldesPrev[p.key] ?? 0;
     row2027 += makePill(p, finPrev, false, isFuture, isSelected, false);
+    const finReel2027 = soldes[p.key]?.fin ?? 0;
+    rowReel2027 += makePill(p, finReel2027, false, isFuture, isSelected, false);
   });
+
+  document.getElementById('pillsReel2027row').innerHTML = rowReel2027;
 
   document.getElementById('pills2026row0').innerHTML = row0;
   document.getElementById('pills2026row1').innerHTML = row1;

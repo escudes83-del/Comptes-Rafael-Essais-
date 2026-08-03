@@ -2401,18 +2401,7 @@ function getCurrentPeriodeIndex() {
 
   const searchKey = `${periodeAnnee}-${String(periodeMois).padStart(2,'0')}`;
   const idx = PERIODES.findIndex(p => p.key === searchKey);
-  if (idx >= 0) return idx;
-  // Si la vraie date d'aujourd'hui n'existe pas dans les périodes de ce fichier (ex: ce fichier
-  // ne couvre que 2027 alors qu'on est encore en 2026), NE PAS retomber sur la période 0 par
-  // défaut — ça la ferait traiter comme "en cours" au lieu de "future". On renvoie -1 (aucune
-  // période courante ici), ce qui fait que TOUTES les périodes du fichier sont bien vues comme
-  // futures (idx > -1) et aucune comme passée (idx < -1 jamais vrai).
-  const premierDebut = getDateDebutPeriode(PERIODES[0]?.key);
-  const dernierDebut = getDateDebutPeriode(PERIODES[PERIODES.length-1]?.key);
-  const aujourdhuiGCI = new Date(y, m - 1, d);
-  if (premierDebut && aujourdhuiGCI < premierDebut) return -1; // tout le fichier est dans le futur
-  if (dernierDebut && aujourdhuiGCI > dernierDebut) return PERIODES.length; // tout le fichier est dans le passé
-  return 0;
+  return idx >= 0 ? idx : 0;
 }
 
 function isPassé(key) {
@@ -4005,6 +3994,16 @@ function renderPills() {
   const curIdx = getCurrentPeriodeIndex();
   const dateRef = getDateRef();
 
+  // Correction locale (juste pour l'affichage des pilules) : si la vraie date d'aujourd'hui est
+  // avant TOUTES les périodes de ce fichier (ex: ce fichier ne couvre que 2027, alors qu'on est
+  // encore en 2026), la fonction globale retombe par défaut sur l'index 0 — ce qui ferait
+  // afficher la toute première période comme "en cours" plutôt que "future". On corrige ça
+  // seulement ici (sans toucher à getCurrentPeriodeIndex, utilisée ailleurs avec des soustractions
+  // d'index qui ne supportent pas -1).
+  const premierDebutRP = getDateDebutPeriode(PERIODES[0]?.key);
+  const aujourdhuiRP = new Date(dateRef);
+  const curIdxAffiche = (premierDebutRP && aujourdhuiRP < premierDebutRP) ? -1 : curIdx;
+
   // Calculer solde "jour J" pour chaque période :
   // - périodes passées : solde fin réel
   // - période courante : solde de début + transactions saisies jusqu'à dateRef
@@ -4012,8 +4011,8 @@ function renderPills() {
 
   function soldeJourJ(key, idx) {
     const s = soldes[key];
-    if (idx < curIdx) return s.fin; // passé : fin réelle
-    if (idx === curIdx) {
+    if (idx < curIdxAffiche) return s.fin; // passé : fin réelle
+    if (idx === curIdxAffiche) {
       // en cours : début + ce qui est saisi jusqu'à dateRef
       if (state.soldeRef !== null) return state.soldeRef;
       let val = s.debut;
@@ -4035,7 +4034,7 @@ function renderPills() {
   function hasAlerte(key, idx) {
     const s = soldes[key];
     if (s.fin < 0) return true;
-    if (idx === curIdx) {
+    if (idx === curIdxAffiche) {
       const nourr = getSommeEntreesAll(key,'nourriture');
       const perso = getSommeEntreesAll(key,'perso');
       if (nourr > getBudgetNourriturePourPeriode(key)) return true;
@@ -4051,8 +4050,8 @@ function renderPills() {
 
   periodes2026.forEach((p) => {
     const idx = getPeriodeIndex(p.key);
-    const isCur = idx === curIdx;
-    const isFuture = idx > curIdx;
+    const isCur = idx === curIdxAffiche;
+    const isFuture = idx > curIdxAffiche;
     const isSelected = selectedMois === p.key;
     const joJ = soldeJourJ(p.key, idx);
     const finPrev = soldesPrev[p.key] ?? 0;
@@ -4127,7 +4126,7 @@ function renderPills() {
 
   periodes2027.forEach((p) => {
     const idx = getPeriodeIndex(p.key);
-    const isFuture = idx > curIdx;
+    const isFuture = idx > curIdxAffiche;
     const isSelected = selectedMois === p.key;
     const finPrev = soldesPrev[p.key] ?? 0;
     const alert = hasAlerte(p.key, idx);

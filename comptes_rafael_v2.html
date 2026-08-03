@@ -1242,6 +1242,17 @@ input, textarea, select { cursor: text; }
         <div class="tl-pills" id="pills2027row" style="gap:6px;flex-wrap:nowrap;display:none;"></div>
         <div id="pillsDispo2027label" class="tl-label" style="display:none;border-color:rgba(62,207,142,.3);background:rgba(62,207,142,.05);"><b style="color:var(--green);">dispo</b><span style="font-size:8px;color:var(--muted);">2027</span></div>
         <div class="tl-pills" id="pillsDispo2027row" style="gap:6px;flex-wrap:nowrap;display:none;"></div>
+        <!-- Bouton toggle 2028 : visible seulement quand 2027 est déjà affiché -->
+        <div id="btn2028wrap" style="display:none;grid-column:1/-1;padding:3px 0;">
+          <button class="btn-toggle-2027" id="btn2028toggle" onclick="toggle2028()" style="font-size:10px;padding:3px 10px;opacity:0.7;">▶ Afficher 2028</button>
+        </div>
+        <!-- Rangée 2028 dans le même grid pour alignement parfait -->
+        <div id="pillsReel2028label" class="tl-label" style="display:none;border-color:rgba(62,207,142,.3);background:rgba(62,207,142,.05);"><b style="color:var(--green);">réel</b><span style="font-size:8px;color:var(--muted);">2028</span></div>
+        <div class="tl-pills" id="pillsReel2028row" style="gap:6px;flex-wrap:nowrap;display:none;"></div>
+        <div id="pills2028label" class="tl-label purple" style="display:none;"><b>prévi.</b><span style="font-size:8px;color:var(--muted);">2028</span></div>
+        <div class="tl-pills" id="pills2028row" style="gap:6px;flex-wrap:nowrap;display:none;"></div>
+        <div id="pillsDispo2028label" class="tl-label" style="display:none;border-color:rgba(62,207,142,.3);background:rgba(62,207,142,.05);"><b style="color:var(--green);">dispo</b><span style="font-size:8px;color:var(--muted);">2028</span></div>
+        <div class="tl-pills" id="pillsDispo2028row" style="gap:6px;flex-wrap:nowrap;display:none;"></div>
       </div>
     </div>
   </div>
@@ -1687,6 +1698,18 @@ const PERIODES = [
   {key:'2027-10', label:'16/sep→15/oct', annee:2027, moisDebut:9,  anneeDebut:2027},
   {key:'2027-11', label:'16/oct→15/nov', annee:2027, moisDebut:10, anneeDebut:2027},
   {key:'2027-12', label:'16/nov→15/déc', annee:2027, moisDebut:11, anneeDebut:2027},
+  {key:'2028-01', label:'16/déc→15/jan', annee:2028, moisDebut:12, anneeDebut:2027},
+  {key:'2028-02', label:'16/jan→15/fév', annee:2028, moisDebut:1,  anneeDebut:2028},
+  {key:'2028-03', label:'16/fév→15/mar', annee:2028, moisDebut:2,  anneeDebut:2028},
+  {key:'2028-04', label:'16/mar→15/avr', annee:2028, moisDebut:3,  anneeDebut:2028},
+  {key:'2028-05', label:'16/avr→15/mai', annee:2028, moisDebut:4,  anneeDebut:2028},
+  {key:'2028-06', label:'16/mai→15/jun', annee:2028, moisDebut:5,  anneeDebut:2028},
+  {key:'2028-07', label:'16/jun→15/jul', annee:2028, moisDebut:6,  anneeDebut:2028},
+  {key:'2028-08', label:'16/jul→15/aoû', annee:2028, moisDebut:7,  anneeDebut:2028},
+  {key:'2028-09', label:'16/aoû→15/sep', annee:2028, moisDebut:8,  anneeDebut:2028},
+  {key:'2028-10', label:'16/sep→15/oct', annee:2028, moisDebut:9,  anneeDebut:2028},
+  {key:'2028-11', label:'16/oct→15/nov', annee:2028, moisDebut:10, anneeDebut:2028},
+  {key:'2028-12', label:'16/nov→15/déc', annee:2028, moisDebut:11, anneeDebut:2028},
 ];
 
 // Frais fixes par défaut (modifiables)
@@ -3868,6 +3891,7 @@ function toggle2027() {
   const rowReel = document.getElementById('pillsReel2027row');
   const labelDispo = document.getElementById('pillsDispo2027label');
   const rowDispo = document.getElementById('pillsDispo2027row');
+  const btn2028wrap = document.getElementById('btn2028wrap');
   const btn = document.getElementById('btn2027toggle');
   const open = label.style.display === 'none';
   label.style.display = open ? '' : 'none';
@@ -3876,9 +3900,38 @@ function toggle2027() {
   if (rowReel) rowReel.style.display = open ? '' : 'none';
   if (labelDispo) labelDispo.style.display = open ? '' : 'none';
   if (rowDispo) rowDispo.style.display = open ? '' : 'none';
+  // Le bouton "Afficher 2028" n'apparaît que quand 2027 est déjà affiché
+  if (btn2028wrap) btn2028wrap.style.display = open ? '' : 'none';
+  if (!open) {
+    // Si on referme 2027, on referme aussi 2028 avec (n'a plus de sens visible sans 2027)
+    ['pillsReel2028label','pillsReel2028row','pills2028label','pills2028row','pillsDispo2028label','pillsDispo2028row'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    const btn28 = document.getElementById('btn2028toggle');
+    if (btn28) btn28.textContent = '▶ Afficher 2028';
+  }
   const wrap = { style: { display: open ? 'block' : 'none' } }; // compat
   btn.textContent = open ? '▼ Masquer 2027' : '▶ Afficher 2027';
   btn.className = open ? 'btn-toggle-2027 open' : 'btn-toggle-2027';
+}
+
+function toggle2028() {
+  const label = document.getElementById('pills2028label');
+  const row = document.getElementById('pills2028row');
+  const labelReel = document.getElementById('pillsReel2028label');
+  const rowReel = document.getElementById('pillsReel2028row');
+  const labelDispo = document.getElementById('pillsDispo2028label');
+  const rowDispo = document.getElementById('pillsDispo2028row');
+  const btn = document.getElementById('btn2028toggle');
+  const open = label.style.display === 'none';
+  label.style.display = open ? '' : 'none';
+  row.style.display = open ? '' : 'none';
+  if (labelReel) labelReel.style.display = open ? '' : 'none';
+  if (rowReel) rowReel.style.display = open ? '' : 'none';
+  if (labelDispo) labelDispo.style.display = open ? '' : 'none';
+  if (rowDispo) rowDispo.style.display = open ? '' : 'none';
+  btn.textContent = open ? '▼ Masquer 2028' : '▶ Afficher 2028';
 }
 
 function toggleMasquer2026() {
@@ -4161,6 +4214,36 @@ function renderPills() {
 
   document.getElementById('pillsReel2027row').innerHTML = rowReel2027;
   document.getElementById('pillsDispo2027row').innerHTML = rowDispo2027;
+
+  // 2028 — même principe que 2027, une année plus loin
+  const periodes2028 = PERIODES.filter(p => p.annee === 2028);
+  let row2028='', rowReel2028='', rowDispo2028='';
+
+  periodes2028.forEach((p) => {
+    const idx = getPeriodeIndex(p.key);
+    const isFuture = idx > curIdx;
+    const isSelected = selectedMois === p.key;
+    const finPrev2028 = soldesPrev[p.key] ?? 0;
+    row2028 += makePill(p, finPrev2028, false, isFuture, isSelected, false);
+    const finReel2028 = soldes[p.key]?.fin ?? 0;
+    rowReel2028 += makePill(p, finReel2028, false, isFuture, isSelected, false);
+    const nourritureDepensee2028 = getSommeEntreesAll(p.key, 'nourriture');
+    const persoDepense2028 = getSommeEntreesAll(p.key, 'perso');
+    const resteNourr2028 = getBudgetNourriturePourPeriode(p.key) - nourritureDepensee2028;
+    const restePerso2028 = getBudgetPersoPourPeriode(p.key) - persoDepense2028;
+    const portefeuilleEngage2028 = (state.portefeuilleDette || []).filter(v => v.periode === p.key).reduce((s,v) => s+v.montant, 0);
+    const dispo2028 = resteNourr2028 + restePerso2028 - portefeuilleEngage2028;
+    let clsDispo2028 = 'pill row2style' + (isSelected?' selected':isFuture?' future':' past');
+    if (dispo2028 <= 0) clsDispo2028 += ' neg';
+    else if (dispo2028 < 250) clsDispo2028 += ' warn';
+    rowDispo2028 += `<div class="${clsDispo2028}" onclick="selectMois('${p.key}')">
+      <div class="pill-solde" style="color:#fff;">${fmt(dispo2028)}</div>
+    </div>`;
+  });
+
+  document.getElementById('pills2028row').innerHTML = row2028;
+  document.getElementById('pillsReel2028row').innerHTML = rowReel2028;
+  document.getElementById('pillsDispo2028row').innerHTML = rowDispo2028;
 
   document.getElementById('pills2026row0').innerHTML = row0;
   document.getElementById('pills2026row1').innerHTML = row1;

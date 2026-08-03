@@ -6397,12 +6397,16 @@ function v2_getBudgetHistoriquePourPeriode(type, periodeKey) {
 }
 
 function v2_getBudgetNourriturePourPeriode(periodeKey) {
+  const override = d.budgetOverrides && d.budgetOverrides[periodeKey] && d.budgetOverrides[periodeKey].nourriture;
+  if (override !== undefined && override !== null) return override;
   const base = v2_getBudgetHistoriquePourPeriode('nourriture', periodeKey);
   const boost = (d.reliquatsAppliques && d.reliquatsAppliques[periodeKey] && d.reliquatsAppliques[periodeKey].nourriture) || 0;
   return base + boost;
 }
 
 function v2_getBudgetPersoPourPeriode(periodeKey) {
+  const override = d.budgetOverrides && d.budgetOverrides[periodeKey] && d.budgetOverrides[periodeKey].perso;
+  if (override !== undefined && override !== null) return override;
   const base = v2_getBudgetHistoriquePourPeriode('perso', periodeKey);
   const boost = (d.reliquatsAppliques && d.reliquatsAppliques[periodeKey] && d.reliquatsAppliques[periodeKey].perso) || 0;
   return base + boost;
@@ -6418,7 +6422,7 @@ function v2_getAutresPeriode(key) {
 
 function v2_getCurrentPeriodeIndex() {
   // Parser la date sans problème de fuseau horaire
-  const dr = getDateRef(); // format YYYY-MM-DD
+  const dr = v2_getDateRef(); // format YYYY-MM-DD
   const parts = dr.split('-');
   const y = parseInt(parts[0]);
   const m = parseInt(parts[1]);
@@ -6445,6 +6449,11 @@ function v2_getCurrentPeriodeIndex() {
   return idx >= 0 ? idx : 0;
 }
 
+function v2_getDateRef() {
+  // Retourne la date de référence sous forme YYYY-MM-DD
+  return d.dateRef || new Date().toISOString().slice(0,10);
+}
+
 function v2_calculerSoldes() {
   let solde = d.soldeDepart;
   const soldes = {};
@@ -6452,8 +6461,11 @@ function v2_calculerSoldes() {
   for (const p of PERIODES_V2) {
     const k = p.key;
     const fixes = v2_getFixesTotauxPeriode(k);
-    // Budget par défaut seulement pour les périodes FUTURES (pas en cours ni passées)
-    const isFuturePeriode = v2_getPeriodeIndex(k) > v2_getCurrentPeriodeIndex();
+    // Budget par défaut seulement pour les périodes FUTURES (pas en cours ni passées).
+    // Comparaison directe par date (pas par index) — plus robuste.
+    const debutPeriodeK = v2_getDateDebutPeriode(k);
+    const aujourdhuiCS = new Date(v2_getDateRef());
+    const isFuturePeriode = debutPeriodeK ? debutPeriodeK > aujourdhuiCS : (v2_getPeriodeIndex(k) > v2_getCurrentPeriodeIndex());
     const nourriture = v2_getSommeEntreesAll(k, 'nourriture') ||
       (isFuturePeriode ? v2_getBudgetNourriturePourPeriode(k) : 0);
     const perso = v2_getSommeEntreesAll(k, 'perso') ||
@@ -6461,15 +6473,18 @@ function v2_calculerSoldes() {
     const exceptionnel = v2_getSommeEntreesAll(k, 'exceptionnel');
     const salaire = v2_getSalairePeriode(k);
     const autre = v2_getAutresPeriode(k);
-    // Dépôt vers l'épargne = sortie du compte courant ; retrait de l'épargne = rentrée
-    const depotsEpargne = v2_getDepotsPeriode(k);
-    const retraitsEpargne = v2_getRetraitsPeriode(k);
+    // Dépôts/retraits épargne créés APRÈS l'ajout de la traçabilité ont une entrée liée
+    // (Exceptionnel / Autre revenu) déjà comptée ci-dessus. Les mouvements plus anciens
+    // (créés avant, sans entrée liée) sont comptés ici pour rester rétrocompatibles.
+    const mouvementsEpargneK = v2_getEpargneMouvementsPeriode(k);
+    const depotsNonLies = mouvementsEpargneK.filter(m => m.type === 'depot' && !m._linkedEntreeId).reduce((s,m)=>s+m.montant,0);
+    const retraitsNonLies = mouvementsEpargneK.filter(m => m.type === 'retrait' && !m._linkedEntreeId).reduce((s,m)=>s+m.montant,0);
 
     // AEC : salaire estimé si pas saisi
     const salaireAEC = 0;
 
-    const revenus = salaire + autre + salaireAEC + retraitsEpargne;
-    const depenses = fixes.total + nourriture + perso + exceptionnel + depotsEpargne;
+    const revenus = salaire + autre + salaireAEC + retraitsNonLies;
+    const depenses = fixes.total + nourriture + perso + exceptionnel + depotsNonLies;
 
     soldes[k] = {
       debut: solde,
@@ -6542,6 +6557,7 @@ function v2_getRetraitsPeriode(key) {
 
   return { calculerSoldes: v2_calculerSoldes, calculerPrevisionnel: v2_calculerPrevisionnel, PERIODES_V2: PERIODES_V2 };
 }
+
 
 function v2_getEntreesPeriode(key) {
   return (d.entrees[key] || []);

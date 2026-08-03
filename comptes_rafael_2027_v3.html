@@ -2330,8 +2330,13 @@ function calculerSoldes() {
   for (const p of PERIODES) {
     const k = p.key;
     const fixes = getFixesTotauxPeriode(k);
-    // Budget par défaut seulement pour les périodes FUTURES (pas en cours ni passées)
-    const isFuturePeriode = getPeriodeIndex(k) > getCurrentPeriodeIndex();
+    // Budget par défaut seulement pour les périodes FUTURES (pas en cours ni passées).
+    // Comparaison directe par date (pas par index) — plus robuste : dans un fichier qui ne
+    // couvre qu'une année future (ex: 2027 alors qu'on est en 2026), l'index "courant" peut
+    // mal se calculer, alors qu'une comparaison de dates reste toujours correcte.
+    const debutPeriodeK = getDateDebutPeriode(k);
+    const aujourdhuiCS = new Date(getDateRef());
+    const isFuturePeriode = debutPeriodeK ? debutPeriodeK > aujourdhuiCS : (getPeriodeIndex(k) > getCurrentPeriodeIndex());
     const nourriture = getSommeEntreesAll(k, 'nourriture') ||
       (isFuturePeriode ? getBudgetNourriturePourPeriode(k) : 0);
     const perso = getSommeEntreesAll(k, 'perso') ||

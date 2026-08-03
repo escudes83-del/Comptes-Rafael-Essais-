@@ -2432,7 +2432,16 @@ function getCurrentPeriodeIndex() {
 
   const searchKey = `${periodeAnnee}-${String(periodeMois).padStart(2,'0')}`;
   const idx = PERIODES.findIndex(p => p.key === searchKey);
-  return idx >= 0 ? idx : 0;
+  if (idx >= 0) return idx;
+  // Si la vraie date d'aujourd'hui n'existe pas dans les périodes de ce fichier (ex: ce fichier
+  // ne couvre que 2027 alors qu'on est encore en 2026), NE PAS retomber sur la période 0 par
+  // défaut — ça la ferait traiter comme "en cours" au lieu de "future".
+  const premierDebut = getDateDebutPeriode(PERIODES[0]?.key);
+  const dernierDebut = getDateDebutPeriode(PERIODES[PERIODES.length-1]?.key);
+  const aujourdhuiGCI = new Date(y, m - 1, d);
+  if (premierDebut && aujourdhuiGCI < premierDebut) return -1;
+  if (dernierDebut && aujourdhuiGCI > dernierDebut) return PERIODES.length;
+  return 0;
 }
 
 function isPassé(key) {

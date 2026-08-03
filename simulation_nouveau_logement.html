@@ -2368,8 +2368,11 @@ function calculerSoldes() {
   for (const p of PERIODES) {
     const k = p.key;
     const fixes = getFixesTotauxPeriode(k);
-    // Budget par défaut seulement pour les périodes FUTURES (pas en cours ni passées)
-    const isFuturePeriode = getPeriodeIndex(k) > getCurrentPeriodeIndex();
+    // Budget par défaut seulement pour les périodes FUTURES (pas en cours ni passées).
+    // Comparaison directe par date (pas par index) — plus robuste.
+    const debutPeriodeK = getDateDebutPeriode(k);
+    const aujourdhuiCS = new Date(getDateRef());
+    const isFuturePeriode = debutPeriodeK ? debutPeriodeK > aujourdhuiCS : (getPeriodeIndex(k) > getCurrentPeriodeIndex());
     const nourriture = getSommeEntreesAll(k, 'nourriture') ||
       (isFuturePeriode ? getBudgetNourriturePourPeriode(k) : 0);
     const perso = getSommeEntreesAll(k, 'perso') ||

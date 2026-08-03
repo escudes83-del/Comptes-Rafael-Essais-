@@ -1235,6 +1235,8 @@ input, textarea, select { cursor: text; }
           <button class="btn-toggle-2027" id="btn2027toggle" onclick="toggle2027()" style="font-size:10px;padding:3px 10px;opacity:0.7;">▶ Afficher simulation 2027</button>
         </div>
         <!-- Rangée 2027 dans le même grid pour alignement parfait -->
+        <div id="pillsReel2027label" class="tl-label" style="display:none;border-color:rgba(62,207,142,.3);background:rgba(62,207,142,.05);"><b style="color:var(--green);">réel</b><span style="font-size:8px;color:var(--muted);">2027</span></div>
+        <div class="tl-pills" id="pillsReel2027row" style="gap:6px;flex-wrap:nowrap;display:none;"></div>
         <div id="pills2027label" class="tl-label purple" style="display:none;"><b>simu.</b>fin pér.</div>
         <div class="tl-pills" id="pills2027row" style="gap:6px;flex-wrap:nowrap;display:none;"></div>
       </div>
@@ -3856,10 +3858,14 @@ function supprimerRappelPersonnalise(id) {
 function toggle2027() {
   const label = document.getElementById('pills2027label');
   const row = document.getElementById('pills2027row');
+  const labelReel = document.getElementById('pillsReel2027label');
+  const rowReel = document.getElementById('pillsReel2027row');
   const btn = document.getElementById('btn2027toggle');
   const open = label.style.display === 'none';
   label.style.display = open ? '' : 'none';
   row.style.display = open ? '' : 'none';
+  if (labelReel) labelReel.style.display = open ? '' : 'none';
+  if (rowReel) rowReel.style.display = open ? '' : 'none';
   const wrap = { style: { display: open ? 'block' : 'none' } }; // compat
   btn.textContent = open ? '▼ Masquer simulation 2027' : '▶ Afficher simulation 2027';
   btn.className = open ? 'btn-toggle-2027 open' : 'btn-toggle-2027';
@@ -4024,7 +4030,7 @@ function renderPills() {
   const periodes2026 = PERIODES.filter(p => p.annee === 2026 || p.key === '2026-01');
   const periodes2027 = PERIODES.filter(p => p.annee === 2027 && p.key !== '2026-01');
 
-  let row0='', row1='', row2='', row3='', row2027='';
+  let row0='', row1='', row2='', row3='', row2027='', rowReel2027='';
 
   periodes2026.forEach((p) => {
     const idx = getPeriodeIndex(p.key);
@@ -4111,7 +4117,13 @@ function renderPills() {
     // mécanisme périmé qui lisait une copie obsolète du fichier 2027 dans le localStorage.
     const finPrev = soldesPrev[p.key] ?? 0;
     row2027 += makePill(p, finPrev, false, isFuture, isSelected, false);
+    // Vraie ligne "réel 2027" — mêmes vraies données que la ligne réel du haut, juste
+    // affichée séparément puisque la ligne principale ne montre que 2026.
+    const finReel2027 = soldes[p.key]?.fin ?? 0;
+    rowReel2027 += makePill(p, finReel2027, false, isFuture, isSelected, false);
   });
+
+  document.getElementById('pillsReel2027row').innerHTML = rowReel2027;
 
   document.getElementById('pills2026row0').innerHTML = row0;
   document.getElementById('pills2026row1').innerHTML = row1;

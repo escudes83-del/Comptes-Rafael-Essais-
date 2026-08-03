@@ -3935,11 +3935,13 @@ function toggle2028() {
 }
 
 function toggleMasquer2026() {
-  const ids2026 = ['pills2026moisLabel','pills2026row0','pills2026reelLabel','pills2026row1',
+  // La ligne "mois" (déc/jan, jan/fév, ...) sert de repère pour toutes les années — colonnes
+  // alignées, elle reste toujours visible même quand on masque les valeurs 2026.
+  const ids2026 = ['pills2026reelLabel','pills2026row1',
                    'pills2026previLabel','pills2026row2','pills2026dispoLabel','pills2026row3'];
   const btn = document.getElementById('btnMasquer2026toggle');
-  const premier = document.getElementById('pills2026moisLabel');
-  const masque = premier.style.display !== 'none';
+  const premierValeur = document.getElementById('pills2026reelLabel');
+  const masque = premierValeur.style.display !== 'none';
   ids2026.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = masque ? 'none' : '';

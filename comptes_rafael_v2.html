@@ -4884,7 +4884,7 @@ function renderVueMois(key) {
   const dr = getDatePourPeriode(key);
 
   // Header
-  document.getElementById('vmTitre').textContent = p.label;
+  document.getElementById('vmTitre').textContent = p.label + ' ' + p.annee;
   document.getElementById('vmDebut').textContent = fmt(s.debut);
   document.getElementById('vmDebut').className = 'vm-solde-val ' + colorClass(s.debut);
   document.getElementById('vmRevenus').textContent = '+' + fmt(s.revenus);

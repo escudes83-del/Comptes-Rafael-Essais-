@@ -1349,6 +1349,21 @@ input, textarea, select { cursor: text; }
           <button onclick="toggleDetteCalendrier()" id="btnDetteCalBtn"
             style="background:transparent;border:1px solid rgba(247,217,79,.4);border-radius:5px;
                    color:var(--yellow);font-size:11px;padding:5px 10px;cursor:pointer;">▶ Voir détail</button>
+          <button onclick="annulerDette()" id="btnAnnulerDette"
+            style="background:transparent;border:1px solid rgba(242,92,92,.4);border-radius:5px;
+                   color:var(--red);font-size:11px;padding:5px 10px;cursor:pointer;">🚫 Annuler la dette</button>
+        </div>
+        <!-- Bandeau affiché uniquement quand la dette est annulée -->
+        <div id="detteAnnuleeBanner" style="display:none;margin-top:8px;padding:8px 12px;
+             background:rgba(62,207,142,.08);border:1px solid rgba(62,207,142,.3);border-radius:6px;
+             align-items:center;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:180px;">
+            <div style="font-size:12px;font-weight:700;color:var(--green);">✅ Dette annulée</div>
+            <div id="detteAnnuleeDetail" style="font-size:11px;color:var(--muted);margin-top:2px;"></div>
+          </div>
+          <button onclick="retablirDette()"
+            style="background:transparent;border:1px solid rgba(247,217,79,.4);border-radius:5px;
+                   color:var(--yellow);font-size:11px;padding:5px 10px;cursor:pointer;">↩ Rétablir la dette</button>
         </div>
         <div id="dettePeriodesRow" style="display:none;margin-top:8px;
              border-top:1px solid rgba(247,217,79,.2);padding-top:8px;">
@@ -1774,6 +1789,7 @@ function defaultState() {
     loyersPeriodes: {}, // override loyer par période (legacy)
     loyerEntrees: {}, // entrées loyer par période [{id,montant,desc,date}]
     dernierExtra: null,
+    detteAnnulee: null, // {date, motif} — dette annulee par le proprietaire (aucun mouvement d'argent)
     portefeuilleDette: [], // [{id, montant, date, periode}]
     detteIRCC: 2000, // prêt argent reçu de Pilou en juin 2026, à rembourser éventuellement
     detteLoyerLogement: 6080, // prêt de PY pour le prépaiement du logement (oct 2026 -> jun/jul 2027)
@@ -1797,6 +1813,7 @@ function loadState() {
     if (raw) {
       const s = JSON.parse(raw);
       if (s.detteIRCC === undefined) s.detteIRCC = 2000;
+      if (s.detteAnnulee === undefined) s.detteAnnulee = null;
       if (s.detteLoyerLogement === undefined) s.detteLoyerLogement = 6080;
       // Firebase supprime les null — on les restitue
       if (s.soldeRef === undefined) s.soldeRef = null;
@@ -2101,6 +2118,9 @@ function getDetteRestante() {
 }
 
 function getDetteAuMois(targetKey) {
+  // Dette annulee par le proprietaire : plus rien a devoir, quelle que soit la periode.
+  // Purement declaratif — aucune ecriture comptable n'est creee (le solde du compte ne bouge pas).
+  if (state.detteAnnulee) return 0;
   if (!targetKey) return DETTE_INITIALE;
   const cal = getDetteCalendrier();
   // Partir de 1700, déduire le 200 de juin automatiquement
@@ -4396,7 +4416,33 @@ function renderDette() {
   const elBloc = document.getElementById('detteBlockPerm');
   // Mettre à jour la bulle étiquette
   if (elM) elM.textContent = fmt(restant);
-  if (elBloc) elBloc.style.display = restant <= 0 ? 'none' : '';
+
+  // --- Etat "dette annulee" ---
+  const annulee = !!state.detteAnnulee;
+  const banner = document.getElementById('detteAnnuleeBanner');
+  const btnAnnul = document.getElementById('btnAnnulerDette');
+  const btnCal = document.getElementById('btnDetteCalBtn');
+  const inputExtra = document.getElementById('dette_perm_input');
+  if (banner) {
+    banner.style.display = annulee ? 'flex' : 'none';
+    const det = document.getElementById('detteAnnuleeDetail');
+    if (det && annulee) {
+      const d = state.detteAnnulee.date || '';
+      const m = state.detteAnnulee.motif || '';
+      det.textContent = `Annulée le ${d}${m ? ' — ' + m : ''} · aucun mouvement d'argent enregistré`;
+    }
+  }
+  if (btnAnnul) btnAnnul.style.display = annulee ? 'none' : '';
+  if (btnCal) btnCal.style.display = annulee ? 'none' : '';
+  if (inputExtra) inputExtra.parentElement.style.display = annulee ? 'none' : '';
+  if (annulee) {
+    // Fermer le detail s'il etait ouvert
+    const pr = document.getElementById('dettePeriodesRow');
+    if (pr) pr.style.display = 'none';
+  }
+  // Le bloc reste visible si la dette est annulee (pour pouvoir la retablir),
+  // sinon il disparait une fois la dette entierement remboursee.
+  if (elBloc) elBloc.style.display = (restant <= 0 && !annulee) ? 'none' : '';
   // Rendre les pills dette
   // Rendre les pills remboursement dette
   // Met à jour la table du modal détail
@@ -4419,6 +4465,31 @@ function renderDette() {
   }
   html += '</table>';
   document.getElementById('detteDetailTable').innerHTML = html;
+}
+
+function annulerDette() {
+  const restant = getDetteRestante();
+  const motif = prompt(
+    `Annuler définitivement la dette propriétaire de ${fmt(restant)} ?\n\n` +
+    `⚠️ Aucun mouvement d'argent ne sera enregistré : le solde du compte et l'épargne ne bougent pas.\n` +
+    `C'est une annulation de la créance, pas un remboursement.\n\n` +
+    `Motif (ex : compensée par le prépaiement du logement) :`,
+    'Compensée par le prépaiement du logement'
+  );
+  if (motif === null) return; // Annuler
+  state.detteAnnulee = { date: getDateRef(), motif: (motif || '').trim(), montantAuMomentDeLAnnulation: restant };
+  saveState();
+  render();
+  renderDette();
+}
+
+function retablirDette() {
+  if (!state.detteAnnulee) return;
+  if (!confirm('Rétablir la dette propriétaire ?\n\nLe montant restant et l\'historique des remboursements seront restaurés tels quels.')) return;
+  state.detteAnnulee = null;
+  saveState();
+  render();
+  renderDette();
 }
 
 function renderAlertes() {

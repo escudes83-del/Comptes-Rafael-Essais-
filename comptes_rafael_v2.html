@@ -4269,15 +4269,9 @@ function getDatePourPeriode(key) {
   }
 
   if (pIdx === curIdx) {
-    // Période courante :
-    // - si on est entre le 16 et le 31 → 16 du mois (début de période)
-    // - si on est entre le 1 et le 15  → 1er du mois (2ème mois de la période)
-    const dr = getDateRef();
-    const parts = dr.split('-');
-    const day = parseInt(parts[2]);
-    const y = parts[0];
-    const m = parts[1];
-    return day >= 16 ? `${y}-${m}-16` : `${y}-${m}-01`;
+    // Période courante : la vraie date d'aujourd'hui (plus simple et intuitif que d'arrondir
+    // au 16 ou au 1er du mois — si on saisit une dépense aujourd'hui, autant proposer aujourd'hui).
+    return getDateRef();
   }
 
   // Période future → 16 du premier mois de la période

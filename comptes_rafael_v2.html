@@ -1339,12 +1339,12 @@ input, textarea, select { cursor: text; }
             <div style="font-size:10px;color:var(--muted);" id="dettePermDetail">—</div>
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
-            <input type="number" id="dette_perm_input" placeholder="extra $" step="1" min="0"
-              style="width:70px;background:var(--bg);border:1px solid var(--border);border-radius:5px;
+            <input type="number" id="dette_perm_input" placeholder="montant $" step="1" min="0"
+              style="width:80px;background:var(--bg);border:1px solid var(--border);border-radius:5px;
                      color:var(--text);font-size:12px;font-family:var(--font-mono);padding:4px 8px;">
             <button onclick="saveDettePaiementCourant()"
               style="background:var(--yellow);color:#000;border:none;border-radius:5px;
-                     font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;">+ Extra</button>
+                     font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;">💸 Rembourser</button>
           </div>
           <button onclick="toggleDetteCalendrier()" id="btnDetteCalBtn"
             style="background:transparent;border:1px solid rgba(247,217,79,.4);border-radius:5px;
@@ -5172,6 +5172,10 @@ function saveDettePaiementCourant() {
   const detteAvant = getDetteRestante();
   const detteApres = Math.max(0, detteAvant - montant);
   const colDispo = dispoApres < 100 ? 'var(--red)' : dispoApres < 250 ? 'var(--yellow)' : 'var(--green)';
+  // Option "depuis l'épargne" : disponible seulement si le solde d'épargne couvre le montant
+  const soldeEpargneActuel = getSoldeEpargne();
+  const epargneApres = soldeEpargneActuel - montant;
+  const epargneSuffisante = epargneApres >= 0;
 
   let html = `<div style="margin-bottom:12px;">
     <div style="margin-bottom:8px;">Extra remboursement dette : <b style="color:var(--yellow);">${fmt(montant)}</b></div>
@@ -5213,6 +5217,18 @@ function saveDettePaiementCourant() {
         <div style="font-size:11px;color:var(--muted);">Hors budget nourriture/perso</div>
         <div style="font-size:11px;color:var(--yellow);">Via le loyer / compte</div>
       </label>
+      <label style="flex:1;min-width:120px;cursor:pointer;border:1px solid rgba(62,207,142,.3);border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:3px;background:rgba(62,207,142,.05);${epargneSuffisante ? '' : 'opacity:.45;'}">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="radio" name="budgetChoix" value="epargne" id="choixEpargne" ${epargneSuffisante ? '' : 'disabled'}>
+          <span>💰 Épargne</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);">Solde : <b style="color:var(--green);">${fmt(soldeEpargneActuel)}</b></div>
+        <div style="font-size:11px;">Après : <b style="color:${epargneApres < 0 ? 'var(--red)' : 'var(--green)'};">${fmt(epargneApres)}</b></div>
+      </label>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--muted);border-top:1px solid rgba(255,255,255,.07);padding-top:6px;">
+      💰 Épargne : retrait de l'épargne → crédite le compte courant, puis la dépense le redébite.
+      <b style="color:var(--text);">Effet net sur le compte courant : 0$.</b> Seule l'épargne diminue.
     </div>
     <div style="margin-top:8px;font-size:11px;">Disponible total après : <b style="color:${colDispo};">${fmt(dispoApres)}</b></div>
   </div>`;
@@ -5319,11 +5335,43 @@ function confirmerExtra() {
   if (_pendingExtra) {
     const { curKey, montant } = _pendingExtra;
     const choix = getBudgetChoix();
+
+    // Remboursement depuis l'épargne : on crée un VRAI retrait d'épargne, qui crédite le
+    // compte courant via une entrée "Autre revenu" liée (même mécanisme que la fenêtre
+    // Épargne). La dépense de remboursement ci-dessous redébite ce même montant.
+    // Effet net sur le compte courant : 0$. Seule l'épargne diminue.
+    if (choix === 'epargne') {
+      const soldeEp = getSoldeEpargne();
+      if (montant > soldeEp) {
+        alert(`Épargne insuffisante.\n\nSolde épargne : ${fmt(soldeEp)}\nMontant demandé : ${fmt(montant)}`);
+        return;
+      }
+      if (!state.epargne) state.epargne = { soldeDepart: 0, mouvements: [] };
+      if (!state.epargne.mouvements) state.epargne.mouvements = [];
+      const dateMv = getDatePourPeriode(curKey);
+      const mouvementId = uid();
+      const mouvement = { id: mouvementId, type: 'retrait', montant,
+                          desc: 'Remboursement dette propriétaire', date: dateMv };
+      const periodeKey = getPeriodeKeyPourDate(dateMv) || curKey;
+      const entreeId = uid();
+      if (!state.entrees[periodeKey]) state.entrees[periodeKey] = [];
+      state.entrees[periodeKey].push({
+        id: entreeId, type: 'autre', montant,
+        desc: 'Retrait épargne — Remboursement dette propriétaire',
+        date: dateMv, rembourse: false, rembDesc: '', _linkedEpargneId: mouvementId
+      });
+      mouvement._linkedEntreeId = entreeId;
+      mouvement._linkedPeriode = periodeKey;
+      state.epargne.mouvements.push(mouvement);
+    }
+
     appliquerExtra(curKey, montant);
     // Toujours ajouter dans le loyer peu importe le budget choisi
     if (!state.loyerEntrees) state.loyerEntrees = {};
     if (!state.loyerEntrees[curKey]) state.loyerEntrees[curKey] = [];
-    const descLoyer = choix === 'compte' ? 'Remb. dette (compte)' : 'Remb. dette (' + choix + ')';
+    const descLoyer = choix === 'compte' ? 'Remb. dette (compte)'
+                    : choix === 'epargne' ? 'Remb. dette (épargne)'
+                    : 'Remb. dette (' + choix + ')';
     state.loyerEntrees[curKey].push({ id: uid(), montant, desc: descLoyer, date: getDatePourPeriode(curKey) });
     saveState();
     render();
@@ -5352,27 +5400,7 @@ function debiterBudget(curKey, montant, budget) {
   return null;
 }
 
-function confirmerExtraPortefeuille() {
-  if (!_pendingExtra) return;
-  const { curKey, montant } = _pendingExtra;
-  const choix = getBudgetChoix();
-  if (!state.portefeuilleDette) state.portefeuilleDette = [];
-  state.portefeuilleDette.push({ id: uid(), montant, date: getDateRef(), periode: curKey, budget: choix });
-  // Toujours ajouter dans le loyer peu importe le budget choisi
-  if (!state.loyerEntrees) state.loyerEntrees = {};
-  if (!state.loyerEntrees[curKey]) state.loyerEntrees[curKey] = [];
-  const descLoyer = choix === 'compte' ? 'Portefeuille dette (compte)' : 'Portefeuille dette (' + choix + ')';
-  state.loyerEntrees[curKey].push({ id: uid(), montant, desc: descLoyer, date: getDatePourPeriode(curKey) });
-  _pendingExtra = null;
-  const elInput = document.getElementById('dette_perm_input');
-  if (elInput) elInput.value = '';
-  saveState();
-  closeModal('modalExtraConfirm');
-  render();
-  renderPortefeuille();
-  const pi = document.getElementById('portefeuilleInline');
-  if (pi) pi.style.display = 'block';
-}
+// confirmerExtraPortefeuille() : RETIRÉE le 04/08/2026 (portefeuille supprimé)
 
 function saveDettePaiement(periode) {
   const el = document.getElementById('dette_input_' + periode);
@@ -6594,7 +6622,6 @@ window.addEventListener('storage', function(e) {
     <div id="extraConfirmContent" style="font-size:13px;line-height:1.6;margin-bottom:16px;"></div>
     <div class="form-actions" style="gap:8px;flex-wrap:wrap;">
       <button class="btn btn-secondary" onclick="annulerExtra()">✕ Annuler</button>
-      <button class="btn btn-accent" onclick="confirmerExtraPortefeuille()" style="background:var(--accent);">💰 Mettre au portefeuille</button>
       <button class="btn btn-yellow" onclick="confirmerExtra()">🏠 Rembourser la dette</button>
     </div>
   </div>

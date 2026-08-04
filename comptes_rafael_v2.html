@@ -4408,14 +4408,9 @@ function renderDette() {
   const cal = getDetteCalendrier();
   // Mettre à jour le bloc dette permanent
   const restant = getDetteRestante();
-  const pct = Math.round((1 - restant/DETTE_INITIALE)*100);
-  const rembourse = DETTE_INITIALE - restant;
-  const elM = document.getElementById('dettePermMontant');
-  const elB = document.getElementById('dettePermBarre');
-  const elD = document.getElementById('dettePermDetail');
   const elBloc = document.getElementById('detteBlockPerm');
-  // Mettre à jour la bulle étiquette
-  if (elM) elM.textContent = fmt(restant);
+  // Affichage du montant/barre/detail delegue a la source unique (periode selectionnee)
+  majBlocDetteMontant(selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key);
 
   // --- Etat "dette annulee" ---
   const annulee = !!state.detteAnnulee;
@@ -5117,14 +5112,31 @@ function renderVueMois(key) {
   vueMoisEl.style.display = 'block';
 
   // Mettre à jour le bloc dette permanent avec la dette de cette période
-  const detteAuMois = getDetteAuMois(key);
-  const dettePctMois = Math.round((1 - detteAuMois/DETTE_INITIALE)*100);
-  const rembMois = DETTE_INITIALE - detteAuMois;
-  const isCurPeriode = getPeriodeIndex(key) === getCurrentPeriodeIndex();
-  const detteLabel = isFuture ? "· projection" : (isCurPeriode ? "· aujourd'hui" : "· réel");
+  majBlocDetteMontant(key);
+}
+
+// Source UNIQUE de vérité pour l'affichage du bloc dette (montant + barre + détail).
+// Avant, renderVueMois() et renderDette() écrivaient chacune dans ces mêmes éléments avec
+// une période DIFFÉRENTE : renderDette() s'exécutant en dernier écrasait le montant avec la
+// dette d'aujourd'hui, mais laissait la barre et le "Remboursé : x / y (z%)" sur la période
+// sélectionnée. D'où un montant et un pourcentage qui ne correspondaient pas.
+function majBlocDetteMontant(key) {
+  if (!key) key = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
+  if (!key) return;
   const elM = document.getElementById('dettePermMontant');
   const elB = document.getElementById('dettePermBarre');
   const elD = document.getElementById('dettePermDetail');
+  if (state.detteAnnulee) {
+    if (elM) elM.innerHTML = fmt(0) + ' <span style="font-size:11px;color:var(--muted);font-weight:400;">· annulée</span>';
+    if (elB) elB.style.width = '100%';
+    if (elD) elD.textContent = 'Dette annulée — plus rien à rembourser';
+    return;
+  }
+  const detteAuMois = getDetteAuMois(key);
+  const dettePctMois = Math.round((1 - detteAuMois/DETTE_INITIALE)*100);
+  const rembMois = DETTE_INITIALE - detteAuMois;
+  const idxKey = getPeriodeIndex(key), idxCur = getCurrentPeriodeIndex();
+  const detteLabel = idxKey > idxCur ? "· projection" : (idxKey === idxCur ? "· aujourd'hui" : "· réel");
   if (elM) elM.innerHTML = fmt(detteAuMois) + ` <span style="font-size:11px;color:var(--muted);font-weight:400;">${detteLabel}</span>`;
   if (elB) elB.style.width = dettePctMois + '%';
   if (elD) elD.textContent = `Remboursé : ${fmt(rembMois)} / ${fmt(DETTE_INITIALE)} (${dettePctMois}%)`;

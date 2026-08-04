@@ -2887,13 +2887,28 @@ function render() {
 
 // Le bandeau du haut (app-header) a grandi avec le temps (beaucoup de cartes ajoutées) —
 // la ligne des pilules doit rester collée juste en dessous de sa hauteur RÉELLE, pas une
-// valeur fixe qui ne suit plus quand le bandeau grandit ou change de taille selon l'écran.
+// valeur fixe qui ne suit plus quand le bandeau grandit, rétrécit, ou se réorganise (fenêtre
+// réduite, retour à la ligne des cartes, etc.). Un ResizeObserver réagit à TOUT changement de
+// taille du bandeau, immédiatement, sans dépendre d'un appel manuel à render() ou resize().
 function ajusterPillsStickyTop() {
   const header = document.querySelector('.app-header');
   const pillsWrap = document.getElementById('pills-sticky-wrap');
   if (!header || !pillsWrap) return;
   const hauteur = header.offsetHeight;
   pillsWrap.style.top = hauteur + 'px';
+}
+
+if (window.ResizeObserver) {
+  const headerResizeObserver = new ResizeObserver(() => ajusterPillsStickyTop());
+  function attacherObserverHeader() {
+    const header = document.querySelector('.app-header');
+    if (header) headerResizeObserver.observe(header);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', attacherObserverHeader);
+  } else {
+    attacherObserverHeader();
+  }
 }
 
 function renderRappels() {

@@ -2886,6 +2886,18 @@ function render() {
   if (vueMois && selectedMois) {
     renderVueMois(selectedMois);
   }
+  ajusterPillsStickyTop();
+}
+
+// Le bandeau du haut (app-header) a grandi avec le temps (beaucoup de cartes ajoutées) —
+// la ligne des pilules doit rester collée juste en dessous de sa hauteur RÉELLE, pas une
+// valeur fixe qui ne suit plus quand le bandeau grandit ou change de taille selon l'écran.
+function ajusterPillsStickyTop() {
+  const header = document.querySelector('.app-header');
+  const pillsWrap = document.getElementById('pills-sticky-wrap');
+  if (!header || !pillsWrap) return;
+  const hauteur = header.offsetHeight;
+  pillsWrap.style.top = hauteur + 'px';
 }
 
 function renderRappels() {
@@ -6441,6 +6453,7 @@ function alignerPillsTableau() {
   });
 }
 window.addEventListener('resize', alignerPillsTableau);
+window.addEventListener('resize', ajusterPillsStickyTop);
 
 // Fermer le bloc dette au scroll
 window.addEventListener('scroll', function() {

@@ -941,6 +941,11 @@
     flex: 1;
     gap: 6px;
   }
+  /* FIX (04/08/2026) : placement explicite des colonnes du grid des pilules.
+     Empeche l'auto-placement CSS Grid de faire basculer une rangee de pilules
+     dans la colonne label (80px) si un label venait a etre masque. */
+  #pills2027grid > .tl-label { grid-column: 1; }
+  #pills2027grid > .tl-pills { grid-column: 2; min-width: 0; }
   .timeline-year-pill {
     border-radius: 50px;
     border: 1.5px solid var(--border);

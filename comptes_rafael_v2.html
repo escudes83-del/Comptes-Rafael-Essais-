@@ -4339,22 +4339,10 @@ function renderHero() {
   const fin2027 = soldes['2027-12'];
   const dateRef = getDateRef();
 
-  // Solde affiché : soldeRef si renseigné, sinon calculé au début de la période courante
-  let soldeNow;
-  if (state.soldeRef !== null) {
-    // Solde réel connu à dateRef — on l'utilise directement
-    soldeNow = state.soldeRef;
-  } else {
-    // Solde calculé : début de période courante + revenus saisis jusqu'à dateRef - dépenses jusqu'à dateRef
-    soldeNow = curKey ? (soldes[curKey]?.debut ?? 0) : 0;
-    if (curKey) {
-      const entreesJusquAujourd = getEntreesPeriode(curKey).filter(e => e.date <= dateRef);
-      const revenus = entreesJusquAujourd.filter(e => ['salaire','autre'].includes(e.type)).reduce((s,e)=>s+e.montant,0);
-      const depenses = entreesJusquAujourd.filter(e => ['nourriture','perso','exceptionnel','autre_fixe'].includes(e.type) && !e.rembourse).reduce((s,e)=>s+e.montant,0);
-      // Frais fixes manuels déjà engagés (logement + entrées électricité/assurance/gym/netflix/fido/bixi datées avant dateRef)
-      soldeNow += revenus - depenses - getFraisFixesEngagesAvant(curKey, dateRef);
-    }
-  }
+  // Solde affiché : soldeRef si renseigné, sinon calculé au début de la période courante.
+  // Réutilise getSoldeJourJActuel() (même fonction que la pilule "réel jour J") pour garantir
+  // que ce gros chiffre affiche toujours exactement la même valeur que la pilule correspondante.
+  const soldeNow = getSoldeJourJActuel();
 
   const el = document.getElementById('heroSolde');
   el.textContent = fmt(soldeNow);

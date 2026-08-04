@@ -3312,6 +3312,7 @@ function ouvrirEpargne() {
         </div>`;
       }).join('');
 
+  const nbOrphelins = getMouvementsEpargneOrphelins().length;
   overlay.innerHTML = `
     <div class="modal" style="width:460px;max-width:95vw;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -3350,6 +3351,17 @@ function ouvrirEpargne() {
       </div>
       <div class="divider" style="margin:16px 0;"></div>
       <h3 style="font-size:13px;margin-bottom:8px;">Historique</h3>
+      ${nbOrphelins > 0 ? `
+      <div style="margin-bottom:10px;padding:8px 12px;background:rgba(242,92,92,.08);
+           border:1px solid rgba(242,92,92,.35);border-radius:6px;display:flex;
+           align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:180px;font-size:11px;">
+          <b style="color:var(--red);">⚠️ ${nbOrphelins} mouvement(s) orphelin(s)</b><br>
+          <span style="color:var(--muted);">Leur entrée liée a été supprimée — le solde de l'épargne est faussé.</span>
+        </div>
+        <button class="btn" style="background:var(--red);color:#fff;font-size:11px;padding:5px 10px;"
+          onclick="nettoyerOrphelinsEpargne()">🧹 Nettoyer</button>
+      </div>` : ''}
       <div style="max-height:220px;overflow-y:auto;">${historiqueHtml}</div>
       <div class="form-actions" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
         <button class="btn" style="background:var(--accent2);color:#fff;" onclick="ouvrirProjectionEpargne()">📊 Voir la projection</button>
@@ -3487,6 +3499,42 @@ function ajouterMouvementEpargne() {
     }
   }
   state.epargne.mouvements.push(mouvement);
+  saveState();
+  render();
+  ouvrirEpargne();
+}
+
+// Mouvements d'epargne dont l'entree liee a ete supprimee (bug de dissymetrie corrige
+// le 04/08/2026). Ce sont de VRAIS orphelins : ils portent un _linkedEntreeId qui ne
+// pointe plus sur rien. Les anciens mouvements sans _linkedEntreeId sont legitimes.
+function getMouvementsEpargneOrphelins() {
+  const mvs = (state.epargne && state.epargne.mouvements) || [];
+  return mvs.filter(m => {
+    if (!m._linkedEntreeId || !m._linkedPeriode) return false;
+    const arr = state.entrees[m._linkedPeriode] || [];
+    return !arr.some(e => e.id === m._linkedEntreeId);
+  });
+}
+
+function nettoyerOrphelinsEpargne() {
+  const orph = getMouvementsEpargneOrphelins();
+  if (!orph.length) { alert('Aucun mouvement orphelin. Le compte épargne est cohérent.'); return; }
+  let net = 0;
+  const lignes = orph.map(m => {
+    const signe = m.type === 'retrait' ? '+' : '-';
+    net += (m.type === 'retrait' ? m.montant : -m.montant);
+    return `  ${signe} ${fmt(m.montant)}  ${m.date}  ${m.type}${m.desc ? ' — ' + m.desc : ''}`;
+  }).join('\n');
+  const soldeAvant = getSoldeEpargne();
+  if (!confirm(
+      `${orph.length} mouvement(s) orphelin(s) détecté(s).\n\n` +
+      `Leur entrée liée (revenu/dépense) a été supprimée, mais le mouvement est resté\n` +
+      `dans l'épargne et fausse le solde.\n\n${lignes}\n\n` +
+      `Solde épargne actuel : ${fmt(soldeAvant)}\n` +
+      `Après nettoyage      : ${fmt(soldeAvant + net)}\n\n` +
+      `Supprimer ces mouvements ?`)) return;
+  const ids = new Set(orph.map(m => m.id));
+  state.epargne.mouvements = state.epargne.mouvements.filter(m => !ids.has(m.id));
   saveState();
   render();
   ouvrirEpargne();
@@ -5925,9 +5973,28 @@ function toggleEditForm(formId) {} // legacy
 
 
 
+// Une entree "Retrait epargne" / "Depot epargne" est LIEE a un mouvement du compte
+// epargne (_linkedEpargneId). Supprimer l'entree sans supprimer le mouvement laissait un
+// retrait fantome qui vidait l'epargne pour de faux. Symetrique de supprimerMouvementEpargne().
+// Retourne false si l'utilisateur annule.
+function detacherMouvementEpargneLie(periode, id) {
+  const entree = (state.entrees[periode] || []).find(e => e.id === id);
+  if (!entree || !entree._linkedEpargneId) return true;
+  const mvs = (state.epargne && state.epargne.mouvements) || [];
+  const mv = mvs.find(m => m.id === entree._linkedEpargneId);
+  if (!mv) return true;
+  const libelle = mv.type === 'retrait' ? 'retrait' : mv.type === 'depot' ? 'dépôt' : mv.type;
+  if (!confirm(
+      `Cette entrée est liée au compte épargne.\n\n` +
+      `Le ${libelle} de ${fmt(mv.montant)} du ${mv.date} sera lui aussi supprimé de l'épargne.\n\n` +
+      `Continuer ?`)) return false;
+  state.epargne.mouvements = mvs.filter(m => m.id !== entree._linkedEpargneId);
+  return true;
+}
+
 function deleteEntreeVM(periode, id) {
   if (!confirm('Supprimer ?')) return;
-  // (Restauration vers le portefeuille retirée le 04/08/2026 — système supprimé)
+  if (!detacherMouvementEpargneLie(periode, id)) return;
   state.entrees[periode] = (state.entrees[periode] || []).filter(e => e.id !== id);
   saveState();
   render();
@@ -6108,6 +6175,7 @@ function saveSalaire() {
 
 function deleteEntree(periode, id) {
   if (!confirm('Supprimer cette entrée ?')) return;
+  if (!detacherMouvementEpargneLie(periode, id)) return;
   state.entrees[periode] = (state.entrees[periode] || []).filter(e => e.id !== id);
   saveState();
   render();

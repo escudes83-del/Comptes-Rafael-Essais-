@@ -940,6 +940,19 @@
     flex: 1;
     gap: 6px;
   }
+  /* FIX (04/08/2026) : placement explicite des colonnes du grid des pilules.
+     Sans ça, si un label est masque:none alors que sa rangee de pilules reste
+     visible, l'auto-placement CSS Grid fait basculer la rangee dans la colonne
+     label (80px) et toutes les pilules s'ecrasent l'une sur l'autre. */
+  #pills2026grid > .tl-label { grid-column: 1; }
+  #pills2026grid > .tl-pills { grid-column: 2; min-width: 0; }
+  /* Masquage des lignes 2026 par classe : impossible a ecraser par un style inline. */
+  #pills2026grid.masque2026 > #pills2026reelLabel,
+  #pills2026grid.masque2026 > #pills2026row1,
+  #pills2026grid.masque2026 > #pills2026previLabel,
+  #pills2026grid.masque2026 > #pills2026row2,
+  #pills2026grid.masque2026 > #pills2026dispoLabel,
+  #pills2026grid.masque2026 > #pills2026row3 { display: none !important; }
   .timeline-year-pill {
     border-radius: 50px;
     border: 1.5px solid var(--border);
@@ -3957,19 +3970,36 @@ function toggle2028() {
   btn.textContent = open ? '▼ Masquer 2028' : '▶ Afficher 2028';
 }
 
-function toggleMasquer2026() {
+// Etat de masquage des lignes 2026. Stocke en localStorage LOCAL uniquement
+// (preference d'affichage propre a l'appareil, pas synchronisee sur Firebase).
+let MASQUE_2026 = (function(){
+  try { return localStorage.getItem('comptes_rafael_ui_masque2026') === '1'; }
+  catch(e) { return false; }
+})();
+
+// Applique l'etat de masquage aux lignes 2026. Appelee par le bouton ET a la fin
+// de renderPills() : sans ca, un simple render() (clic sur une pilule, saisie,
+// sync Firebase...) faisait reapparaitre les rangees SANS leurs labels.
+function appliquerMasquage2026() {
   // La ligne "mois" (déc/jan, jan/fév, ...) sert de repère pour toutes les années — colonnes
   // alignées, elle reste toujours visible même quand on masque les valeurs 2026.
-  const ids2026 = ['pills2026reelLabel','pills2026row1',
-                   'pills2026previLabel','pills2026row2','pills2026dispoLabel','pills2026row3'];
-  const btn = document.getElementById('btnMasquer2026toggle');
-  const premierValeur = document.getElementById('pills2026reelLabel');
-  const masque = premierValeur.style.display !== 'none';
-  ids2026.forEach(id => {
+  const grid = document.getElementById('pills2026grid');
+  if (grid) grid.classList.toggle('masque2026', MASQUE_2026);
+  // Nettoyage des eventuels styles inline residuels (ancienne version du code)
+  ['pills2026reelLabel','pills2026row1','pills2026previLabel',
+   'pills2026row2','pills2026dispoLabel','pills2026row3'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.style.display = masque ? 'none' : '';
+    if (el && el.style.display) el.style.display = '';
   });
-  btn.textContent = masque ? '👁 Afficher 2026' : '👁 Masquer 2026';
+  const btn = document.getElementById('btnMasquer2026toggle');
+  if (btn) btn.textContent = MASQUE_2026 ? '👁 Afficher 2026' : '👁 Masquer 2026';
+}
+
+window.FIX_MASQUAGE_2026 = '2026-fix-v2 (04/08/2026)';
+function toggleMasquer2026() {
+  MASQUE_2026 = !MASQUE_2026;
+  try { localStorage.setItem('comptes_rafael_ui_masque2026', MASQUE_2026 ? '1' : '0'); } catch(e) {}
+  appliquerMasquage2026();
 }
 
 function pillColor(solde, isFuture) {
@@ -4275,11 +4305,9 @@ function renderPills() {
   document.getElementById('pills2026row2').innerHTML = row2;
   document.getElementById('pills2026row3').innerHTML = row3;
   document.getElementById('pills2027row').innerHTML = row2027;
-  // forcer visibilité
-  ['pills2026row1','pills2026row2'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'flex';
-  });
+  // Reapplique l'etat de masquage 2026 (remplace l'ancien "forcer visibilite"
+  // qui remettait row1/row2 en display:flex a chaque render et cassait le masquage).
+  appliquerMasquage2026();
 }
 
 function getDatePourPeriode(key) {

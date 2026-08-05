@@ -110,6 +110,20 @@
   .hist-btn { background: transparent; border: none; font-size: 16px; padding: 4px 6px; cursor: pointer; line-height: 1; border-radius: 6px; }
   .hist-btn:active { background: rgba(255,255,255,0.08); }
 
+  /* Rappels personnalisés remontés depuis l'app principale (04/08/2026) */
+  .rappel-card { background: #2d0b0b; border: 1px solid #7a1e1e; border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; animation: pulseRappel 2s ease-in-out infinite; }
+  .rappel-card.retard { border-color: #e24b4a; }
+  @keyframes pulseRappel { 0%,100%{ border-color:#7a1e1e; } 50%{ border-color:#e24b4a; } }
+  .rappel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+  .rappel-quand { font-size: 10px; font-weight: 800; color: #e24b4a; letter-spacing: 0.5px; }
+  .rappel-montant { font-size: 17px; font-weight: 700; color: #fff; white-space: nowrap; }
+  .rappel-desc { font-size: 14px; color: #e8b0b0; margin-bottom: 10px; }
+  .rappel-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .rappel-btn { border-radius: 10px; padding: 11px 8px; font-size: 13px; font-weight: 700; cursor: pointer; border: 0.5px solid; }
+  .rappel-btn.fait { background: #0b2a22; border-color: #1d6e56; color: #5dcaa5; }
+  .rappel-btn.plus-tard { background: #0d2137; border-color: #1e4a7a; color: #7eb8f7; }
+  .rappel-btn:active { opacity: 0.6; }
+
   .alerte { background: #2d0b0b; border-radius: 12px; padding: 10px 14px; border: 0.5px solid #7a1e1e; margin-bottom: 12px; display: none; }
   .alerte.show { display: block; }
   .alerte-text { font-size: 13px; color: #e24b4a; }
@@ -183,6 +197,8 @@
 </div>
 
 <div class="sync-status loading" id="sync-status">⏳ Connexion à Firebase...</div>
+
+<div id="rappels-zone"></div>
 
 <div class="budgets">
   <div class="budget-card" id="card-nourriture">
@@ -632,6 +648,90 @@ function mettreAJourUI() {
   renderMiniHist('hist-nourriture', 'nourriture', '🛒', 'hist-nourr');
   renderMiniHist('hist-perso', 'perso', '🧴', 'hist-perso');
   renderMiniHist('hist-except', 'exceptionnel', '⚡', 'hist-except');
+  renderRappels();
+}
+
+// ---- Rappels personnalisés (créés depuis l'app principale) ----
+// Affichés ici parce que Rafael a surtout la mini-app sous les yeux.
+// "Déjà payé" crée la dépense dans la bonne catégorie et éteint le rappel.
+// "Plus tard" repousse l'affichage de 3 jours (champ snoozeJusqua, respecté aussi par v2).
+const RAPPEL_SNOOZE_JOURS = 3;
+
+function getRappelsAAfficher() {
+  const today = getDateAujourdhui();
+  return (state.rappelsPersonnalises || []).filter(r => {
+    if (r.paye) return false;
+    if (r.snoozeJusqua && today < r.snoozeJusqua) return false;
+    const jours = Math.ceil((new Date(r.dateEcheance+'T00:00:00') - new Date(today+'T00:00:00')) / 86400000);
+    return jours <= 37;
+  });
+}
+
+function renderRappels() {
+  const zone = document.getElementById('rappels-zone');
+  if (!zone) return;
+  const today = getDateAujourdhui();
+  const rappels = getRappelsAAfficher();
+  if (!rappels.length) { zone.innerHTML = ''; return; }
+  zone.innerHTML = rappels.map(r => {
+    const jours = Math.ceil((new Date(r.dateEcheance+'T00:00:00') - new Date(today+'T00:00:00')) / 86400000);
+    const retard = jours < 0;
+    const quand = retard ? 'EN RETARD' : jours === 0 ? "À PAYER AUJOURD'HUI" : `RAPPEL · J-${jours}`;
+    return `<div class="rappel-card${retard?' retard':''}">
+      <div class="rappel-head">
+        <span class="rappel-quand">🔔 ${quand}</span>
+        <span class="rappel-montant">${fmt(r.montant)}</span>
+      </div>
+      <div class="rappel-desc">${r.desc}</div>
+      <div class="rappel-btns">
+        <button class="rappel-btn fait" onclick="resetSessionTimer();rappelDejaPaye('${r.id}')">✅ Déjà payé</button>
+        <button class="rappel-btn plus-tard" onclick="resetSessionTimer();rappelPlusTard('${r.id}')">⏰ Plus tard</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Recharge l'état frais avant d'écrire, pour ne pas écraser une modif faite
+// dans l'app principale pendant que cette page dormait en arrière-plan.
+async function majRappel(id, appliquer) {
+  setSyncStatus('loading','⏳ Vérification...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+  } catch(e) { /* on continue avec l'état local en dernier recours */ }
+  const r = (state.rappelsPersonnalises || []).find(x => x.id === id);
+  if (!r) { alert("Ce rappel n'existe plus."); mettreAJourUI(); return; }
+  if (!appliquer(r)) { setSyncStatus('ok','✅ Synchronisé'); return; }
+  mettreAJourUI();
+  setSyncStatus('loading','⏳ Sauvegarde...');
+  await sauvegarderDansFirebase();
+}
+
+function rappelDejaPaye(id) {
+  majRappel(id, r => {
+    if (!confirm(`Marquer "${r.desc}" (${fmt(r.montant)}) comme payé ?\n\nLa dépense sera enregistrée automatiquement.`)) return false;
+    const dateJour = getDateAujourdhui();
+    const cible = getPeriodeKeyPourDate(dateJour);
+    if (!state.entrees) state.entrees = {};
+    if (!state.entrees[cible]) state.entrees[cible] = [];
+    if (!Array.isArray(state.entrees[cible])) state.entrees[cible] = Object.values(state.entrees[cible]);
+    state.entrees[cible].push({
+      id: uid(), type: r.categorie, montant: r.montant, desc: r.desc,
+      date: dateJour, rembourse: false, rembDesc: ''
+    });
+    r.paye = true;
+    return true;
+  });
+}
+
+function rappelPlusTard(id) {
+  majRappel(id, r => {
+    const d = new Date(getDateAujourdhui() + 'T12:00:00');
+    d.setDate(d.getDate() + RAPPEL_SNOOZE_JOURS);
+    r.snoozeJusqua = d.toISOString().slice(0,10);
+    return true;
+  });
 }
 
 function toggleHistExpanded(type) {

@@ -60,6 +60,8 @@
 
   .dispo-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
   .dispo-card { background: #0d2137; border-radius: 14px; padding: 10px 8px; border: 0.5px solid #1e3a2e; text-align: center; }
+  @keyframes pulseDangerCard { 0%,100%{ background:#2e1414; border-color:#e24b4a; } 50%{ background:#4a1a1a; border-color:#ff6b6a; } }
+  .dispo-card.danger-card { animation: pulseDangerCard 1.5s ease-in-out infinite; }
   .dispo-card.perso { background: #150d2e; border-color: #2d1f5e; }
   .dispo-card.except { background: #1a120d; border-color: #5a3a1a; display: flex; flex-direction: column; justify-content: center; }
   .dispo-label { font-size: 12px; color: #4a7fba; margin-bottom: 4px; }
@@ -69,6 +71,12 @@
   .dispo-amount.ok { color: #5dcaa5; }
   .dispo-amount.warn { color: #f0c040; }
   .dispo-amount.danger { color: #e24b4a; }
+  .dispo-amount.depense { color: #8fa6bd; }
+  /* Etats du montant "reste" sur les grandes cartes (04/08/2026) */
+  .budget-amount.ok     { color: #5dcaa5 !important; }
+  .budget-amount.warn   { color: #f0c040 !important; }
+  .budget-amount.danger { color: #e24b4a !important; }
+  .budget-card.danger-card { animation: pulseDangerCard 1.5s ease-in-out infinite; }
   .dispo-periode { font-size: 13px; font-weight: 700; color: #e0a060; line-height: 1.2; }
 
   .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
@@ -169,13 +177,13 @@
 <div class="budgets">
   <div class="budget-card" id="card-nourriture">
     <div class="confirm-check" id="check-nourriture">✓</div>
-    <div class="budget-label">🛒 Nourriture dépensée</div>
+    <div class="budget-label">🛒 Reste Nourriture</div>
     <div class="budget-amount" id="nourr-amount">—</div>
     <div class="progress-bar"><div class="progress-fill" id="nourr-bar" style="width:0%"></div></div>
   </div>
   <div class="budget-card perso" id="card-perso">
     <div class="confirm-check" id="check-perso">✓</div>
-    <div class="budget-label">🧴 Perso dépensé</div>
+    <div class="budget-label">🧴 Reste Perso</div>
     <div class="budget-amount" id="perso-amount">—</div>
     <div class="progress-bar"><div class="progress-fill" id="perso-bar" style="width:0%"></div></div>
   </div>
@@ -190,11 +198,11 @@
 
 <div class="dispo-row">
   <div class="dispo-card">
-    <div class="dispo-label">Reste Nourriture</div>
+    <div class="dispo-label">Nourriture dépensée</div>
     <div class="dispo-amount ok" id="dispo-nourr-amount">—</div>
   </div>
   <div class="dispo-card perso">
-    <div class="dispo-label">Reste Perso</div>
+    <div class="dispo-label">Perso dépensé</div>
     <div class="dispo-amount ok" id="dispo-perso-amount">—</div>
   </div>
   <div class="dispo-card except">
@@ -511,28 +519,44 @@ function mettreAJourUI() {
   const restePerso = budgetPerso - totalPerso;
   const dispo = resteNourr + restePerso;
 
-  document.getElementById('nourr-amount').textContent = fmt(totalNourr);
-  const pN = Math.min(100, Math.round(totalNourr/budgetNourr*100));
+  // Si l'enveloppe combinée (nourriture+perso) est épuisée, ne plus afficher de "reste" positif
+  // dans une catégorie individuelle — trompeur si l'autre catégorie a tout absorbé.
+  const resteNourrAffiche = dispo < 0 ? Math.min(resteNourr, 0) : resteNourr;
+  const restePersoAffiche = dispo < 0 ? Math.min(restePerso, 0) : restePerso;
+
+  // --- Grandes cartes (haut) : ce qu'il RESTE (inversé le 04/08/2026) ---
+  const nourrEl = document.getElementById('nourr-amount');
+  nourrEl.textContent = fmt(resteNourrAffiche);
+  nourrEl.className = 'budget-amount '+(resteNourrAffiche<0?'danger':resteNourrAffiche<20?'warn':'ok');
+  // La barre se VIDE au fur et à mesure des dépenses (part de 100%, tombe à 0)
+  const pN = Math.max(0, Math.min(100, Math.round(resteNourr/budgetNourr*100)));
   document.getElementById('nourr-bar').style.width = pN+'%';
   document.getElementById('nourr-bar').className = 'progress-fill'+(totalNourr>budgetNourr?' danger':'');
 
-  document.getElementById('perso-amount').textContent = fmt(totalPerso);
-  const pP = Math.min(100, Math.round(totalPerso/budgetPerso*100));
+  const persoEl = document.getElementById('perso-amount');
+  persoEl.textContent = fmt(restePersoAffiche);
+  persoEl.className = 'budget-amount '+(restePersoAffiche<0?'danger':restePersoAffiche<20?'warn':'ok');
+  const pP = Math.max(0, Math.min(100, Math.round(restePerso/budgetPerso*100)));
   document.getElementById('perso-bar').style.width = pP+'%';
   document.getElementById('perso-bar').className = 'progress-fill'+(totalPerso>budgetPerso?' danger':'');
 
   document.getElementById('except-amount').textContent = fmt(totalExcept);
 
+  // --- Petites cartes (milieu) : ce qui a été DÉPENSÉ (inversé le 04/08/2026) ---
   const dispoNourrEl = document.getElementById('dispo-nourr-amount');
   const dispoPersoEl = document.getElementById('dispo-perso-amount');
-  // Si l'enveloppe combinée (nourriture+perso) est épuisée, ne plus afficher de "dispo" positif
-  // dans une catégorie individuelle — trompeur si l'autre catégorie a tout absorbé.
-  const resteNourrAffiche = dispo < 0 ? Math.min(resteNourr, 0) : resteNourr;
-  const restePersoAffiche = dispo < 0 ? Math.min(restePerso, 0) : restePerso;
-  dispoNourrEl.textContent = fmt(resteNourrAffiche);
-  dispoNourrEl.className = 'dispo-amount '+(resteNourrAffiche<0?'danger':resteNourrAffiche<20?'warn':'ok');
-  dispoPersoEl.textContent = fmt(restePersoAffiche);
-  dispoPersoEl.className = 'dispo-amount '+(restePersoAffiche<0?'danger':restePersoAffiche<20?'warn':'ok');
+  dispoNourrEl.textContent = fmt(totalNourr);
+  dispoNourrEl.className = 'dispo-amount depense';
+  dispoPersoEl.textContent = fmt(totalPerso);
+  dispoPersoEl.className = 'dispo-amount depense';
+
+  // Le clignotement d'alerte suit désormais les cartes "reste" (haut)
+  const alerteNourr = resteNourrAffiche < 0 || dispo < 0;
+  const alertePerso = restePersoAffiche < 0 || dispo < 0;
+  document.getElementById('card-nourriture')?.classList.toggle('danger-card', alerteNourr);
+  document.getElementById('card-perso')?.classList.toggle('danger-card', alertePerso);
+  dispoNourrEl.closest('.dispo-card')?.classList.remove('danger-card');
+  dispoPersoEl.closest('.dispo-card')?.classList.remove('danger-card');
 
   const alerte = document.getElementById('alerte');
   const alerteText = document.getElementById('alerte-text');

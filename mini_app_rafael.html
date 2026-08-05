@@ -35,10 +35,17 @@
   .mini-hist { background: #0d2137; border-radius: 12px; padding: 8px 10px; border: 0.5px solid #1e4a7a; min-height: 30px; }
   .btn-group:nth-child(2) .mini-hist { background: #150d2e; border-color: #2d1f5e; }
   .btn-group:nth-child(3) .mini-hist { background: #1a120d; border-color: #5a3a1a; }
-  .mini-hist .hist-item { padding: 5px 0; gap: 4px; }
-  .mini-hist .hist-desc { font-size: 12px; }
-  .mini-hist .hist-montant { font-size: 12px; }
-  .mini-hist .hist-btn { font-size: 15px; padding: 4px 5px; }
+  .mini-hist { overflow: hidden; }
+  /* Ecrans etroits (04/08/2026) : dans les 3 colonnes du telephone, montant + crayon +
+     corbeille ne tiennent pas a cote de la description. flex-wrap fait passer le bloc
+     montant/boutons a la ligne SEULEMENT quand la place manque — sur ecran large, la
+     ligne reste sur une seule rangee comme avant. Le min-width sur .hist-desc empeche
+     la description de se comprimer a zero (ce qui empechait le retour a la ligne). */
+  .mini-hist .hist-item { padding: 5px 0; gap: 4px; flex-wrap: wrap; }
+  .mini-hist .hist-desc { font-size: 12px; min-width: 64px; }
+  .mini-hist .hist-montant { font-size: 12px; min-width: 0; }
+  .mini-hist .hist-right { min-width: 0; flex-shrink: 1; margin-left: auto; }
+  .mini-hist .hist-btn { font-size: 15px; padding: 4px 3px; }
   .mini-hist .hist-empty { padding: 4px 0; font-size: 11.5px; }
   .hist-toggle { text-align: center; font-size: 11px; color: #4a7fba; padding: 3px 0 2px; cursor: pointer; user-select: none; }
   .hist-toggle:active { opacity: 0.6; }

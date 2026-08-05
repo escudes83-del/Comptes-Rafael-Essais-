@@ -14,9 +14,10 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #111827; color: #fff; font-family: -apple-system, BlinkMacSystemFont, sans-serif; min-height: 100vh; padding: 16px; }
 
-  .header { background: #0f3460; border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .header { background: #0f3460; border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .header-periode-wrap { flex: 1; text-align: center; }
   .header-title { font-size: 15px; color: #7eb8f7; font-weight: 700; }
-  .header-sub { font-size: 16px; color: #a8d0f5; font-weight: 700; margin-top: 4px; }
+  .header-sub { font-size: 19px; color: #a8d0f5; font-weight: 700; letter-spacing: 0.3px; }
   .header-date { text-align: right; font-size: 13px; color: #7eb8f7; }
   .header-statut { font-size: 11px; color: #4a7fba; }
 
@@ -46,13 +47,14 @@
   .jour-summary.perso { color: #9080c0; }
   .jour-summary.except { color: #c07a30; }
   .budget-card.perso { background: #150d2e; border-color: #2d1f5e; }
-  .budget-card.except { background: #1a120d; border-color: #5a3a1a; grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; }
+  .budget-card.total { background: #0b2a22; border-color: #1d6e56; grid-column: 1 / -1; text-align: center; padding: 10px 12px; }
+  .budget-card.total .budget-label { color: #5dcaa5; margin-bottom: 2px; }
+  .budget-card.total .budget-amount { font-size: 30px; margin-bottom: 8px; }
+  .budget-card.total .progress-fill { background: #1d9e75; }
   .budget-label { font-size: 12px; color: #4a7fba; margin-bottom: 6px; }
   .budget-card.perso .budget-label { color: #9b7fe8; }
-  .budget-card.except .budget-label { color: #c07a30; margin-bottom: 0; }
   .budget-amount { font-size: 26px; font-weight: 700; color: #7eb8f7; margin-bottom: 6px; }
   .budget-card.perso .budget-amount { color: #c4abf0; }
-  .budget-card.except .budget-amount { font-size: 18px; color: #e0a060; margin-bottom: 0; }
   .progress-bar { height: 5px; background: #0a1a2e; border-radius: 3px; margin-bottom: 4px; overflow: hidden; }
   .progress-fill { height: 5px; background: #378add; border-radius: 3px; transition: width 0.3s; }
   .budget-card.perso .progress-fill { background: #7f77dd; }
@@ -77,7 +79,6 @@
   .budget-amount.warn   { color: #f0c040 !important; }
   .budget-amount.danger { color: #e24b4a !important; }
   .budget-card.danger-card { animation: pulseDangerCard 1.5s ease-in-out infinite; }
-  .dispo-periode { font-size: 13px; font-weight: 700; color: #e0a060; line-height: 1.2; }
 
   .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
   .btn-main { border-radius: 14px; padding: 16px 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; border: none; transition: transform 0.1s, opacity 0.1s; }
@@ -164,6 +165,8 @@
     <ellipse cx="42.5" cy="9" rx="2" ry="2.5" fill="#d4851a"/>
   </g>
 </svg> Comptes Rafael</div>
+  </div>
+  <div class="header-periode-wrap">
     <div class="header-sub" id="header-periode">Chargement...</div>
   </div>
   <div class="header-date">
@@ -187,12 +190,10 @@
     <div class="budget-amount" id="perso-amount">—</div>
     <div class="progress-bar"><div class="progress-fill" id="perso-bar" style="width:0%"></div></div>
   </div>
-  <div class="budget-card except" id="card-except">
-    <div class="confirm-check" id="check-except">✓</div>
-    <div>
-      <div class="budget-label">⚡ Exceptionnel dépensé</div>
-      <div class="budget-amount" id="except-amount">—</div>
-    </div>
+  <div class="budget-card total" id="card-total">
+    <div class="budget-label">💰 Total disponible · Nourriture + Perso</div>
+    <div class="budget-amount" id="total-amount">—</div>
+    <div class="progress-bar"><div class="progress-fill" id="total-bar" style="width:0%"></div></div>
   </div>
 </div>
 
@@ -205,9 +206,10 @@
     <div class="dispo-label">Perso dépensé</div>
     <div class="dispo-amount ok" id="dispo-perso-amount">—</div>
   </div>
-  <div class="dispo-card except">
-    <div class="dispo-label">Période</div>
-    <div class="dispo-periode" id="periode-label">—</div>
+  <div class="dispo-card except" id="card-except" style="position:relative;overflow:hidden;">
+    <div class="confirm-check" id="check-except">✓</div>
+    <div class="dispo-label">Exceptionnel dépensé</div>
+    <div class="dispo-amount depense" id="except-amount">—</div>
   </div>
 </div>
 
@@ -509,7 +511,6 @@ function mettreAJourUI() {
   document.getElementById('header-date').textContent = `${jours[dateObj.getDay()]} ${d} ${moisNoms[parseInt(m)-1]}`;
   document.getElementById('header-periode').textContent = getPeriodeLabel(periodeKey);
   document.getElementById('header-statut').textContent = state.mode==='aec' ? 'AEC Étudiant' : 'Visiteur';
-  document.getElementById('periode-label').textContent = getPeriodeLabel(periodeKey);
 
   const entries = state.entrees?.[periodeKey] || [];
   const totalNourr = getSomme(entries,'nourriture');
@@ -541,6 +542,17 @@ function mettreAJourUI() {
   document.getElementById('perso-bar').className = 'progress-fill'+(totalPerso>budgetPerso?' danger':'');
 
   document.getElementById('except-amount').textContent = fmt(totalExcept);
+
+  // --- Carte Total disponible (Nourriture + Perso), sous les deux cartes "reste" ---
+  const totalEl = document.getElementById('total-amount');
+  totalEl.textContent = fmt(dispo);
+  totalEl.className = 'budget-amount '+(dispo<0?'danger':dispo<40?'warn':'ok');
+  // Barre du total : même logique que les deux autres, elle se VIDE au fil des dépenses
+  const budgetTotal = budgetNourr + budgetPerso;
+  const pT = Math.max(0, Math.min(100, Math.round(dispo/budgetTotal*100)));
+  document.getElementById('total-bar').style.width = pT+'%';
+  document.getElementById('total-bar').className = 'progress-fill'+(dispo<0?' danger':'');
+  document.getElementById('card-total')?.classList.toggle('danger-card', dispo < 0);
 
   // --- Petites cartes (milieu) : ce qui a été DÉPENSÉ (inversé le 04/08/2026) ---
   const dispoNourrEl = document.getElementById('dispo-nourr-amount');

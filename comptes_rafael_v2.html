@@ -1340,6 +1340,7 @@ input, textarea, select { cursor: text; }
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
             <input type="number" id="dette_perm_input" placeholder="montant $" step="1" min="0"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();saveDettePaiementCourant();}"
               style="width:80px;background:var(--bg);border:1px solid var(--border);border-radius:5px;
                      color:var(--text);font-size:12px;font-family:var(--font-mono);padding:4px 8px;">
             <button onclick="saveDettePaiementCourant()"
@@ -2979,6 +2980,8 @@ function renderRappels() {
     let htmlPerso = '';
     (state.rappelsPersonnalises || []).forEach(r => {
       if (r.paye) return;
+      // Report decide depuis la mini-app (bouton "Plus tard")
+      if (r.snoozeJusqua && getDateRef() < r.snoozeJusqua) return;
       const echeance = new Date(r.dateEcheance + 'T00:00:00');
       const joursRestants = Math.ceil((echeance - today) / 86400000);
       if (joursRestants > 37) return; // pas encore assez proche, on n'affiche pas tout de suite
@@ -3847,7 +3850,7 @@ function ouvrirModalNouveauRappel() {
       </div>
       <div class="form-row">
         <label>Description</label>
-        <input type="text" id="rappelPersoDesc" placeholder="ex: Électricité">
+        <input type="text" id="rappelPersoDesc" placeholder="ex: Renouvellement permis">
       </div>
       <div class="form-row">
         <label>Montant ($)</label>
@@ -5200,7 +5203,18 @@ function saveDettePaiementCourant() {
   const el = document.getElementById('dette_perm_input');
   if (!el) return;
   const montant = parseFloat(el.value);
-  if (isNaN(montant) || montant <= 0) return;
+  // Avant, un champ vide faisait sortir la fonction en silence : le bouton semblait mort.
+  if (isNaN(montant) || montant <= 0) {
+    alert("Entre d'abord le montant à rembourser dans le champ à gauche du bouton.");
+    el.focus();
+    return;
+  }
+  const restantDette = getDetteRestante();
+  if (montant > restantDette) {
+    alert(`Montant supérieur à la dette restante.\n\nDette restante : ${fmt(restantDette)}\nMontant saisi  : ${fmt(montant)}`);
+    el.focus();
+    return;
+  }
 
   // Simuler le solde après cet extra
   const soldes = calculerSoldes();

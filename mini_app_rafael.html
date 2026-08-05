@@ -683,8 +683,9 @@ function renderRappels() {
         <span class="rappel-montant">${fmt(r.montant)}</span>
       </div>
       <div class="rappel-desc">${r.desc}</div>
+      <div style="font-size:10px;color:#9a7070;margin:-6px 0 10px;">Rappel seulement — pense à saisir la dépense</div>
       <div class="rappel-btns">
-        <button class="rappel-btn fait" onclick="resetSessionTimer();rappelDejaPaye('${r.id}')">✅ Déjà payé</button>
+        <button class="rappel-btn fait" onclick="resetSessionTimer();rappelDejaPaye('${r.id}')">✅ C'est fait</button>
         <button class="rappel-btn plus-tard" onclick="resetSessionTimer();rappelPlusTard('${r.id}')">⏰ Plus tard</button>
       </div>
     </div>`;
@@ -708,18 +709,11 @@ async function majRappel(id, appliquer) {
   await sauvegarderDansFirebase();
 }
 
+// Un rappel ne cree AUCUNE depense : il previent, rien de plus. La saisie se fait
+// normalement via les boutons Nourriture / Perso / Exception.
 function rappelDejaPaye(id) {
   majRappel(id, r => {
-    if (!confirm(`Marquer "${r.desc}" (${fmt(r.montant)}) comme payé ?\n\nLa dépense sera enregistrée automatiquement.`)) return false;
-    const dateJour = getDateAujourdhui();
-    const cible = getPeriodeKeyPourDate(dateJour);
-    if (!state.entrees) state.entrees = {};
-    if (!state.entrees[cible]) state.entrees[cible] = [];
-    if (!Array.isArray(state.entrees[cible])) state.entrees[cible] = Object.values(state.entrees[cible]);
-    state.entrees[cible].push({
-      id: uid(), type: r.categorie, montant: r.montant, desc: r.desc,
-      date: dateJour, rembourse: false, rembDesc: ''
-    });
+    if (!confirm(`Fermer le rappel "${r.desc}" (${fmt(r.montant)}) ?\n\nAucune dépense ne sera créée : pense à saisir la dépense normalement si ce n'est pas déjà fait.`)) return false;
     r.paye = true;
     return true;
   });

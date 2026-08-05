@@ -3860,14 +3860,10 @@ function ouvrirModalNouveauRappel() {
         <label>Date d'échéance</label>
         <input type="date" id="rappelPersoDate" value="${aujourdhui}">
       </div>
-      <div class="form-row">
-        <label>Catégorie (où loger la dépense une fois payée)</label>
-        <select id="rappelPersoCat">
-          <option value="nourriture">🛒 Nourriture</option>
-          <option value="perso">🧴 Perso</option>
-          <option value="exceptionnel">⚡ Exceptionnel</option>
-          <option value="autre_fixe" selected>🔒 Frais fixe ponctuel</option>
-        </select>
+      <div style="font-size:11px;color:var(--muted);background:rgba(255,255,255,.03);
+           border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-top:6px;">
+        ℹ️ Un rappel sert <b style="color:var(--text);">uniquement à prévenir</b>. Il ne crée
+        aucune dépense : la saisie se fait normalement, au bon endroit, le moment venu.
       </div>
       <div class="form-actions" style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end;">
         <button class="btn btn-secondary" onclick="document.getElementById('modalNouveauRappel').classList.remove('open')">Annuler</button>
@@ -3881,13 +3877,12 @@ function enregistrerNouveauRappel() {
   const desc = document.getElementById('rappelPersoDesc').value.trim();
   const montant = parseFloat(document.getElementById('rappelPersoMontant').value);
   const dateEcheance = document.getElementById('rappelPersoDate').value;
-  const categorie = document.getElementById('rappelPersoCat').value;
   if (!desc) { alert('Entre une description.'); return; }
   if (!montant || montant <= 0) { alert('Entre un montant valide.'); return; }
   if (!dateEcheance) { alert('Entre une date d\'échéance.'); return; }
   if (!state.rappelsPersonnalises) state.rappelsPersonnalises = [];
   state.rappelsPersonnalises.push({
-    id: uid(), desc, montant, dateEcheance, categorie, paye: false
+    id: uid(), desc, montant, dateEcheance, paye: false
   });
   document.getElementById('modalNouveauRappel').classList.remove('open');
   saveState();
@@ -3922,29 +3917,22 @@ function ouvrirRappelPersonnalise(id) {
       <div class="form-actions" style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
         <button class="btn btn-secondary" onclick="document.getElementById('modalRappelPersoInfo').classList.remove('open')">Fermer</button>
         <button class="btn btn-secondary" onclick="document.getElementById('modalRappelPersoInfo').classList.remove('open');supprimerRappelPersonnalise('${r.id}')" style="color:var(--muted);">✕ Supprimer</button>
-        <button class="btn" style="background:var(--red);color:#fff;" onclick="payerRappelPersonnalise('${r.id}')">💳 Payer</button>
+        <button class="btn" style="background:var(--green);color:#000;" onclick="payerRappelPersonnalise('${r.id}')">✅ C'est fait</button>
       </div>
     </div>`;
   overlay.classList.add('open');
 }
 
+// Un rappel ne cree AUCUNE depense (decision du 04/08/2026) : il se contente de
+// prevenir. La saisie reelle se fait normalement, au bon endroit (bouton Rembourser
+// pour la dette, saisie classique pour le reste). Evite les doubles ecritures.
 function payerRappelPersonnalise(id) {
   const r = (state.rappelsPersonnalises || []).find(x => x.id === id);
   if (!r) return;
-  const aujourdhui = getDateRef();
-  const periodeKey = getPeriodeKeyPourDate(aujourdhui);
-  if (!periodeKey) { alert("Impossible de déterminer la période pour aujourd'hui."); return; }
-  if (!state.entrees) state.entrees = {};
-  if (!state.entrees[periodeKey]) state.entrees[periodeKey] = [];
-  state.entrees[periodeKey].push({
-    id: uid(), type: r.categorie, montant: r.montant, desc: r.desc,
-    date: aujourdhui, rembourse: false, rembDesc: ''
-  });
   r.paye = true;
   document.getElementById('modalRappelPersoInfo').classList.remove('open');
   saveState();
   render();
-  alert(`${r.desc} (${fmt(r.montant)}) enregistré comme dépense et rappel réglé.`);
 }
 
 function supprimerRappelPersonnalise(id) {

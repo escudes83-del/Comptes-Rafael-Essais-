@@ -474,7 +474,7 @@
   .rappel-date { font-size: 11px; color: var(--red); font-weight: 600; margin-top: 2px; }
   .rappel-date.ok { color: var(--green); }
 
-  /* ── BLOC FRAIS FIXES ── */
+  /* ── BLOC FRAIS DIVERS ── */
   .fixes-bloc {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -1425,10 +1425,10 @@ input, textarea, select { cursor: text; }
   <!-- ALERTES -->
   <div class="alertes-panel" id="alertesPanel"></div>
 
-  <!-- FRAIS FIXES -->
+  <!-- FRAIS DIVERS -->
   <div class="fixes-bloc" id="fixesBloc">
     <div class="fixes-header">
-      <div class="fixes-title">🔒 Frais fixes du mois<span onclick="event.stopPropagation();ouvrirAide('fraisFixes')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:6px;vertical-align:middle;flex-shrink:0;">?</span><span onclick="event.stopPropagation();ouvrirAide('changerDatesDebit')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:6px;vertical-align:middle;flex-shrink:0;">?</span></div>
+      <div class="fixes-title">🔒 Frais divers du mois<span onclick="event.stopPropagation();ouvrirAide('fraisFixes')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:6px;vertical-align:middle;flex-shrink:0;">?</span><span onclick="event.stopPropagation();ouvrirAide('changerDatesDebit')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:6px;vertical-align:middle;flex-shrink:0;">?</span></div>
       <div class="fixes-total" id="fixesTotal">—</div>
     </div>
     <div class="fixes-grid" id="fixesGrid"></div>
@@ -1552,7 +1552,7 @@ input, textarea, select { cursor: text; }
 <div class="modal-overlay" id="modalSimFrequence">
   <div class="modal">
     <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h2 style="margin:0;">🔧 Paramètres frais fixes</h2>
+      <h2 style="margin:0;">🔧 Paramètres frais divers</h2>
       <span onclick="closeModal('modalSimFrequence')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
     </div>
     <p style="font-size:11px;color:var(--muted);margin-bottom:14px;">Modifiable à tout moment. Metro : tarif étudiant automatique en mode AEC.</p>
@@ -1820,6 +1820,9 @@ function defaultState() {
     detteCalManuel: {}, // override remboursement dette prévu par période
     loyersPeriodes: {}, // override loyer par période (legacy)
     loyerEntrees: {}, // entrées loyer par période [{id,montant,desc,date}]
+    // Santé : soins payés et remboursements (assurance costaricienne, RAMQ...)
+    // sens: 'depense' (sort du compte) | 'remboursement' (rentre sur le compte)
+    santeEntrees: {}, // { periodeKey: [{id, montant, desc, date, sens}] }
     dernierExtra: null,
     detteAnnulee: null, // {date, motif} — dette annulee par le proprietaire (aucun mouvement d'argent)
     portefeuilleDette: [], // [{id, montant, date, periode}]
@@ -1848,6 +1851,7 @@ function loadState() {
       if (s.detteIRCC === undefined) s.detteIRCC = 2000;
       if (s.detteAnnulee === undefined) s.detteAnnulee = null;
       if (!s.joursDebit) s.joursDebit = {...DEFAUT_JOURS_DEBIT};
+      if (!s.santeEntrees) s.santeEntrees = {};
       if (s.detteLoyerLogement === undefined) s.detteLoyerLogement = 6080;
       // Firebase supprime les null — on les restitue
       if (s.soldeRef === undefined) s.soldeRef = null;
@@ -2246,6 +2250,53 @@ function getLogementPeriode(key) {
   return entries.reduce((s, e) => s + e.montant, 0);
 }
 
+// ── SANTÉ ───────────────────────────────────────────────────────
+// Net santé = soins payés MOINS remboursements reçus. Un net négatif (plus de
+// remboursements que de soins sur la période) redonne bien de l'argent au solde.
+function getSanteEntrees(key) {
+  return (state.santeEntrees || {})[key] || [];
+}
+function getSanteDepenses(key) {
+  return getSanteEntrees(key).filter(e => e.sens !== 'remboursement')
+    .reduce((s,e) => s + e.montant, 0);
+}
+function getSanteRemboursements(key) {
+  return getSanteEntrees(key).filter(e => e.sens === 'remboursement')
+    .reduce((s,e) => s + e.montant, 0);
+}
+function getSantePeriode(key) {
+  return getSanteDepenses(key) - getSanteRemboursements(key);
+}
+// Net santé déjà engagé à une date donnée (pour le solde « réel jour J »)
+function getSanteEngageeAvant(key, dateRef) {
+  return getSanteEntrees(key).filter(e => e.date <= dateRef)
+    .reduce((s,e) => s + (e.sens === 'remboursement' ? -e.montant : e.montant), 0);
+}
+
+function addSanteEntree(key, sens) {
+  const suffixe = sens === 'remboursement' ? 'remb' : 'dep';
+  const amtEl  = document.getElementById('sante_' + suffixe + '_amt');
+  const descEl = document.getElementById('sante_' + suffixe + '_desc');
+  const dateEl = document.getElementById('sante_' + suffixe + '_date');
+  const montant = parseFloat(amtEl.value);
+  if (isNaN(montant) || montant <= 0) { alert('Entre un montant.'); amtEl.focus(); return; }
+  const desc = (descEl.value || '').trim() || (sens === 'remboursement' ? 'Remboursement santé' : 'Soins');
+  const date = dateEl.value || getDatePourPeriode(key);
+  if (!state.santeEntrees) state.santeEntrees = {};
+  if (!state.santeEntrees[key]) state.santeEntrees[key] = [];
+  state.santeEntrees[key].push({ id: uid(), montant, desc, date, sens });
+  amtEl.value = ''; descEl.value = '';
+  saveState();
+  render();
+}
+
+function deleteSanteEntree(key, id) {
+  if (!confirm('Supprimer cette ligne ?')) return;
+  state.santeEntrees[key] = (state.santeEntrees[key] || []).filter(e => e.id !== id);
+  saveState();
+  render();
+}
+
 function getFixeEntreesPeriode(fixKey, periodeKey) {
   return (((state.fixesEntrees || {})[fixKey]) || {})[periodeKey] || [];
 }
@@ -2267,6 +2318,8 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
   // Loyer : seulement les lignes dont la date est <= dateRef (reflète le solde banque réel)
   const loyerEntrees = (state.loyerEntrees || {})[periodeKey] || [];
   total += loyerEntrees.filter(e => e.date <= dateRef).reduce((s,e) => s+e.montant, 0);
+  // Santé : net (soins - remboursements) déjà engagé à cette date
+  total += getSanteEngageeAvant(periodeKey, dateRef);
   // Frais fixes manuels (saisis explicitement) : seulement les entrées dont la date est <= dateRef
   ['electricite','assurance','gym','netflix','fido','bixi','metro'].forEach(fixKey => {
     const entrees = getFixeEntreesPeriode(fixKey, periodeKey);
@@ -2316,9 +2369,10 @@ function getFixesTotauxPeriode(key) {
   const fido = getFidoPeriode(key);
   const metro = getMetroPeriode(key);
   const bixi = getBixiPeriode(key);
+  const sante = getSantePeriode(key);
   const dette = 0;
-  return {logement, electricite, assurance, gym, netflix, fido, metro, bixi, dette,
-    total: logement+electricite+assurance+gym+netflix+fido+metro+bixi};
+  return {logement, electricite, assurance, gym, netflix, fido, metro, bixi, sante, dette,
+    total: logement+electricite+assurance+gym+netflix+fido+metro+bixi+sante};
 }
 
 function getSommeEntrees(key, type) {
@@ -2611,6 +2665,7 @@ function renderFixesBloc() {
   html += renderFixeEntreeCard('fido', 'Fido (tél)', '📱', curKey, fixes.fido, 'irrégulier', null, fidoDebite);
   html += renderFixeEntreeCard('metro', 'Métro', '🚇', curKey, metroMontant, isAEC ? 'tarif étudiant' : 'tarif normal', 'Prochain : ' + fmtDate(nextMetro), metroDebite);
   html += renderFixeEntreeCard('bixi', 'Bixi', '🚲', curKey, fixes.bixi, fixes.bixi === 0 ? 'non actif' : '1 mois', null, false);
+  html += renderSanteCard(curKey);
 
   document.getElementById('fixesGrid').innerHTML = html;
 }
@@ -2653,7 +2708,7 @@ function renderLogementFixeCard(curKey, logementMontant, detteFixeMensuelle) {
     : '';
 
   return '<div class="' + cls + '" id="fixes_card_logement" style="min-width:200px;">' +
-    '<div class="fixes-item-label">🏠 Logement</div>' +
+    '<div class="fixes-item-label">🏠 Logement' + '<span onclick="event.stopPropagation();ouvrirAide(\'fixe_logement\')" title="Aide / Help"' + ' style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;' + 'border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:8px;' + 'font-weight:800;cursor:pointer;margin-left:4px;vertical-align:middle;">?</span>' + '</div>' +
     (total > 0 ? '<div class="fixes-item-montant">' + fmt(total) + '</div>' : '<div class="fixes-item-montant">—</div>') +
     detteHTML +
     '<div style="margin-top:6px;">' + listeHTML + '</div>' +
@@ -2669,6 +2724,63 @@ function renderLogementFixeCard(curKey, logementMontant, detteFixeMensuelle) {
 // ── CRUD GENERIQUE FRAIS FIXES ──────────────────────────────────
 // Carte Gym spécifique : 2 prélèvements distincts (23 puis 7 du mois suivant), chacun avec
 // son propre statut débité/pas encore — plus précis qu'un badge combiné sur le total.
+// Carte Santé : soins payés et remboursements (assurance costaricienne, RAMQ...).
+// Le net (soins - remboursements) entre dans le solde comme les autres frais.
+function renderSanteCard(curKey) {
+  const entries = getSanteEntrees(curKey);
+  const dep  = getSanteDepenses(curKey);
+  const remb = getSanteRemboursements(curKey);
+  const net  = dep - remb;
+  const cls  = entries.length ? 'fixes-item actif' : 'fixes-item inactif';
+  const dateDefault = getDatePourPeriode(curKey);
+
+  let listeHTML = '';
+  if (!entries.length) {
+    listeHTML = '<div style="font-size:10px;color:var(--muted);padding:3px 0;">Aucune entrée</div>';
+  } else {
+    [...entries].sort((a,b) => a.date.localeCompare(b.date)).forEach(e => {
+      const remboursement = e.sens === 'remboursement';
+      listeHTML += '<div class="vm-tx-wrap" style="margin:0;">'
+        + '<div class="vm-tx" style="font-size:11px;padding:2px 0;">'
+          + '<span class="vm-tx-date" style="font-size:10px;">' + e.date.slice(8) + '/' + e.date.slice(5,7) + '</span>'
+          + '<span class="vm-tx-desc" style="font-size:11px;flex:1;">'
+            + (remboursement ? '↩ ' : '🩺 ') + e.desc + '</span>'
+          + '<span class="vm-tx-amt" style="font-size:11px;color:'
+            + (remboursement ? 'var(--green)' : 'var(--text)') + ';">'
+            + (remboursement ? '+' : '−') + fmt(e.montant) + '</span>'
+          + '<button class="vm-tx-del" onclick="deleteSanteEntree(\'' + curKey + '\',\'' + e.id + '\')" title="Supprimer" style="font-size:11px;">✕</button>'
+        + '</div>'
+      + '</div>';
+    });
+  }
+
+  const champs = (sens, libelle, couleur, placeholder) =>
+    '<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;align-items:center;">'
+    + '<input type="number" id="sante_' + sens + '_amt" placeholder="Montant $" step="0.01" min="0" style="width:75px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;font-family:var(--font-mono);padding:3px 6px;">'
+    + '<input type="text" id="sante_' + sens + '_desc" placeholder="' + placeholder + '" style="flex:1;min-width:80px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;padding:3px 6px;">'
+    + '<input type="date" id="sante_' + sens + '_date" value="' + dateDefault + '" style="width:115px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;padding:3px 5px;">'
+    + '<button onclick="addSanteEntree(\'' + curKey + '\',\'' + (sens === 'remb' ? 'remboursement' : 'depense') + '\')" style="background:' + couleur + ';color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;padding:3px 10px;cursor:pointer;">' + libelle + '</button>'
+    + '</div>';
+
+  const aide = '<span onclick="event.stopPropagation();ouvrirAide(\'fixe_sante\')" title="Aide / Help"'
+    + ' style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;'
+    + 'border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:8px;'
+    + 'font-weight:800;cursor:pointer;margin-left:4px;vertical-align:middle;">?</span>';
+
+  return '<div class="' + cls + '" id="fixes_card_sante" style="min-width:230px;">'
+    + '<div class="fixes-item-label">🏥 Santé' + aide + '</div>'
+    + '<div class="fixes-item-montant" style="color:' + (net > 0 ? 'var(--text)' : net < 0 ? 'var(--green)' : 'var(--muted)') + ';">'
+      + (entries.length ? (net >= 0 ? fmt(net) : '+' + fmt(-net)) : '—') + '</div>'
+    + (entries.length
+        ? '<div style="font-size:9px;color:var(--muted);">soins ' + fmt(dep)
+          + ' · remb. <span style="color:var(--green);">' + fmt(remb) + '</span></div>'
+        : '<div style="font-size:9px;color:var(--muted);">soins et remboursements</div>')
+    + '<div style="margin-top:5px;">' + listeHTML + '</div>'
+    + champs('dep', '+ Soin', 'var(--accent)', 'ex : dentiste')
+    + champs('remb', '+ Remb.', 'var(--green)', 'ex : assurance CR')
+  + '</div>';
+}
+
 function renderGymCard(curKey, gym, nextGym, gymDebite1, gymDebite2) {
   const fixKey = 'gym';
   const entries = getFixeEntreesPeriode(fixKey, curKey);
@@ -2720,7 +2832,7 @@ function renderGymCard(curKey, gym, nextGym, gymDebite1, gymDebite2) {
   }
 
   return '<div class="' + cls + '" id="fixes_card_gym">'
-    + '<div class="fixes-item-label">🏋️ Gym</div>'
+    + '<div class="fixes-item-label">🏋️ Gym' + '<span onclick="event.stopPropagation();ouvrirAide(\'fixe_gym\')" title="Aide / Help"' + ' style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;' + 'border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:8px;' + 'font-weight:800;cursor:pointer;margin-left:4px;vertical-align:middle;">?</span>' + '</div>'
     + corpsHTML
     + '<div class="fixes-item-next">Prochain : ' + fmtDate(nextGym) + '</div>'
     + '<div style="font-size:9px;color:var(--muted);">' + gym.count + 'x ' + montantUnitaire.toFixed(2).replace('.',',') + ' $</div>'
@@ -4575,8 +4687,8 @@ function retablirDette() {
 // ============================================================================
 const AIDES = {
   demarrage: {
-    fr: { titre: "🚀 Bien démarrer", aquoi: "Vue d'ensemble de l'application. Elle suit le budget de Rafael période par période, du 16 d'un mois au 15 du suivant.", etapes: ["Le <b>bandeau du haut</b> montre les alertes importantes du moment.", "La <b>frise de pilules</b> montre le solde de chaque période. Clique sur une pilule pour voir le détail dessous.", "Le <b>détail de la période</b> liste les revenus, les frais fixes et les dépenses.", "Les boutons à droite du bandeau ouvrent les outils : Paramètres, Rappels, Simulation, Tableau."], notes: "Chaque fonction a un petit <b>?</b> bleu à côté. Clique dessus : la fenêtre d'aide reste ouverte pendant que tu utilises la fonction, et tu peux la déplacer où tu veux." },
-    en: { titre: "🚀 Getting started", aquoi: "Overview of the app. It tracks Rafael's budget period by period, from the 16th of one month to the 15th of the next.", etapes: ["The <b>top banner</b> shows the important alerts of the moment.", "The <b>pill strip</b> shows the balance for each period. Click a pill to see its detail below.", "The <b>period detail</b> lists income, fixed costs and expenses.", "The buttons on the right of the banner open the tools: Settings, Reminders, Simulation, Table."], notes: "Every function has a small blue <b>?</b> next to it. Click it: the help window stays open while you use the function, and you can drag it anywhere." }
+    fr: { titre: "🚀 Bien démarrer", aquoi: "Vue d'ensemble de l'application. Elle suit le budget de Rafael période par période, du 16 d'un mois au 15 du suivant.", etapes: ["Le <b>bandeau du haut</b> montre les alertes importantes du moment.", "La <b>frise de pilules</b> montre le solde de chaque période. Clique sur une pilule pour voir le détail dessous.", "Le <b>détail de la période</b> liste les revenus, les frais divers et les dépenses.", "Les boutons à droite du bandeau ouvrent les outils : Paramètres, Rappels, Simulation, Tableau."], notes: "Chaque fonction a un petit <b>?</b> bleu à côté. Clique dessus : la fenêtre d'aide reste ouverte pendant que tu utilises la fonction, et tu peux la déplacer où tu veux." },
+    en: { titre: "🚀 Getting started", aquoi: "Overview of the app. It tracks Rafael's budget period by period, from the 16th of one month to the 15th of the next.", etapes: ["The <b>top banner</b> shows the important alerts of the moment.", "The <b>pill strip</b> shows the balance for each period. Click a pill to see its detail below.", "The <b>period detail</b> lists income, miscellaneous costs and expenses.", "The buttons on the right of the banner open the tools: Settings, Reminders, Simulation, Table."], notes: "Every function has a small blue <b>?</b> next to it. Click it: the help window stays open while you use the function, and you can drag it anywhere." }
   },
   pilules: {
     fr: { titre: "📅 Les pilules de périodes", aquoi: "La frise du haut montre le solde de chaque période. Une période va du 16 d'un mois au 15 du mois suivant.", etapes: ["<b>réel jour J</b> : où en est le compte aujourd'hui dans cette période.", "<b>prévi fin pér.</b> : le solde prévu à la fin de la période.", "<b>dispo</b> : ce qu'il reste à dépenser en Nourriture + Perso.", "Clique sur une pilule pour afficher le détail de cette période plus bas.", "<b>▶ Afficher 2027 / 2028</b> déroule les années suivantes."], notes: "<b>👁 Masquer 2026</b> cache les lignes 2026 pour y voir plus clair. La ligne des mois reste toujours visible : elle sert de repère de colonnes pour toutes les années." },
@@ -4611,7 +4723,7 @@ const AIDES = {
     en: { titre: "💰 Savings account", aquoi: "Account separate from the current account. Every deposit or withdrawal automatically creates the matching entry in the books.", etapes: ["<b>Deposit</b>: money leaves the current account → an \"Exceptionnel\" expense is created.", "<b>Withdrawal</b>: money returns to the current account → an \"Autre revenu\" entry is created.", "<b>Interest</b>: added to savings without touching the current account.", "<b>📊 Voir la projection</b> simulates how long the savings can last."], notes: "Deleting a movement also deletes the linked entry, and vice versa — a confirmation warns you each time. The two cannot get out of sync." }
   },
   projectionEpargne: {
-    fr: { titre: "📊 Projection d'épargne", aquoi: "Simule les périodes à venir en puisant dans l'épargne pour maintenir le compte courant au-dessus de 100 $, jusqu'à épuisement.", etapes: ["Ouvre le <b>💰 Compte Épargne</b>.", "Clique sur <b>📊 Voir la projection</b>.", "Lis la période où l'épargne serait épuisée."], notes: "C'est une projection, pas une décision : rien n'est enregistré. Elle suppose que les revenus et frais fixes actuels continuent à l'identique." },
+    fr: { titre: "📊 Projection d'épargne", aquoi: "Simule les périodes à venir en puisant dans l'épargne pour maintenir le compte courant au-dessus de 100 $, jusqu'à épuisement.", etapes: ["Ouvre le <b>💰 Compte Épargne</b>.", "Clique sur <b>📊 Voir la projection</b>.", "Lis la période où l'épargne serait épuisée."], notes: "C'est une projection, pas une décision : rien n'est enregistré. Elle suppose que les revenus et frais divers actuels continuent à l'identique." },
     en: { titre: "📊 Savings projection", aquoi: "Simulates upcoming periods, drawing on savings to keep the current account above $100, until it runs out.", etapes: ["Open <b>💰 Compte Épargne</b>.", "Click <b>📊 Voir la projection</b>.", "Read the period where savings would run out."], notes: "This is a projection, not a decision: nothing is recorded. It assumes current income and fixed costs continue unchanged." }
   },
   suggestionVirement: {
@@ -4621,6 +4733,14 @@ const AIDES = {
   reliquat: {
     fr: { titre: "🎁 Reliquat", aquoi: "Ce qui reste des budgets Nourriture et Perso à la fin d'une période. Une bulle verte apparaît au début de la période suivante.", etapes: ["Clique sur la bulle verte pour voir le montant.", "Choisis : reporter sur le budget <b>Nourriture</b> ou <b>Perso</b>, verser au <b>💰 Compte Épargne</b>, ou l'appliquer à la <b>dette</b>.", "Ou ferme avec ✕ pour ne rien faire."], notes: "La bulle expire après 10 jours. Si une catégorie a été dépassée, le reliquat peut être négatif : c'est un déficit, pas un bonus." },
     en: { titre: "🎁 Leftover", aquoi: "What is left of the Food and Personal budgets at the end of a period. A green bubble appears at the start of the next period.", etapes: ["Click the green bubble to see the amount.", "Choose: carry over to the <b>Food</b> or <b>Personal</b> budget, move it to <b>💰 Savings</b>, or apply it to the <b>debt</b>.", "Or close with ✕ to do nothing."], notes: "The bubble expires after 10 days. If a category was overspent, the leftover can be negative: that is a deficit, not a bonus." }
+  },
+  fixe_logement: {
+    fr: { titre: "🏠 Logement", aquoi: "Le loyer se saisit entièrement à la main, ligne par ligne. Aucun prélèvement automatique.", etapes: ["Entre le montant, une description (ex : « Loyer juillet ») et la <b>date réelle</b> du paiement.", "Clique sur <b>+ Ajouter</b>. Tu peux mettre plusieurs lignes dans une même période.", "Le crayon modifie une ligne, la croix la supprime.", "Le montant est retiré du solde « réel jour J » <b>à la date que tu as saisie</b>, pas avant."], notes: "Le loyer n'est pas automatisé parce qu'il change selon les mois et les arrangements. Depuis octobre 2026, le logement est prépayé (6 080 $ avancés par PY) : les lignes servent alors à suivre la consommation de cette avance, pas des paiements au propriétaire." },
+    en: { titre: "🏠 Housing", aquoi: "Rent is entered entirely by hand, line by line. No automatic charge.", etapes: ["Enter the amount, a description (e.g. \"Loyer juillet\") and the <b>real payment date</b>.", "Click <b>+ Ajouter</b>. You can put several lines in the same period.", "The pencil edits a line, the cross deletes it.", "The amount leaves the \"réel jour J\" balance <b>on the date you entered</b>, not before."], notes: "Rent is not automated because it varies with the month and the arrangement. Since October 2026 housing is prepaid ($6,080 advanced by PY): the lines then track the use of that advance rather than payments to the landlord." }
+  },
+  fixe_sante: {
+    fr: { titre: "🏥 Santé", aquoi: "Les soins payés et les remboursements reçus (assurance costaricienne, RAMQ…). Tout se saisit à la main.", etapes: ["<b>+ Soin</b> (bouton bleu) : un soin payé. Montant, description (ex : « dentiste »), date réelle du paiement.", "<b>+ Remb.</b> (bouton vert) : un remboursement reçu. Montant, qui rembourse (ex : « assurance CR »), date de réception.", "Le gros chiffre de la carte est le <b>net</b> : soins payés moins remboursements reçus.", "S'il est <b>vert avec un +</b>, c'est que les remboursements dépassent les soins sur cette période : de l'argent est rentré."], notes: "Chaque ligne agit sur le solde <b>à sa propre date</b> : un soin payé le 3 sort du compte le 3, un remboursement reçu le 20 rentre le 20. C'est important quand le remboursement arrive des semaines après le soin — le solde « réel jour J » reste juste entre les deux." },
+    en: { titre: "🏥 Health", aquoi: "Care paid for and reimbursements received (Costa Rican insurance, RAMQ…). Everything is entered by hand.", etapes: ["<b>+ Soin</b> (blue button): care you paid for. Amount, description (e.g. \"dentist\"), real payment date.", "<b>+ Remb.</b> (green button): a reimbursement received. Amount, who is paying (e.g. \"assurance CR\"), date received.", "The large figure on the card is the <b>net</b>: care paid minus reimbursements received.", "If it is <b>green with a +</b>, reimbursements exceed care for that period: money came in."], notes: "Each line hits the balance <b>on its own date</b>: care paid on the 3rd leaves the account on the 3rd, a reimbursement received on the 20th comes in on the 20th. That matters when the refund arrives weeks after the care — the \"réel jour J\" balance stays correct in between." }
   },
   fixe_gym: {
     fr: { titre: "🏋️ Gym", aquoi: "40,80 $ par période, prélevés automatiquement en deux fois. Rien à faire.", etapes: ["<b>Tu n'as rien à saisir.</b> Le montant est déjà connu de l'app et retiré tout seul à la bonne date.", "20,40 $ le <b>23</b>, puis 20,40 $ le <b>7</b> du mois suivant. La carte affiche les deux séparément.", "<b>✅ Débité</b> = le prélèvement est passé, il est <b>déjà retiré</b> du solde « réel jour J ». Le chiffre affiché correspond donc à ton vrai solde bancaire.", "<b>⏳ Pas encore débité</b> = la date n'est pas encore arrivée. Le montant n'est <b>pas</b> retiré du solde « réel jour J », mais il est bien compté dans « prévi fin pér. ».", "Pour changer le montant ou les jours : <b>🔧 Paramètres</b>."], notes: "⚠️ Ne saisis <b>pas</b> ce frais à la main : il serait compté deux fois. La saisie manuelle sert uniquement si le prélèvement est tombé à une date inhabituelle ce mois-là — dans ce cas elle remplace complètement le calcul automatique pour cette période. C'est le seul frais prélevé deux fois par période." },
@@ -4635,8 +4755,8 @@ const AIDES = {
     en: { titre: "🎬 Netflix", aquoi: "$21.46 per month, charged automatically on the 25th. Nothing to do.", etapes: ["<b>You have nothing to enter.</b> The app already knows the amount and deducts it on the right date.", "A single charge, in the period's first month. The card shows the next charge date.", "<b>✅ Débité</b> = the charge has gone through and is <b>already deducted</b> from the \"réel jour J\" balance. The figure shown therefore matches your real bank balance.", "<b>⏳ Pas encore débité</b> = the date has not arrived yet. The amount is <b>not</b> deducted from \"réel jour J\", but it is included in \"prévi fin pér.\".", "To change the amount or day: <b>🔧 Paramètres</b>."], notes: "⚠️ Do <b>not</b> enter this cost by hand: it would be counted twice. Manual entry is only for a month where the charge landed on an unusual date — in that case it fully replaces the automatic calculation for that period." }
   },
   fixe_metro: {
-    fr: { titre: "🚇 Métro", aquoi: "La passe mensuelle, prélevée automatiquement le 1er du mois suivant le début de la période. Rien à faire.", etapes: ["<b>Tu n'as rien à saisir.</b> Le montant est déjà connu de l'app et retiré tout seul à la bonne date.", "<b>110 $</b> en statut Visiteur, <b>62,50 $</b> en statut AEC Étudiant. Le tarif suit tout seul le statut choisi dans le bandeau.", "<b>✅ Débité</b> = le prélèvement est passé, il est <b>déjà retiré</b> du solde « réel jour J ». Le chiffre affiché correspond donc à ton vrai solde bancaire.", "<b>⏳ Pas encore débité</b> = la date n'est pas encore arrivée. Le montant n'est <b>pas</b> retiré du solde « réel jour J », mais il est bien compté dans « prévi fin pér. ».", "Pour changer les montants ou le jour : <b>🔧 Paramètres</b>."], notes: "⚠️ Ne saisis <b>pas</b> ce frais à la main : il serait compté deux fois. La saisie manuelle sert uniquement si le prélèvement est tombé à une date inhabituelle ce mois-là — dans ce cas elle remplace complètement le calcul automatique pour cette période. C'est le plus gros frais fixe : c'est lui qui fait chuter le solde en début de mois." },
-    en: { titre: "🚇 Metro", aquoi: "The monthly pass, charged automatically on the 1st of the month following the start of the period. Nothing to do.", etapes: ["<b>You have nothing to enter.</b> The app already knows the amount and deducts it on the right date.", "<b>$110</b> as Visitor, <b>$62.50</b> as AEC Student. The fare follows the status chosen in the banner automatically.", "<b>✅ Débité</b> = the charge has gone through and is <b>already deducted</b> from the \"réel jour J\" balance. The figure shown therefore matches your real bank balance.", "<b>⏳ Pas encore débité</b> = the date has not arrived yet. The amount is <b>not</b> deducted from \"réel jour J\", but it is included in \"prévi fin pér.\".", "To change the amounts or day: <b>🔧 Paramètres</b>."], notes: "⚠️ Do <b>not</b> enter this cost by hand: it would be counted twice. Manual entry is only for a month where the charge landed on an unusual date — in that case it fully replaces the automatic calculation for that period. It is the largest fixed cost: it is what drops the balance at the start of the month." }
+    fr: { titre: "🚇 Métro", aquoi: "La passe mensuelle, prélevée automatiquement le 1er du mois suivant le début de la période. Rien à faire.", etapes: ["<b>Tu n'as rien à saisir.</b> Le montant est déjà connu de l'app et retiré tout seul à la bonne date.", "<b>110 $</b> en statut Visiteur, <b>62,50 $</b> en statut AEC Étudiant. Le tarif suit tout seul le statut choisi dans le bandeau.", "<b>✅ Débité</b> = le prélèvement est passé, il est <b>déjà retiré</b> du solde « réel jour J ». Le chiffre affiché correspond donc à ton vrai solde bancaire.", "<b>⏳ Pas encore débité</b> = la date n'est pas encore arrivée. Le montant n'est <b>pas</b> retiré du solde « réel jour J », mais il est bien compté dans « prévi fin pér. ».", "Pour changer les montants ou le jour : <b>🔧 Paramètres</b>."], notes: "⚠️ Ne saisis <b>pas</b> ce frais à la main : il serait compté deux fois. La saisie manuelle sert uniquement si le prélèvement est tombé à une date inhabituelle ce mois-là — dans ce cas elle remplace complètement le calcul automatique pour cette période. C'est le plus gros frais du mois : c'est lui qui fait chuter le solde en début de mois." },
+    en: { titre: "🚇 Metro", aquoi: "The monthly pass, charged automatically on the 1st of the month following the start of the period. Nothing to do.", etapes: ["<b>You have nothing to enter.</b> The app already knows the amount and deducts it on the right date.", "<b>$110</b> as Visitor, <b>$62.50</b> as AEC Student. The fare follows the status chosen in the banner automatically.", "<b>✅ Débité</b> = the charge has gone through and is <b>already deducted</b> from the \"réel jour J\" balance. The figure shown therefore matches your real bank balance.", "<b>⏳ Pas encore débité</b> = the date has not arrived yet. The amount is <b>not</b> deducted from \"réel jour J\", but it is included in \"prévi fin pér.\".", "To change the amounts or day: <b>🔧 Paramètres</b>."], notes: "⚠️ Do <b>not</b> enter this cost by hand: it would be counted twice. Manual entry is only for a month where the charge landed on an unusual date — in that case it fully replaces the automatic calculation for that period. It is the largest cost of the month: it is what drops the balance at the start of the month." }
   },
   fixe_electricite: {
     fr: { titre: "⚡ Électricité", aquoi: "Facture Hydro-Québec. Aucun montant automatique : elle se saisit à la main.", etapes: ["Entre le montant, une description et la date réelle de la facture.", "Clique sur <b>+ Ajouter</b>."], notes: "Contrairement au gym, Fido, Netflix et au métro, il n'y a <b>aucun prélèvement automatique</b> ici : tant que tu ne saisis rien, le montant n'est pas compté. Une alerte orange apparaît dans le bandeau tant qu'aucune facture n'est saisie pour la période." },
@@ -4651,15 +4771,15 @@ const AIDES = {
     en: { titre: "🚲 Bixi", aquoi: "Bike subscription, entered by hand when active.", etapes: ["Enter the amount and date.", "Click <b>+ Ajouter</b>."], notes: "Shown as \"non actif\" while the default amount is 0." }
   },
   fraisFixes: {
-    fr: { titre: "🔒 Frais fixes", aquoi: "Les dépenses qui reviennent chaque période : métro, gym, Fido, Netflix. L'app les compte toute seule, sans aucune saisie, en se calant sur la vraie date de prélèvement de la banque.", etapes: ["<b>Gym — 40,80 $ en deux fois.</b> 20,40 $ le <b>23</b> du 1er mois de la période, puis 20,40 $ le <b>7</b> du 2e mois. La carte Gym affiche les deux prélèvements séparément, chacun avec son propre statut.", "<b>Fido — 33,96 $</b>, prélevé le <b>29</b> du 1er mois de la période.", "<b>Netflix — 21,46 $</b>, prélevé le <b>25</b> du mois.", "<b>Métro — 110 $</b> (62,50 $ en statut AEC étudiant), prélevé le <b>1er du mois suivant</b> le début de la période.", "Le badge <b>✅ Débité</b> ou <b>⏳ Pas encore débité</b> sur chaque carte dit si la date est passée."], notes: "<b>Pourquoi ces dates comptent :</b> le solde « réel jour J » n'ajoute un frais fixe que si sa date de prélèvement est déjà passée. C'est ce qui permet au solde affiché de correspondre au vrai solde bancaire, et pas à une moyenne théorique. Un frais prévu plus tard dans la période n'est donc pas encore déduit — il apparaît en revanche dans « prévi fin pér. »." },
-    en: { titre: "🔒 Fixed costs", aquoi: "The costs that come back every period: metro, gym, Fido, Netflix. The app counts them automatically, with no data entry, using the real bank charge date.", etapes: ["<b>Gym — $40.80 in two parts.</b> $20.40 on the <b>23rd</b> of the period's first month, then $20.40 on the <b>7th</b> of the second month. The Gym card shows both charges separately, each with its own status.", "<b>Fido — $33.96</b>, charged on the <b>29th</b> of the period's first month.", "<b>Netflix — $21.46</b>, charged on the <b>25th</b> of the month.", "<b>Metro — $110</b> ($62.50 with AEC student status), charged on the <b>1st of the month following</b> the start of the period.", "The <b>✅ Débité</b> or <b>⏳ Pas encore débité</b> badge on each card says whether the date has passed."], notes: "<b>Why these dates matter:</b> the \"réel jour J\" balance only adds a fixed cost once its charge date has passed. That is what makes the displayed balance match the real bank balance instead of a theoretical average. A cost due later in the period is therefore not deducted yet — it does show up in \"prévi fin pér.\" though." }
+    fr: { titre: "🔒 Frais divers", aquoi: "Les dépenses qui reviennent chaque période : métro, gym, Fido, Netflix. L'app les compte toute seule, sans aucune saisie, en se calant sur la vraie date de prélèvement de la banque.", etapes: ["<b>Gym — 40,80 $ en deux fois.</b> 20,40 $ le <b>23</b> du 1er mois de la période, puis 20,40 $ le <b>7</b> du 2e mois. La carte Gym affiche les deux prélèvements séparément, chacun avec son propre statut.", "<b>Fido — 33,96 $</b>, prélevé le <b>29</b> du 1er mois de la période.", "<b>Netflix — 21,46 $</b>, prélevé le <b>25</b> du mois.", "<b>Métro — 110 $</b> (62,50 $ en statut AEC étudiant), prélevé le <b>1er du mois suivant</b> le début de la période.", "Le badge <b>✅ Débité</b> ou <b>⏳ Pas encore débité</b> sur chaque carte dit si la date est passée."], notes: "<b>Pourquoi ces dates comptent :</b> le solde « réel jour J » n'ajoute un frais que si sa date de prélèvement est déjà passée. C'est ce qui permet au solde affiché de correspondre au vrai solde bancaire, et pas à une moyenne théorique. Un frais prévu plus tard dans la période n'est donc pas encore déduit — il apparaît en revanche dans « prévi fin pér. »." },
+    en: { titre: "🔒 Miscellaneous costs", aquoi: "The costs that come back every period: metro, gym, Fido, Netflix. The app counts them automatically, with no data entry, using the real bank charge date.", etapes: ["<b>Gym — $40.80 in two parts.</b> $20.40 on the <b>23rd</b> of the period's first month, then $20.40 on the <b>7th</b> of the second month. The Gym card shows both charges separately, each with its own status.", "<b>Fido — $33.96</b>, charged on the <b>29th</b> of the period's first month.", "<b>Netflix — $21.46</b>, charged on the <b>25th</b> of the month.", "<b>Metro — $110</b> ($62.50 with AEC student status), charged on the <b>1st of the month following</b> the start of the period.", "The <b>✅ Débité</b> or <b>⏳ Pas encore débité</b> badge on each card says whether the date has passed."], notes: "<b>Why these dates matter:</b> the \"réel jour J\" balance only adds a fixed cost once its charge date has passed. That is what makes the displayed balance match the real bank balance instead of a theoretical average. A cost due later in the period is therefore not deducted yet — it does show up in \"prévi fin pér.\" though." }
   },
   changerDatesDebit: {
     fr: { titre: "📅 Changer une date ou un montant de prélèvement", aquoi: "Les montants ET les jours de prélèvement se règlent maintenant depuis les Paramètres, sans toucher au code.", etapes: ["<b>Changer un jour de prélèvement :</b> ouvre <b>🔧 Paramètres</b>, section <b>📅 Jours de prélèvement</b>. Modifie le jour voulu et enregistre. S'applique à toutes les périodes, passées comme futures.", "<b>Changer un montant :</b> même fenêtre, section du haut (gym, fido, netflix, métro normal, métro étudiant).", "<b>Cas particulier d'une seule période :</b> si un prélèvement est tombé à une date inhabituelle un mois donné, ajoute une <b>entrée manuelle</b> sur la carte du frais avec la date réelle. Le calcul automatique est alors désactivé pour ce frais et cette période uniquement.", "Pour revenir à l'automatique, supprime l'entrée manuelle."], notes: "Le gym a <b>deux</b> réglages séparés (1er et 2e prélèvement) car il tombe une fois dans chaque moitié de période. Un jour au-delà de la fin du mois est ramené au dernier jour réel : régler 31 donne le 28 en février, le 30 en avril. ⚠️ Pour la saisie manuelle, c'est <b>tout ou rien par période et par frais</b> : si le gym a été prélevé deux fois, saisis bien les <b>deux</b> lignes, sinon il en manquera une." },
     en: { titre: "📅 Changing a charge date or amount", aquoi: "Both amounts AND charge days are now set from Settings, with no code changes needed.", etapes: ["<b>Change a charge day:</b> open <b>🔧 Paramètres</b>, section <b>📅 Jours de prélèvement</b>. Edit the day and save. Applies to every period, past and future.", "<b>Change an amount:</b> same window, top section (gym, fido, netflix, normal metro, student metro).", "<b>One-off case:</b> if a charge landed on an unusual date in a given month, add a <b>manual entry</b> on that cost's card with the real date. The automatic calculation is then disabled for that cost and that period only.", "To go back to automatic, delete the manual entry."], notes: "The gym has <b>two</b> separate settings (1st and 2nd charge) because it falls once in each half of the period. A day beyond the end of the month is clamped to the last real day: setting 31 gives the 28th in February, the 30th in April. ⚠️ For manual entries it is <b>all or nothing, per period and per cost</b>: if the gym was charged twice, enter <b>both</b> lines or one will be missing." }
   },
   parametres: {
-    fr: { titre: "🔧 Paramètres", aquoi: "Change les montants de référence : salaire, frais fixes, budgets Nourriture et Perso par défaut.", etapes: ["Ouvre <b>🔧 Paramètres</b>.", "Modifie les champs voulus.", "Enregistre."], notes: "⚠️ Ça change le budget <b>par défaut</b>, pour maintenant et les périodes à venir. Ça ne corrige PAS une période passée : pour ça, utilise <b>🔧 Corriger budget période</b>." },
+    fr: { titre: "🔧 Paramètres", aquoi: "Change les montants de référence : salaire, frais divers, budgets Nourriture et Perso par défaut.", etapes: ["Ouvre <b>🔧 Paramètres</b>.", "Modifie les champs voulus.", "Enregistre."], notes: "⚠️ Ça change le budget <b>par défaut</b>, pour maintenant et les périodes à venir. Ça ne corrige PAS une période passée : pour ça, utilise <b>🔧 Corriger budget période</b>." },
     en: { titre: "🔧 Settings", aquoi: "Changes the reference amounts: salary, fixed costs, default Food and Personal budgets.", etapes: ["Open <b>🔧 Paramètres</b>.", "Change the fields you need.", "Save."], notes: "⚠️ This changes the <b>default</b> budget, for now and future periods. It does NOT fix a past period: for that, use <b>🔧 Corriger budget période</b>." }
   },
   correctionBudget: {
@@ -4671,11 +4791,11 @@ const AIDES = {
     en: { titre: "🔔 New reminder", aquoi: "A memo for an upcoming expense you might forget: permit, insurance, IRCC fees…", etapes: ["Enter the description, amount and due date.", "A red badge appears about a month ahead, counting down J-… then EN RETARD (overdue).", "When the time comes: <b>enter the expense normally</b>, then click <b>✅ C'est fait</b>."], notes: "A reminder creates NO expense — it only warns you. It also shows on the phone mini-app, with a <b>⏰ Plus tard</b> button that postpones it 3 days on both sides." }
   },
   loyer: {
-    fr: { titre: "🏘️ Loyer", aquoi: "Le loyer se saisit entièrement à la main, ligne par ligne, avec sa date réelle.", etapes: ["Ouvre le détail de la période.", "Ajoute une ligne de loyer avec son montant et sa date.", "Le crayon modifie, la corbeille supprime."], notes: "Le loyer n'est pas dans les frais fixes automatiques, justement parce qu'il change selon les mois et les arrangements. Depuis octobre 2026, le logement est prépayé." },
+    fr: { titre: "🏘️ Loyer", aquoi: "Le loyer se saisit entièrement à la main, ligne par ligne, avec sa date réelle.", etapes: ["Ouvre le détail de la période.", "Ajoute une ligne de loyer avec son montant et sa date.", "Le crayon modifie, la corbeille supprime."], notes: "Le loyer n'est pas dans les frais automatiques, justement parce qu'il change selon les mois et les arrangements. Depuis octobre 2026, le logement est prépayé." },
     en: { titre: "🏘️ Rent", aquoi: "Rent is entered fully by hand, line by line, with its actual date.", etapes: ["Open the period detail.", "Add a rent line with its amount and date.", "The pencil edits, the bin deletes."], notes: "Rent is not among the automatic fixed costs, precisely because it varies by month and arrangement. Since October 2026, housing is prepaid." }
   },
   statut: {
-    fr: { titre: "🎓 Visiteur / AEC Étudiant", aquoi: "Bascule entre les deux statuts de Rafael. La seule différence de calcul est le prix du métro.", etapes: ["Clique sur <b>Visiteur</b> ou <b>AEC Étudiant</b>.", "Confirme le changement.", "Le tarif étudiant (62,50 $) s'applique à partir du 1er du mois suivant la date de bascule."], notes: "Tout le reste est identique entre les deux modes : mêmes budgets, mêmes frais fixes, mêmes revenus." },
+    fr: { titre: "🎓 Visiteur / AEC Étudiant", aquoi: "Bascule entre les deux statuts de Rafael. La seule différence de calcul est le prix du métro.", etapes: ["Clique sur <b>Visiteur</b> ou <b>AEC Étudiant</b>.", "Confirme le changement.", "Le tarif étudiant (62,50 $) s'applique à partir du 1er du mois suivant la date de bascule."], notes: "Tout le reste est identique entre les deux modes : mêmes budgets, mêmes frais divers, mêmes revenus." },
     en: { titre: "🎓 Visitor / AEC Student", aquoi: "Switches between Rafael's two statuses. The only calculation difference is the metro fare.", etapes: ["Click <b>Visiteur</b> or <b>AEC Étudiant</b>.", "Confirm the change.", "The student fare ($62.50) applies from the 1st of the month after the switch date."], notes: "Everything else is identical between the two modes: same budgets, same fixed costs, same income." }
   },
   simuler: {
@@ -5115,7 +5235,7 @@ function renderTable() {
     { id: 'aec_est', label: 'Salaire AEC (estimé)', getter: k => soldes[k].salaireAEC, hideIfZero: true },
     { id: 'autre', label: 'Autres sources', getter: k => soldes[k].autre },
     { id: 'revenus_total', label: 'Total revenus', getter: k => soldes[k].revenus, bold: true, green: true },
-    { section: true, label: '🔒 FRAIS FIXES' },
+    { section: true, label: '🔒 FRAIS DIVERS' },
     { id: 'logement', label: 'Logement', getter: k => soldes[k].fixes.logement },
     { id: 'gym', label: 'Gym', getter: k => soldes[k].fixes.gym },
     { id: 'netflix', label: 'Netflix', getter: k => soldes[k].fixes.netflix },
@@ -5228,7 +5348,7 @@ function renderDetailMois(key) {
   // Frais fixes du mois
   const fixes = s.fixes;
   html += '<div class="divider"></div>';
-  html += '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">Frais fixes calculés</div>';
+  html += '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">Frais divers calculés</div>';
   const fixesList = [
     ['Logement', fixes.logement],
     ['Gym', fixes.gym],

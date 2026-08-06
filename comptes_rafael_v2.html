@@ -1218,10 +1218,11 @@ input, textarea, select { cursor: text; }
   <div class="header-right">
     <div style="display:flex;flex-direction:column;gap:6px;">
       <button class="btn btn-purple btn-sm" onclick="openModal('modalSimFrequence')" style="font-size:11px;">🔧 Paramètres</button>
-      <button class="btn btn-secondary btn-sm" onclick="ouvrirModalNouveauRappel()" style="font-size:11px;">🔔 Nouveau rappel</button>
-      <button class="btn btn-secondary btn-sm" onclick="ouvrirCorrectionBudget()" style="font-size:11px;">🔧 Corriger budget période</button>
-      <button class="btn btn-secondary btn-sm" onclick="openModal('modalSimulation')" style="font-size:11px;">📊 Simuler</button>
+      <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" onclick="ouvrirModalNouveauRappel()" style="font-size:11px;">🔔 Nouveau rappel</button><span onclick="event.stopPropagation();ouvrirAide('rappels')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span></div>
+      <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" onclick="ouvrirCorrectionBudget()" style="font-size:11px;">🔧 Corriger budget période</button><span onclick="event.stopPropagation();ouvrirAide('correctionBudget')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span></div>
+      <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" onclick="openModal('modalSimulation')" style="font-size:11px;">📊 Simuler</button><span onclick="event.stopPropagation();ouvrirAide('simuler')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span></div>
       <button class="btn btn-secondary btn-sm" id="btnTableau" onclick="toggleTableau()" style="font-size:11px;">📊 Tableau</button>
+      <button class="btn btn-secondary btn-sm" onclick="ouvrirSommaireAide()" style="font-size:11px;color:var(--accent2);border-color:var(--accent2);">❓ Aide</button>
     </div>
   </div>
 </div>
@@ -1230,7 +1231,7 @@ input, textarea, select { cursor: text; }
   <div style="max-width:1600px;margin:0 auto;padding:0 24px;">
     <div id="pills-scroll-wrap" style="overflow-x:auto;padding-bottom:8px;">
       <div id="pills2026grid" style="display:grid;grid-template-columns:80px 1fr;gap:6px 0;">
-        <div id="pills2026moisLabel" class="tl-label" style="border-color:#3a4060;"><b>2026</b>mois</div>
+        <div id="pills2026moisLabel" class="tl-label" style="border-color:#3a4060;cursor:pointer;" onclick="ouvrirAide('pilules')" title="À quoi servent ces lignes ?"><b>2026</b>mois&nbsp;?</div>
         <div class="tl-pills" id="pills2026row0" style="gap:0;flex-wrap:nowrap;"></div>
         <div id="pills2026reelLabel" class="tl-label green"><b>réel</b>jour J</div>
         <div class="tl-pills" id="pills2026row1" style="gap:0;flex-wrap:nowrap;"></div>
@@ -1329,7 +1330,7 @@ input, textarea, select { cursor: text; }
            border-left:3px solid var(--yellow);border-radius:var(--radius);padding:8px 14px;">
         <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
           <div>
-            <div style="font-size:10px;color:var(--muted);">Dette propriétaire</div>
+            <div style="font-size:10px;color:var(--muted);">Dette propriétaire<span onclick="event.stopPropagation();ouvrirAide('dette')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span></div>
             <div id="dettePermMontant" style="font-size:18px;font-weight:700;color:var(--yellow);font-family:var(--font-mono);">—</div>
           </div>
           <div style="flex:1;min-width:120px;">
@@ -1345,14 +1346,14 @@ input, textarea, select { cursor: text; }
                      color:var(--text);font-size:12px;font-family:var(--font-mono);padding:4px 8px;">
             <button onclick="saveDettePaiementCourant()"
               style="background:var(--yellow);color:#000;border:none;border-radius:5px;
-                     font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;">💸 Rembourser</button>
+                     font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;">💸 Rembourser</button><span onclick="event.stopPropagation();ouvrirAide('rembourserDette')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span>
           </div>
           <button onclick="toggleDetteCalendrier()" id="btnDetteCalBtn"
             style="background:transparent;border:1px solid rgba(247,217,79,.4);border-radius:5px;
                    color:var(--yellow);font-size:11px;padding:5px 10px;cursor:pointer;">▶ Voir détail</button>
           <button onclick="annulerDette()" id="btnAnnulerDette"
             style="background:transparent;border:1px solid rgba(242,92,92,.4);border-radius:5px;
-                   color:var(--red);font-size:11px;padding:5px 10px;cursor:pointer;">🚫 Annuler la dette</button>
+                   color:var(--red);font-size:11px;padding:5px 10px;cursor:pointer;">🚫 Annuler la dette</button><span onclick="event.stopPropagation();ouvrirAide('annulerDette')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span>
         </div>
         <!-- Bandeau affiché uniquement quand la dette est annulée -->
         <div id="detteAnnuleeBanner" style="display:none;margin-top:8px;padding:8px 12px;
@@ -3319,7 +3320,7 @@ function ouvrirEpargne() {
   overlay.innerHTML = `
     <div class="modal" style="width:460px;max-width:95vw;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h2 style="margin:0;">💰 Compte Épargne</h2>
+        <h2 style="margin:0;">💰 Compte Épargne<span onclick="event.stopPropagation();ouvrirAide('epargne')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:10px;font-weight:800;cursor:pointer;margin-left:7px;vertical-align:middle;">?</span></h2>
         <span onclick="document.getElementById('modalEpargne').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
       </div>
       <p style="font-size:22px;font-weight:800;color:var(--green);margin:10px 0 2px;">${fmt(soldeEpargne)}</p>
@@ -4524,6 +4525,173 @@ function retablirDette() {
   saveState();
   render();
   renderDette();
+}
+
+
+// ============================================================================
+//  SYSTÈME D'AIDE CONTEXTUELLE (04/08/2026)
+//  Chaque fonction a une fiche : à quoi ça sert + les étapes + les pièges.
+//  Pour en ajouter une : une entrée dans AIDES, puis btnAide('cle') dans le HTML.
+// ============================================================================
+const AIDES = {
+  dette: {
+    titre: '🏠 Dette propriétaire',
+    aquoi: "Suit ce que Rafael doit encore au propriétaire. Le montant de départ est de 1 955,88 $. La dette diminue à chaque remboursement enregistré.",
+    etapes: [
+      "Le montant affiché correspond à la <b>période sélectionnée</b> dans les pilules, pas forcément à aujourd'hui.",
+      "La mention à droite du montant le précise : <b>· réel</b> (période passée), <b>· aujourd'hui</b>, ou <b>· projection</b> (période future).",
+      "<b>▶ Voir détail</b> montre le calendrier des remboursements, période par période."
+    ],
+    notes: "La dette n'entre pas dans le calcul du solde du compte. Ce sont les remboursements enregistrés qui font bouger le solde, pas la dette elle-même."
+  },
+  rembourserDette: {
+    titre: '💸 Rembourser la dette',
+    aquoi: "Enregistre un remboursement : la dette diminue ET la dépense est créée sur le compte. Les deux d'un coup.",
+    etapes: [
+      "Tape le montant dans le champ à gauche du bouton (ou valide avec <b>Entrée</b>).",
+      "Clique sur <b>💸 Rembourser</b>.",
+      "Choisis d'où vient l'argent : <b>Nourriture</b>, <b>Perso</b>, <b>Sur compte</b> (hors budget) ou <b>💰 Épargne</b>.",
+      "Vérifie le récapitulatif, puis confirme."
+    ],
+    notes: "L'option <b>💰 Épargne</b> fait un retrait d'épargne qui crédite le compte courant, puis la dépense le redébite. Effet net sur le compte courant : 0 $. Seule l'épargne diminue. L'option est grisée si l'épargne ne couvre pas le montant."
+  },
+  annulerDette: {
+    titre: '🚫 Annuler la dette',
+    aquoi: "Efface la dette parce que le propriétaire y renonce (par exemple compensée par le prépaiement du logement). Ce n'est PAS un remboursement.",
+    etapes: [
+      "Clique sur <b>🚫 Annuler la dette</b>.",
+      "Indique le motif (un texte est proposé par défaut).",
+      "Confirme."
+    ],
+    notes: "⚠️ Aucun mouvement d'argent n'est enregistré : le solde du compte et l'épargne ne bougent pas. C'est réversible à tout moment via <b>↩ Rétablir la dette</b> — l'historique des remboursements est conservé intact."
+  },
+  epargne: {
+    titre: '💰 Compte Épargne',
+    aquoi: "Compte séparé du compte courant. Chaque dépôt ou retrait crée automatiquement l'écriture correspondante dans les comptes.",
+    etapes: [
+      "<b>Dépôt</b> : l'argent quitte le compte courant → une dépense « Exceptionnel » est créée.",
+      "<b>Retrait</b> : l'argent revient sur le compte courant → un « Autre revenu » est créé.",
+      "<b>📊 Voir la projection</b> simule combien de temps l'épargne peut tenir en maintenant le compte courant au-dessus de 100 $ par période."
+    ],
+    notes: "Supprimer un mouvement supprime aussi l'écriture liée, et inversement — une confirmation prévient à chaque fois. Impossible de désynchroniser les deux."
+  },
+  correctionBudget: {
+    titre: '🔧 Corriger budget période',
+    aquoi: "Change le budget Nourriture/Perso d'UNE SEULE période, y compris une période déjà passée.",
+    etapes: [
+      "Choisis la période dans la liste.",
+      "Entre le nouveau budget Nourriture et/ou Perso.",
+      "<b>Enregistrer</b>. Laisser un champ vide garde le budget normal pour cette catégorie."
+    ],
+    notes: "À ne pas confondre avec <b>🔧 Paramètres</b>, qui change le budget par défaut de TOUTES les périodes à venir mais ne peut pas corriger le passé. <b>↺ Revenir au budget normal</b> supprime l'exception."
+  },
+  rappels: {
+    titre: '🔔 Nouveau rappel',
+    aquoi: "Pense-bête pour une dépense à venir qu'on risque d'oublier (permis, assurance, frais IRCC...). Une pastille rouge apparaît quand l'échéance approche.",
+    etapes: [
+      "Entre la description, le montant et la date d'échéance.",
+      "Le rappel apparaît dans le bandeau environ un mois avant, avec un décompte J-… puis EN RETARD.",
+      "Le moment venu : <b>saisis la dépense normalement</b>, puis clique <b>✅ C'est fait</b> pour éteindre le rappel."
+    ],
+    notes: "Un rappel ne crée AUCUNE dépense — il ne fait que prévenir. Le rappel s'affiche aussi sur la mini-app du téléphone, avec un bouton <b>⏰ Plus tard</b> qui le repousse de 3 jours des deux côtés."
+  },
+  pilules: {
+    titre: '📅 Les pilules de périodes',
+    aquoi: "La frise du haut montre le solde de chaque période. Une période va du 16 d'un mois au 15 du suivant.",
+    etapes: [
+      "<b>réel jour J</b> : où en est le compte aujourd'hui dans cette période.",
+      "<b>prévi fin pér.</b> : ce que sera le solde à la fin de la période.",
+      "<b>dispo</b> : ce qu'il reste à dépenser en Nourriture + Perso.",
+      "Clique sur une pilule pour afficher le détail de cette période plus bas."
+    ],
+    notes: "<b>▶ Afficher 2027 / 2028</b> déroule les années suivantes. <b>👁 Masquer 2026</b> cache les lignes 2026 pour y voir plus clair — la ligne des mois reste visible comme repère."
+  },
+  simuler: {
+    titre: '📊 Simuler',
+    aquoi: "Teste un changement (revenu, dépense, fréquence) et voit l'effet sur les périodes suivantes, sans rien modifier pour de vrai.",
+    etapes: [
+      "Ouvre <b>📊 Simuler</b>.",
+      "Renseigne les paramètres à tester.",
+      "Compare le résultat aux soldes actuels."
+    ],
+    notes: "Rien n'est enregistré : la simulation ne touche pas aux vraies données."
+  }
+};
+
+function btnAide(cle) {
+  return `<span onclick="event.stopPropagation();ouvrirAide('${cle}')" title="À quoi ça sert ?"
+    style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
+           border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:10px;
+           font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;flex-shrink:0;">?</span>`;
+}
+
+function ouvrirAide(cle) {
+  const a = AIDES[cle];
+  if (!a) return;
+  let overlay = document.getElementById('modalAide');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modalAide';
+    overlay.className = 'modal-overlay';
+    document.body.appendChild(overlay);
+  }
+  const etapes = a.etapes.map((e,i) =>
+    `<li style="margin-bottom:7px;line-height:1.5;"><b style="color:var(--accent2);">${i+1}.</b> ${e}</li>`).join('');
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:520px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">${a.titre}</h2>
+        <span onclick="document.getElementById('modalAide').classList.remove('open')"
+          style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+      </div>
+      <div style="background:rgba(79,142,247,.07);border-left:3px solid var(--accent2);
+           border-radius:0 6px 6px 0;padding:10px 12px;margin:14px 0;font-size:13px;line-height:1.5;">
+        ${a.aquoi}
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Comment faire</div>
+      <ul style="list-style:none;padding:0;margin:0 0 14px;font-size:13px;">${etapes}</ul>
+      ${a.notes ? `<div style="background:rgba(247,197,72,.08);border:1px solid rgba(247,197,72,.25);
+        border-radius:6px;padding:10px 12px;font-size:12px;line-height:1.5;color:var(--text);">
+        💡 ${a.notes}</div>` : ''}
+      <div class="form-actions" style="margin-top:16px;display:flex;gap:8px;justify-content:space-between;">
+        <button class="btn btn-secondary" onclick="ouvrirSommaireAide()" style="font-size:11px;">📖 Toutes les aides</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('modalAide').classList.remove('open')">Fermer</button>
+      </div>
+    </div>`;
+  overlay.classList.add('open');
+}
+
+function ouvrirSommaireAide() {
+  let overlay = document.getElementById('modalAide');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modalAide';
+    overlay.className = 'modal-overlay';
+    document.body.appendChild(overlay);
+  }
+  const items = Object.keys(AIDES).map(k =>
+    `<div onclick="ouvrirAide('${k}')" style="cursor:pointer;padding:10px 12px;border:1px solid var(--border);
+       border-radius:8px;margin-bottom:6px;font-size:13px;transition:background .15s;"
+       onmouseover="this.style.background='rgba(79,142,247,.08)'" onmouseout="this.style.background='transparent'">
+      <b>${AIDES[k].titre}</b>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px;">${AIDES[k].aquoi.slice(0,90)}…</div>
+    </div>`).join('');
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:520px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">📖 Aide — à quoi sert quoi</h2>
+        <span onclick="document.getElementById('modalAide').classList.remove('open')"
+          style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:10px 0 14px;">
+        Clique sur un sujet. Le petit <b style="color:var(--accent2);">?</b> à côté de chaque fonction ouvre directement la bonne fiche.
+      </p>
+      ${items}
+      <div class="form-actions" style="margin-top:14px;display:flex;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="document.getElementById('modalAide').classList.remove('open')">Fermer</button>
+      </div>
+    </div>`;
+  overlay.classList.add('open');
 }
 
 function renderAlertes() {

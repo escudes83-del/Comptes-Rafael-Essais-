@@ -1194,7 +1194,7 @@ input, textarea, select { cursor: text; }
       <div class="subtitle" style="font-size:11px;line-height:1.2;">Relevés du 16 au 15</div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:1px solid var(--border);border-radius:8px;padding:5px 8px;min-height:38px;">
-      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Changement de statut</div>
+      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Changement de statut<span onclick="event.stopPropagation();ouvrirAide('statut')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;flex-shrink:0;">?</span></div>
       <div class="mode-toggle">
         <button class="mode-btn active-visitor" id="btnVisiteur" onclick="setMode('visiteur')">Visiteur</button>
         <button class="mode-btn" id="btnAEC" onclick="confirmSwitchAEC()">AEC Étudiant</button>
@@ -1217,11 +1217,11 @@ input, textarea, select { cursor: text; }
   </div>
   <div class="header-right">
     <div style="display:flex;flex-direction:column;gap:6px;">
-      <button class="btn btn-purple btn-sm" onclick="openModal('modalSimFrequence')" style="font-size:11px;">🔧 Paramètres</button>
+      <div style="display:flex;align-items:center;"><button class="btn btn-purple btn-sm" onclick="openModal('modalSimFrequence')" style="font-size:11px;">🔧 Paramètres</button><span onclick="event.stopPropagation();ouvrirAide('parametres')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;flex-shrink:0;">?</span></div>
       <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" onclick="ouvrirModalNouveauRappel()" style="font-size:11px;">🔔 Nouveau rappel</button><span onclick="event.stopPropagation();ouvrirAide('rappels')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span></div>
       <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" onclick="ouvrirCorrectionBudget()" style="font-size:11px;">🔧 Corriger budget période</button><span onclick="event.stopPropagation();ouvrirAide('correctionBudget')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span></div>
       <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" onclick="openModal('modalSimulation')" style="font-size:11px;">📊 Simuler</button><span onclick="event.stopPropagation();ouvrirAide('simuler')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span></div>
-      <button class="btn btn-secondary btn-sm" id="btnTableau" onclick="toggleTableau()" style="font-size:11px;">📊 Tableau</button>
+      <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" id="btnTableau" onclick="toggleTableau()" style="font-size:11px;">📊 Tableau</button><span onclick="event.stopPropagation();ouvrirAide('tableau')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;flex-shrink:0;">?</span></div>
       <button class="btn btn-secondary btn-sm" onclick="ouvrirSommaireAide()" style="font-size:11px;color:var(--accent2);border-color:var(--accent2);">❓ Aide</button>
     </div>
   </div>
@@ -4534,164 +4534,234 @@ function retablirDette() {
 //  Pour en ajouter une : une entrée dans AIDES, puis btnAide('cle') dans le HTML.
 // ============================================================================
 const AIDES = {
-  dette: {
-    titre: '🏠 Dette propriétaire',
-    aquoi: "Suit ce que Rafael doit encore au propriétaire. Le montant de départ est de 1 955,88 $. La dette diminue à chaque remboursement enregistré.",
-    etapes: [
-      "Le montant affiché correspond à la <b>période sélectionnée</b> dans les pilules, pas forcément à aujourd'hui.",
-      "La mention à droite du montant le précise : <b>· réel</b> (période passée), <b>· aujourd'hui</b>, ou <b>· projection</b> (période future).",
-      "<b>▶ Voir détail</b> montre le calendrier des remboursements, période par période."
-    ],
-    notes: "La dette n'entre pas dans le calcul du solde du compte. Ce sont les remboursements enregistrés qui font bouger le solde, pas la dette elle-même."
-  },
-  rembourserDette: {
-    titre: '💸 Rembourser la dette',
-    aquoi: "Enregistre un remboursement : la dette diminue ET la dépense est créée sur le compte. Les deux d'un coup.",
-    etapes: [
-      "Tape le montant dans le champ à gauche du bouton (ou valide avec <b>Entrée</b>).",
-      "Clique sur <b>💸 Rembourser</b>.",
-      "Choisis d'où vient l'argent : <b>Nourriture</b>, <b>Perso</b>, <b>Sur compte</b> (hors budget) ou <b>💰 Épargne</b>.",
-      "Vérifie le récapitulatif, puis confirme."
-    ],
-    notes: "L'option <b>💰 Épargne</b> fait un retrait d'épargne qui crédite le compte courant, puis la dépense le redébite. Effet net sur le compte courant : 0 $. Seule l'épargne diminue. L'option est grisée si l'épargne ne couvre pas le montant."
-  },
-  annulerDette: {
-    titre: '🚫 Annuler la dette',
-    aquoi: "Efface la dette parce que le propriétaire y renonce (par exemple compensée par le prépaiement du logement). Ce n'est PAS un remboursement.",
-    etapes: [
-      "Clique sur <b>🚫 Annuler la dette</b>.",
-      "Indique le motif (un texte est proposé par défaut).",
-      "Confirme."
-    ],
-    notes: "⚠️ Aucun mouvement d'argent n'est enregistré : le solde du compte et l'épargne ne bougent pas. C'est réversible à tout moment via <b>↩ Rétablir la dette</b> — l'historique des remboursements est conservé intact."
-  },
-  epargne: {
-    titre: '💰 Compte Épargne',
-    aquoi: "Compte séparé du compte courant. Chaque dépôt ou retrait crée automatiquement l'écriture correspondante dans les comptes.",
-    etapes: [
-      "<b>Dépôt</b> : l'argent quitte le compte courant → une dépense « Exceptionnel » est créée.",
-      "<b>Retrait</b> : l'argent revient sur le compte courant → un « Autre revenu » est créé.",
-      "<b>📊 Voir la projection</b> simule combien de temps l'épargne peut tenir en maintenant le compte courant au-dessus de 100 $ par période."
-    ],
-    notes: "Supprimer un mouvement supprime aussi l'écriture liée, et inversement — une confirmation prévient à chaque fois. Impossible de désynchroniser les deux."
-  },
-  correctionBudget: {
-    titre: '🔧 Corriger budget période',
-    aquoi: "Change le budget Nourriture/Perso d'UNE SEULE période, y compris une période déjà passée.",
-    etapes: [
-      "Choisis la période dans la liste.",
-      "Entre le nouveau budget Nourriture et/ou Perso.",
-      "<b>Enregistrer</b>. Laisser un champ vide garde le budget normal pour cette catégorie."
-    ],
-    notes: "À ne pas confondre avec <b>🔧 Paramètres</b>, qui change le budget par défaut de TOUTES les périodes à venir mais ne peut pas corriger le passé. <b>↺ Revenir au budget normal</b> supprime l'exception."
-  },
-  rappels: {
-    titre: '🔔 Nouveau rappel',
-    aquoi: "Pense-bête pour une dépense à venir qu'on risque d'oublier (permis, assurance, frais IRCC...). Une pastille rouge apparaît quand l'échéance approche.",
-    etapes: [
-      "Entre la description, le montant et la date d'échéance.",
-      "Le rappel apparaît dans le bandeau environ un mois avant, avec un décompte J-… puis EN RETARD.",
-      "Le moment venu : <b>saisis la dépense normalement</b>, puis clique <b>✅ C'est fait</b> pour éteindre le rappel."
-    ],
-    notes: "Un rappel ne crée AUCUNE dépense — il ne fait que prévenir. Le rappel s'affiche aussi sur la mini-app du téléphone, avec un bouton <b>⏰ Plus tard</b> qui le repousse de 3 jours des deux côtés."
+  demarrage: {
+    fr: { titre: "🚀 Bien démarrer", aquoi: "Vue d'ensemble de l'application. Elle suit le budget de Rafael période par période, du 16 d'un mois au 15 du suivant.", etapes: ["Le <b>bandeau du haut</b> montre les alertes importantes du moment.", "La <b>frise de pilules</b> montre le solde de chaque période. Clique sur une pilule pour voir le détail dessous.", "Le <b>détail de la période</b> liste les revenus, les frais fixes et les dépenses.", "Les boutons à droite du bandeau ouvrent les outils : Paramètres, Rappels, Simulation, Tableau."], notes: "Chaque fonction a un petit <b>?</b> bleu à côté. Clique dessus : la fenêtre d'aide reste ouverte pendant que tu utilises la fonction, et tu peux la déplacer où tu veux." },
+    en: { titre: "🚀 Getting started", aquoi: "Overview of the app. It tracks Rafael's budget period by period, from the 16th of one month to the 15th of the next.", etapes: ["The <b>top banner</b> shows the important alerts of the moment.", "The <b>pill strip</b> shows the balance for each period. Click a pill to see its detail below.", "The <b>period detail</b> lists income, fixed costs and expenses.", "The buttons on the right of the banner open the tools: Settings, Reminders, Simulation, Table."], notes: "Every function has a small blue <b>?</b> next to it. Click it: the help window stays open while you use the function, and you can drag it anywhere." }
   },
   pilules: {
-    titre: '📅 Les pilules de périodes',
-    aquoi: "La frise du haut montre le solde de chaque période. Une période va du 16 d'un mois au 15 du suivant.",
-    etapes: [
-      "<b>réel jour J</b> : où en est le compte aujourd'hui dans cette période.",
-      "<b>prévi fin pér.</b> : ce que sera le solde à la fin de la période.",
-      "<b>dispo</b> : ce qu'il reste à dépenser en Nourriture + Perso.",
-      "Clique sur une pilule pour afficher le détail de cette période plus bas."
-    ],
-    notes: "<b>▶ Afficher 2027 / 2028</b> déroule les années suivantes. <b>👁 Masquer 2026</b> cache les lignes 2026 pour y voir plus clair — la ligne des mois reste visible comme repère."
+    fr: { titre: "📅 Les pilules de périodes", aquoi: "La frise du haut montre le solde de chaque période. Une période va du 16 d'un mois au 15 du mois suivant.", etapes: ["<b>réel jour J</b> : où en est le compte aujourd'hui dans cette période.", "<b>prévi fin pér.</b> : le solde prévu à la fin de la période.", "<b>dispo</b> : ce qu'il reste à dépenser en Nourriture + Perso.", "Clique sur une pilule pour afficher le détail de cette période plus bas.", "<b>▶ Afficher 2027 / 2028</b> déroule les années suivantes."], notes: "<b>👁 Masquer 2026</b> cache les lignes 2026 pour y voir plus clair. La ligne des mois reste toujours visible : elle sert de repère de colonnes pour toutes les années." },
+    en: { titre: "📅 The period pills", aquoi: "The top strip shows the balance for each period. A period runs from the 16th of one month to the 15th of the next.", etapes: ["<b>réel jour J</b>: where the account stands today within this period.", "<b>prévi fin pér.</b>: the expected balance at the end of the period.", "<b>dispo</b>: what is left to spend on Food + Personal.", "Click a pill to show that period's detail below.", "<b>▶ Afficher 2027 / 2028</b> reveals the following years."], notes: "<b>👁 Masquer 2026</b> hides the 2026 rows for clarity. The month row always stays visible: it is the column reference for every year." }
+  },
+  saisieDepense: {
+    fr: { titre: "🛒 Saisir une dépense", aquoi: "Enregistre un achat dans une des trois catégories : Nourriture, Perso ou Exceptionnel.", etapes: ["Choisis la catégorie.", "Entre le montant et une description courte.", "Vérifie la date (aujourd'hui par défaut).", "Enregistre."], notes: "<b>Nourriture</b> et <b>Perso</b> ont chacun un budget par période. <b>Exceptionnel</b> n'en a pas : c'est pour les dépenses hors budget qui ne doivent pas manger le quotidien." },
+    en: { titre: "🛒 Entering an expense", aquoi: "Records a purchase in one of three categories: Food, Personal or Exceptional.", etapes: ["Pick the category.", "Enter the amount and a short description.", "Check the date (today by default).", "Save."], notes: "<b>Food</b> and <b>Personal</b> each have a budget per period. <b>Exceptional</b> has none: it is for out-of-budget spending that must not eat into daily money." }
+  },
+  dispo: {
+    fr: { titre: "🎯 Le Dispo", aquoi: "Montre ce qu'il reste à dépenser en Nourriture et en Perso pour la période en cours.", etapes: ["Vert : tout va bien.", "Rouge clignotant : le budget combiné est dépassé.", "Si le total combiné est négatif, les montants par catégorie s'affichent au maximum à 0 $."], notes: "Le plafonnement à 0 $ est volontaire : si la nourriture a tout absorbé, afficher un « dispo perso » positif serait trompeur — l'argent n'existe plus." },
+    en: { titre: "🎯 The Dispo card", aquoi: "Shows what is left to spend on Food and Personal for the current period.", etapes: ["Green: all good.", "Flashing red: the combined budget is exceeded.", "If the combined total is negative, per-category amounts are capped at $0."], notes: "The cap at $0 is deliberate: if food has absorbed everything, showing a positive personal balance would be misleading — the money is gone." }
+  },
+  alerteBudget: {
+    fr: { titre: "🐾 Alerte budget dépassé", aquoi: "Prévient quand le rythme de dépenses est trop rapide pour finir la période dans le budget.", etapes: ["L'alerte compare ce qui est dépensé au <b>rythme normal</b> à cette date de la période.", "Elle apparaît même si le budget n'est pas encore épuisé, pour laisser le temps de corriger.", "Clique sur ✕ pour l'acquitter jusqu'à la prochaine période."], notes: "Acquitter l'alerte ne change rien aux chiffres : ça masque juste la pastille." },
+    en: { titre: "🐾 Budget alert", aquoi: "Warns when the spending pace is too fast to finish the period within budget.", etapes: ["The alert compares spending to the <b>normal pace</b> at this point in the period.", "It appears even before the budget runs out, leaving time to adjust.", "Click ✕ to dismiss it until the next period."], notes: "Dismissing the alert changes no numbers: it only hides the badge." }
+  },
+  dette: {
+    fr: { titre: "🏠 Dette propriétaire", aquoi: "Suit ce que Rafael doit encore au propriétaire. Montant de départ : 1 955,88 $. La dette diminue à chaque remboursement enregistré.", etapes: ["Le montant affiché correspond à la <b>période sélectionnée</b>, pas forcément à aujourd'hui.", "La mention à droite le précise : <b>· réel</b> (passé), <b>· aujourd'hui</b>, ou <b>· projection</b> (futur).", "<b>▶ Voir détail</b> montre le calendrier des remboursements période par période."], notes: "La dette n'entre pas dans le calcul du solde du compte. Ce sont les remboursements enregistrés qui font bouger le solde, pas la dette elle-même." },
+    en: { titre: "🏠 Landlord debt", aquoi: "Tracks what Rafael still owes the landlord. Starting amount: $1,955.88. The debt drops with each recorded repayment.", etapes: ["The amount shown is for the <b>selected period</b>, not necessarily today.", "The label on the right says which: <b>· réel</b> (past), <b>· aujourd'hui</b> (today), or <b>· projection</b> (future).", "<b>▶ Voir détail</b> shows the repayment calendar period by period."], notes: "The debt is not part of the account balance calculation. Recorded repayments move the balance, not the debt itself." }
+  },
+  rembourserDette: {
+    fr: { titre: "💸 Rembourser la dette", aquoi: "Enregistre un remboursement : la dette diminue ET la dépense est créée sur le compte, d'un seul geste.", etapes: ["Tape le montant dans le champ à gauche du bouton (ou valide avec <b>Entrée</b>).", "Clique sur <b>💸 Rembourser</b>.", "Choisis d'où vient l'argent : <b>Nourriture</b>, <b>Perso</b>, <b>Sur compte</b> ou <b>💰 Épargne</b>.", "Vérifie le récapitulatif, puis confirme."], notes: "L'option <b>💰 Épargne</b> retire de l'épargne pour créditer le compte courant, puis la dépense le redébite. Effet net sur le compte courant : 0 $. Seule l'épargne diminue." },
+    en: { titre: "💸 Repay the debt", aquoi: "Records a repayment: the debt goes down AND the expense is created on the account, in one action.", etapes: ["Type the amount in the field left of the button (or press <b>Enter</b>).", "Click <b>💸 Rembourser</b>.", "Choose where the money comes from: <b>Food</b>, <b>Personal</b>, <b>Account</b> or <b>💰 Savings</b>.", "Check the summary, then confirm."], notes: "The <b>💰 Savings</b> option withdraws from savings to credit the current account, then the expense debits it back. Net effect on the current account: $0. Only savings go down." }
+  },
+  annulerDette: {
+    fr: { titre: "🚫 Annuler la dette", aquoi: "Efface la dette parce que le propriétaire y renonce, par exemple compensée par le prépaiement du logement. Ce n'est PAS un remboursement.", etapes: ["Clique sur <b>🚫 Annuler la dette</b>.", "Indique le motif (un texte est proposé).", "Confirme."], notes: "⚠️ Aucun mouvement d'argent n'est enregistré : le compte et l'épargne ne bougent pas. Réversible à tout moment via <b>↩ Rétablir la dette</b>, l'historique est conservé intact." },
+    en: { titre: "🚫 Cancel the debt", aquoi: "Clears the debt because the landlord waives it, for example offset by the prepaid rent. This is NOT a repayment.", etapes: ["Click <b>🚫 Annuler la dette</b>.", "Enter the reason (a default text is suggested).", "Confirm."], notes: "⚠️ No money movement is recorded: the account and savings do not change. Reversible any time via <b>↩ Rétablir la dette</b>; history is kept intact." }
+  },
+  epargne: {
+    fr: { titre: "💰 Compte Épargne", aquoi: "Compte séparé du compte courant. Chaque dépôt ou retrait crée automatiquement l'écriture correspondante dans les comptes.", etapes: ["<b>Dépôt</b> : l'argent quitte le compte courant → une dépense « Exceptionnel » est créée.", "<b>Retrait</b> : l'argent revient sur le compte courant → un « Autre revenu » est créé.", "<b>Intérêts</b> : s'ajoutent à l'épargne sans toucher au compte courant.", "<b>📊 Voir la projection</b> simule combien de temps l'épargne peut tenir."], notes: "Supprimer un mouvement supprime aussi l'écriture liée, et inversement — une confirmation prévient à chaque fois. Impossible de désynchroniser les deux." },
+    en: { titre: "💰 Savings account", aquoi: "Account separate from the current account. Every deposit or withdrawal automatically creates the matching entry in the books.", etapes: ["<b>Deposit</b>: money leaves the current account → an \"Exceptionnel\" expense is created.", "<b>Withdrawal</b>: money returns to the current account → an \"Autre revenu\" entry is created.", "<b>Interest</b>: added to savings without touching the current account.", "<b>📊 Voir la projection</b> simulates how long the savings can last."], notes: "Deleting a movement also deletes the linked entry, and vice versa — a confirmation warns you each time. The two cannot get out of sync." }
+  },
+  projectionEpargne: {
+    fr: { titre: "📊 Projection d'épargne", aquoi: "Simule les périodes à venir en puisant dans l'épargne pour maintenir le compte courant au-dessus de 100 $, jusqu'à épuisement.", etapes: ["Ouvre le <b>💰 Compte Épargne</b>.", "Clique sur <b>📊 Voir la projection</b>.", "Lis la période où l'épargne serait épuisée."], notes: "C'est une projection, pas une décision : rien n'est enregistré. Elle suppose que les revenus et frais fixes actuels continuent à l'identique." },
+    en: { titre: "📊 Savings projection", aquoi: "Simulates upcoming periods, drawing on savings to keep the current account above $100, until it runs out.", etapes: ["Open <b>💰 Compte Épargne</b>.", "Click <b>📊 Voir la projection</b>.", "Read the period where savings would run out."], notes: "This is a projection, not a decision: nothing is recorded. It assumes current income and fixed costs continue unchanged." }
+  },
+  suggestionVirement: {
+    fr: { titre: "💡 Suggestion de virement", aquoi: "Propose de transférer de l'épargne vers le compte courant quand une période risque de finir trop bas.", etapes: ["La pastille apparaît dès le début de la période concernée.", "Clique dessus : le virement est pré-rempli avec le montant et la date.", "Vérifie et confirme, ou ferme si tu préfères gérer autrement."], notes: "La date proposée est le 1er du 2e mois de la période : ça garde l'argent en épargne le plus longtemps possible, juste avant le débit du métro." },
+    en: { titre: "💡 Transfer suggestion", aquoi: "Suggests moving money from savings to the current account when a period risks ending too low.", etapes: ["The badge appears from the start of the affected period.", "Click it: the transfer is pre-filled with amount and date.", "Check and confirm, or close it if you prefer another approach."], notes: "The suggested date is the 1st of the period's second month: it keeps money in savings as long as possible, just before the metro charge." }
+  },
+  reliquat: {
+    fr: { titre: "🎁 Reliquat", aquoi: "Ce qui reste des budgets Nourriture et Perso à la fin d'une période. Une bulle verte apparaît au début de la période suivante.", etapes: ["Clique sur la bulle verte pour voir le montant.", "Choisis : reporter sur le budget <b>Nourriture</b> ou <b>Perso</b>, verser au <b>💰 Compte Épargne</b>, ou l'appliquer à la <b>dette</b>.", "Ou ferme avec ✕ pour ne rien faire."], notes: "La bulle expire après 10 jours. Si une catégorie a été dépassée, le reliquat peut être négatif : c'est un déficit, pas un bonus." },
+    en: { titre: "🎁 Leftover", aquoi: "What is left of the Food and Personal budgets at the end of a period. A green bubble appears at the start of the next period.", etapes: ["Click the green bubble to see the amount.", "Choose: carry over to the <b>Food</b> or <b>Personal</b> budget, move it to <b>💰 Savings</b>, or apply it to the <b>debt</b>.", "Or close with ✕ to do nothing."], notes: "The bubble expires after 10 days. If a category was overspent, the leftover can be negative: that is a deficit, not a bonus." }
+  },
+  fraisFixes: {
+    fr: { titre: "🔒 Frais fixes", aquoi: "Les dépenses qui reviennent chaque période : métro, gym, Fido, Netflix. Elles sont calculées automatiquement.", etapes: ["Métro 110 $ (62,50 $ en statut AEC étudiant), débité le 1er du mois suivant.", "Gym 40,80 $ en deux fois : 20,40 $ le 23 et 20,40 $ le 7 du mois suivant.", "Fido 33,96 $, première moitié de période. Netflix 21,46 $, le 25.", "Le badge <b>✅ Débité</b> ou <b>⏳ Pas encore débité</b> indique si le prélèvement est passé."], notes: "Ces montants se modifient dans <b>🔧 Paramètres</b>. Le loyer et la dette n'en font pas partie : ils se saisissent à la main." },
+    en: { titre: "🔒 Fixed costs", aquoi: "The costs that recur every period: metro, gym, Fido, Netflix. They are calculated automatically.", etapes: ["Metro $110 ($62.50 with AEC student status), charged on the 1st of the next month.", "Gym $40.80 in two parts: $20.40 on the 23rd and $20.40 on the 7th of the next month.", "Fido $33.96, first half of the period. Netflix $21.46, on the 25th.", "The <b>✅ Débité</b> or <b>⏳ Pas encore débité</b> badge shows whether the charge has gone through."], notes: "These amounts are changed in <b>🔧 Paramètres</b>. Rent and debt are not included: they are entered manually." }
+  },
+  parametres: {
+    fr: { titre: "🔧 Paramètres", aquoi: "Change les montants de référence : salaire, frais fixes, budgets Nourriture et Perso par défaut.", etapes: ["Ouvre <b>🔧 Paramètres</b>.", "Modifie les champs voulus.", "Enregistre."], notes: "⚠️ Ça change le budget <b>par défaut</b>, pour maintenant et les périodes à venir. Ça ne corrige PAS une période passée : pour ça, utilise <b>🔧 Corriger budget période</b>." },
+    en: { titre: "🔧 Settings", aquoi: "Changes the reference amounts: salary, fixed costs, default Food and Personal budgets.", etapes: ["Open <b>🔧 Paramètres</b>.", "Change the fields you need.", "Save."], notes: "⚠️ This changes the <b>default</b> budget, for now and future periods. It does NOT fix a past period: for that, use <b>🔧 Corriger budget période</b>." }
+  },
+  correctionBudget: {
+    fr: { titre: "🔧 Corriger budget période", aquoi: "Change le budget Nourriture/Perso d'UNE SEULE période, y compris une période déjà passée.", etapes: ["Choisis la période dans la liste.", "Entre le nouveau budget Nourriture et/ou Perso.", "<b>Enregistrer</b>. Un champ laissé vide garde le budget normal pour cette catégorie."], notes: "À ne pas confondre avec <b>🔧 Paramètres</b>, qui change toutes les périodes à venir mais ne peut pas corriger le passé. <b>↺ Revenir au budget normal</b> supprime l'exception." },
+    en: { titre: "🔧 Fix a period's budget", aquoi: "Changes the Food/Personal budget for ONE period only, including a past one.", etapes: ["Pick the period from the list.", "Enter the new Food and/or Personal budget.", "<b>Enregistrer</b>. A field left empty keeps the normal budget for that category."], notes: "Not to be confused with <b>🔧 Paramètres</b>, which changes all future periods but cannot fix the past. <b>↺ Revenir au budget normal</b> removes the exception." }
+  },
+  rappels: {
+    fr: { titre: "🔔 Nouveau rappel", aquoi: "Pense-bête pour une dépense à venir qu'on risque d'oublier : permis, assurance, frais IRCC…", etapes: ["Entre la description, le montant et la date d'échéance.", "Une pastille rouge apparaît environ un mois avant, avec un décompte J-… puis EN RETARD.", "Le moment venu : <b>saisis la dépense normalement</b>, puis clique <b>✅ C'est fait</b>."], notes: "Un rappel ne crée AUCUNE dépense — il ne fait que prévenir. Il s'affiche aussi sur la mini-app du téléphone, avec un bouton <b>⏰ Plus tard</b> qui le repousse de 3 jours des deux côtés." },
+    en: { titre: "🔔 New reminder", aquoi: "A memo for an upcoming expense you might forget: permit, insurance, IRCC fees…", etapes: ["Enter the description, amount and due date.", "A red badge appears about a month ahead, counting down J-… then EN RETARD (overdue).", "When the time comes: <b>enter the expense normally</b>, then click <b>✅ C'est fait</b>."], notes: "A reminder creates NO expense — it only warns you. It also shows on the phone mini-app, with a <b>⏰ Plus tard</b> button that postpones it 3 days on both sides." }
+  },
+  loyer: {
+    fr: { titre: "🏘️ Loyer", aquoi: "Le loyer se saisit entièrement à la main, ligne par ligne, avec sa date réelle.", etapes: ["Ouvre le détail de la période.", "Ajoute une ligne de loyer avec son montant et sa date.", "Le crayon modifie, la corbeille supprime."], notes: "Le loyer n'est pas dans les frais fixes automatiques, justement parce qu'il change selon les mois et les arrangements. Depuis octobre 2026, le logement est prépayé." },
+    en: { titre: "🏘️ Rent", aquoi: "Rent is entered fully by hand, line by line, with its actual date.", etapes: ["Open the period detail.", "Add a rent line with its amount and date.", "The pencil edits, the bin deletes."], notes: "Rent is not among the automatic fixed costs, precisely because it varies by month and arrangement. Since October 2026, housing is prepaid." }
+  },
+  statut: {
+    fr: { titre: "🎓 Visiteur / AEC Étudiant", aquoi: "Bascule entre les deux statuts de Rafael. La seule différence de calcul est le prix du métro.", etapes: ["Clique sur <b>Visiteur</b> ou <b>AEC Étudiant</b>.", "Confirme le changement.", "Le tarif étudiant (62,50 $) s'applique à partir du 1er du mois suivant la date de bascule."], notes: "Tout le reste est identique entre les deux modes : mêmes budgets, mêmes frais fixes, mêmes revenus." },
+    en: { titre: "🎓 Visitor / AEC Student", aquoi: "Switches between Rafael's two statuses. The only calculation difference is the metro fare.", etapes: ["Click <b>Visiteur</b> or <b>AEC Étudiant</b>.", "Confirm the change.", "The student fare ($62.50) applies from the 1st of the month after the switch date."], notes: "Everything else is identical between the two modes: same budgets, same fixed costs, same income." }
   },
   simuler: {
-    titre: '📊 Simuler',
-    aquoi: "Teste un changement (revenu, dépense, fréquence) et voit l'effet sur les périodes suivantes, sans rien modifier pour de vrai.",
-    etapes: [
-      "Ouvre <b>📊 Simuler</b>.",
-      "Renseigne les paramètres à tester.",
-      "Compare le résultat aux soldes actuels."
-    ],
-    notes: "Rien n'est enregistré : la simulation ne touche pas aux vraies données."
+    fr: { titre: "📊 Simuler", aquoi: "Teste un changement (revenu, dépense, fréquence) et voit l'effet sur les périodes suivantes, sans rien modifier pour de vrai.", etapes: ["Ouvre <b>📊 Simuler</b>.", "Renseigne les paramètres à tester.", "Compare le résultat aux soldes actuels."], notes: "Rien n'est enregistré : la simulation ne touche pas aux vraies données." },
+    en: { titre: "📊 Simulate", aquoi: "Tests a change (income, expense, frequency) and shows the effect on later periods, without changing anything for real.", etapes: ["Open <b>📊 Simuler</b>.", "Fill in the parameters to test.", "Compare the result with current balances."], notes: "Nothing is saved: the simulation does not touch the real data." }
+  },
+  tableau: {
+    fr: { titre: "📊 Tableau", aquoi: "Affiche toutes les périodes en tableau, pour comparer les chiffres d'un coup d'œil ou vérifier contre un autre document.", etapes: ["Clique sur <b>📊 Tableau</b> pour l'ouvrir.", "Reclique pour le refermer."], notes: "Pratique pour la vérification ligne à ligne contre un fichier Excel." },
+    en: { titre: "📊 Table", aquoi: "Shows all periods as a table, to compare figures at a glance or check against another document.", etapes: ["Click <b>📊 Tableau</b> to open it.", "Click again to close it."], notes: "Handy for line-by-line checking against an Excel file." }
+  },
+  revenus: {
+    fr: { titre: "💵 Revenus", aquoi: "Le salaire et les autres entrées d'argent : aides, remboursements, retraits d'épargne.", etapes: ["<b>Salaire</b> se règle dans les paramètres et se répète automatiquement.", "<b>Autre revenu</b> s'ajoute au cas par cas dans le détail de la période.", "Une entrée peut être marquée comme remboursable, avec sa description."], notes: "Les retraits d'épargne apparaissent ici automatiquement en « Autre revenu » : ne les saisis pas une deuxième fois à la main." },
+    en: { titre: "💵 Income", aquoi: "Salary and other money coming in: support payments, reimbursements, savings withdrawals.", etapes: ["<b>Salary</b> is set in the settings and repeats automatically.", "<b>Other income</b> is added case by case in the period detail.", "An entry can be marked as reimbursable, with its description."], notes: "Savings withdrawals appear here automatically as \"Autre revenu\": do not enter them a second time by hand." }
+  },
+  sauvegarde: {
+    fr: { titre: "💾 Sauvegarde et synchronisation", aquoi: "Les données sont enregistrées sur l'appareil et synchronisées avec Firebase, pour que l'app principale et la mini-app voient la même chose.", etapes: ["L'enregistrement est automatique après chaque modification.", "Une protection empêche une page restée ouverte d'écraser une modification plus récente.", "<b>Restaurer la sauvegarde auto</b> permet de revenir en arrière en cas de problème."], notes: "En cas de doute, ouvre l'app sur un seul appareil à la fois pour la modification, et laisse les autres en lecture." },
+    en: { titre: "💾 Backup and sync", aquoi: "Data is saved on the device and synced with Firebase, so the main app and the mini-app see the same thing.", etapes: ["Saving is automatic after every change.", "A safeguard prevents a page left open from overwriting a more recent change.", "<b>Restaurer la sauvegarde auto</b> lets you roll back if something goes wrong."], notes: "When in doubt, edit from one device at a time and leave the others read-only." }
   }
 };
 
+
+// --- Panneau d'aide FLOTTANT : non bloquant (on peut utiliser la fonction pendant
+// --- qu'il est ouvert) et deplacable a la souris. Bilingue FR / EN.
+let AIDE_LANGUE = (function(){
+  try { return localStorage.getItem('comptes_rafael_aide_langue') || 'fr'; } catch(e) { return 'fr'; }
+})();
+let AIDE_CLE_COURANTE = null;
+
+function setAideLangue(l) {
+  AIDE_LANGUE = l;
+  try { localStorage.setItem('comptes_rafael_aide_langue', l); } catch(e) {}
+  if (AIDE_CLE_COURANTE === '__sommaire__') ouvrirSommaireAide();
+  else if (AIDE_CLE_COURANTE) ouvrirAide(AIDE_CLE_COURANTE);
+}
+
 function btnAide(cle) {
-  return `<span onclick="event.stopPropagation();ouvrirAide('${cle}')" title="À quoi ça sert ?"
+  return `<span onclick="event.stopPropagation();ouvrirAide('${cle}')" title="Aide / Help"
     style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
            border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:10px;
            font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;flex-shrink:0;">?</span>`;
 }
 
-function ouvrirAide(cle) {
-  const a = AIDES[cle];
-  if (!a) return;
-  let overlay = document.getElementById('modalAide');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'modalAide';
-    overlay.className = 'modal-overlay';
-    document.body.appendChild(overlay);
+function getPanneauAide() {
+  let el = document.getElementById('aidePanel');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'aidePanel';
+    el.style.cssText = 'position:fixed;top:90px;right:24px;width:420px;max-width:calc(100vw - 32px);' +
+      'max-height:72vh;overflow:hidden;background:var(--surface);border:1px solid var(--accent2);' +
+      'border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.6);z-index:9999;display:none;' +
+      'flex-direction:column;';
+    document.body.appendChild(el);
   }
-  const etapes = a.etapes.map((e,i) =>
-    `<li style="margin-bottom:7px;line-height:1.5;"><b style="color:var(--accent2);">${i+1}.</b> ${e}</li>`).join('');
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:520px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h2 style="margin:0;">${a.titre}</h2>
-        <span onclick="document.getElementById('modalAide').classList.remove('open')"
-          style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
-      </div>
-      <div style="background:rgba(79,142,247,.07);border-left:3px solid var(--accent2);
-           border-radius:0 6px 6px 0;padding:10px 12px;margin:14px 0;font-size:13px;line-height:1.5;">
-        ${a.aquoi}
-      </div>
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Comment faire</div>
-      <ul style="list-style:none;padding:0;margin:0 0 14px;font-size:13px;">${etapes}</ul>
-      ${a.notes ? `<div style="background:rgba(247,197,72,.08);border:1px solid rgba(247,197,72,.25);
-        border-radius:6px;padding:10px 12px;font-size:12px;line-height:1.5;color:var(--text);">
-        💡 ${a.notes}</div>` : ''}
-      <div class="form-actions" style="margin-top:16px;display:flex;gap:8px;justify-content:space-between;">
-        <button class="btn btn-secondary" onclick="ouvrirSommaireAide()" style="font-size:11px;">📖 Toutes les aides</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('modalAide').classList.remove('open')">Fermer</button>
+  return el;
+}
+
+function fermerAide() {
+  const el = document.getElementById('aidePanel');
+  if (el) el.style.display = 'none';
+  AIDE_CLE_COURANTE = null;
+}
+
+function enteteAide(titre) {
+  const btnL = (code,label) => `<span onclick="setAideLangue('${code}')" style="cursor:pointer;padding:2px 7px;
+    border-radius:4px;font-size:10px;font-weight:800;letter-spacing:.5px;
+    background:${AIDE_LANGUE===code?'var(--accent2)':'transparent'};
+    color:${AIDE_LANGUE===code?'#fff':'var(--muted)'};
+    border:1px solid ${AIDE_LANGUE===code?'var(--accent2)':'var(--border)'};">${label}</span>`;
+  return `<div id="aidePanelDrag" style="cursor:move;user-select:none;display:flex;align-items:center;
+       justify-content:space-between;gap:8px;padding:11px 13px;background:rgba(79,142,247,.10);
+       border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="font-size:14px;font-weight:700;color:var(--text);overflow:hidden;
+           text-overflow:ellipsis;white-space:nowrap;">${titre}</div>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+        ${btnL('fr','FR')}${btnL('en','EN')}
+        <span onclick="fermerAide()" style="cursor:pointer;font-size:16px;color:var(--muted);
+              padding:0 2px;margin-left:4px;">✕</span>
       </div>
     </div>`;
-  overlay.classList.add('open');
+}
+
+function activerDragAide() {
+  const panel = document.getElementById('aidePanel');
+  const handle = document.getElementById('aidePanelDrag');
+  if (!panel || !handle) return;
+  let dx = 0, dy = 0, drag = false;
+  handle.onmousedown = e => {
+    if (e.target.tagName === 'SPAN' && e.target.onclick) return; // boutons FR/EN/✕
+    drag = true;
+    const r = panel.getBoundingClientRect();
+    dx = e.clientX - r.left; dy = e.clientY - r.top;
+    panel.style.right = 'auto'; panel.style.left = r.left + 'px'; panel.style.top = r.top + 'px';
+    e.preventDefault();
+  };
+  document.onmousemove = e => {
+    if (!drag) return;
+    const maxX = window.innerWidth - panel.offsetWidth;
+    const maxY = window.innerHeight - 40;
+    panel.style.left = Math.max(0, Math.min(maxX, e.clientX - dx)) + 'px';
+    panel.style.top  = Math.max(0, Math.min(maxY, e.clientY - dy)) + 'px';
+  };
+  document.onmouseup = () => { drag = false; };
+}
+
+function ouvrirAide(cle) {
+  const fiche = AIDES[cle];
+  if (!fiche) return;
+  const a = fiche[AIDE_LANGUE] || fiche.fr;
+  AIDE_CLE_COURANTE = cle;
+  const T = AIDE_LANGUE === 'en'
+    ? { comment:'How to do it', tous:'📖 All help topics', ouvert:'This window stays open while you use the function — drag it by its title bar.' }
+    : { comment:'Comment faire', tous:'📖 Toutes les aides', ouvert:"Cette fenêtre reste ouverte pendant que tu utilises la fonction — déplace-la par sa barre de titre." };
+  const etapes = a.etapes.map((e,i) =>
+    `<li style="margin-bottom:8px;line-height:1.55;"><b style="color:var(--accent2);">${i+1}.</b> ${e}</li>`).join('');
+  const panel = getPanneauAide();
+  panel.innerHTML = enteteAide(a.titre) + `
+    <div style="overflow-y:auto;padding:13px;flex:1;">
+      <div style="background:rgba(79,142,247,.07);border-left:3px solid var(--accent2);
+           border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:14px;font-size:13px;line-height:1.55;">
+        ${a.aquoi}
+      </div>
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;
+           margin-bottom:8px;">${T.comment}</div>
+      <ul style="list-style:none;padding:0;margin:0 0 14px;font-size:13px;">${etapes}</ul>
+      ${a.notes ? `<div style="background:rgba(247,197,72,.08);border:1px solid rgba(247,197,72,.25);
+        border-radius:6px;padding:10px 12px;font-size:12px;line-height:1.55;">💡 ${a.notes}</div>` : ''}
+      <div style="font-size:10px;color:var(--muted);margin-top:12px;font-style:italic;">${T.ouvert}</div>
+    </div>
+    <div style="padding:9px 13px;border-top:1px solid var(--border);flex-shrink:0;">
+      <span onclick="ouvrirSommaireAide()" style="cursor:pointer;font-size:11px;color:var(--accent2);">${T.tous}</span>
+    </div>`;
+  panel.style.display = 'flex';
+  activerDragAide();
 }
 
 function ouvrirSommaireAide() {
-  let overlay = document.getElementById('modalAide');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'modalAide';
-    overlay.className = 'modal-overlay';
-    document.body.appendChild(overlay);
-  }
-  const items = Object.keys(AIDES).map(k =>
-    `<div onclick="ouvrirAide('${k}')" style="cursor:pointer;padding:10px 12px;border:1px solid var(--border);
-       border-radius:8px;margin-bottom:6px;font-size:13px;transition:background .15s;"
-       onmouseover="this.style.background='rgba(79,142,247,.08)'" onmouseout="this.style.background='transparent'">
-      <b>${AIDES[k].titre}</b>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px;">${AIDES[k].aquoi.slice(0,90)}…</div>
-    </div>`).join('');
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:520px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h2 style="margin:0;">📖 Aide — à quoi sert quoi</h2>
-        <span onclick="document.getElementById('modalAide').classList.remove('open')"
-          style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
-      </div>
-      <p style="font-size:12px;color:var(--muted);margin:10px 0 14px;">
-        Clique sur un sujet. Le petit <b style="color:var(--accent2);">?</b> à côté de chaque fonction ouvre directement la bonne fiche.
-      </p>
-      ${items}
-      <div class="form-actions" style="margin-top:14px;display:flex;justify-content:flex-end;">
-        <button class="btn btn-secondary" onclick="document.getElementById('modalAide').classList.remove('open')">Fermer</button>
-      </div>
+  AIDE_CLE_COURANTE = '__sommaire__';
+  const T = AIDE_LANGUE === 'en'
+    ? { titre:'📖 Help — what does what', intro:'Pick a topic. The small blue <b>?</b> next to each function opens its page directly.' }
+    : { titre:'📖 Aide — à quoi sert quoi', intro:'Choisis un sujet. Le petit <b>?</b> bleu à côté de chaque fonction ouvre directement sa fiche.' };
+  const items = Object.keys(AIDES).map(k => {
+    const a = AIDES[k][AIDE_LANGUE] || AIDES[k].fr;
+    return `<div onclick="ouvrirAide('${k}')" style="cursor:pointer;padding:9px 11px;border:1px solid var(--border);
+       border-radius:8px;margin-bottom:6px;font-size:12.5px;"
+       onmouseover="this.style.background='rgba(79,142,247,.08)'"
+       onmouseout="this.style.background='transparent'">
+      <b>${a.titre}</b>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4;">${a.aquoi.slice(0,80)}…</div>
     </div>`;
-  overlay.classList.add('open');
+  }).join('');
+  const panel = getPanneauAide();
+  panel.innerHTML = enteteAide(T.titre) + `
+    <div style="overflow-y:auto;padding:13px;flex:1;">
+      <p style="font-size:11.5px;color:var(--muted);margin:0 0 13px;line-height:1.5;">${T.intro}</p>
+      ${items}
+    </div>`;
+  panel.style.display = 'flex';
+  activerDragAide();
 }
 
 function renderAlertes() {

@@ -1428,7 +1428,7 @@ input, textarea, select { cursor: text; }
   <!-- FRAIS FIXES -->
   <div class="fixes-bloc" id="fixesBloc">
     <div class="fixes-header">
-      <div class="fixes-title">🔒 Frais fixes du mois</div>
+      <div class="fixes-title">🔒 Frais fixes du mois<span onclick="event.stopPropagation();ouvrirAide('fraisFixes')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:6px;vertical-align:middle;flex-shrink:0;">?</span><span onclick="event.stopPropagation();ouvrirAide('changerDatesDebit')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:6px;vertical-align:middle;flex-shrink:0;">?</span></div>
       <div class="fixes-total" id="fixesTotal">—</div>
     </div>
     <div class="fixes-grid" id="fixesGrid"></div>
@@ -1734,6 +1734,36 @@ const DEFAUT_FIXES = {
 };
 
 // ============================================================
+//  JOURS DE PRÉLÈVEMENT (réglables dans 🔧 Paramètres)
+//  Avant, ces jours étaient écrits en dur à 13 endroits du code. Ils sont
+//  désormais centralisés ici et lus via getJourDebit() partout.
+//  Convention : gym1 / fido / netflix tombent dans le 1er mois de la période,
+//  gym2 / metro dans le 2e mois.
+// ============================================================
+const DEFAUT_JOURS_DEBIT = {
+  gym1: 23,     // 1er prélèvement gym — 1er mois de la période
+  gym2: 7,      // 2e prélèvement gym — 2e mois de la période
+  fido: 29,     // 1er mois
+  netflix: 25,  // 1er mois
+  metro: 1,     // 2e mois
+};
+
+// Source UNIQUE : tout le calcul des frais fixes passe par ici.
+function getJourDebit(cle) {
+  const j = state && state.joursDebit ? state.joursDebit[cle] : undefined;
+  const n = parseInt(j, 10);
+  if (isNaN(n) || n < 1 || n > 31) return DEFAUT_JOURS_DEBIT[cle];
+  return n;
+}
+
+// Construit une date en bornant le jour au dernier jour réel du mois :
+// un réglage au 31 tombe au 28/29 en février au lieu de déborder sur mars.
+function dateDebit(annee, mois, jour) {
+  const dernier = new Date(annee, mois + 1, 0).getDate();
+  return new Date(annee, mois, Math.min(jour, dernier));
+}
+
+// ============================================================
 // ÉTAT GLOBAL
 // ============================================================
 
@@ -1797,6 +1827,7 @@ function defaultState() {
     detteLoyerLogement: 6080, // prêt de PY pour le prépaiement du logement (oct 2026 -> jun/jul 2027)
     fixesEntrees: {}, // { 'gym': { '2026-07': [{id,montant,desc,date}] }, ... }
     fixes: {...DEFAUT_FIXES},
+    joursDebit: {...DEFAUT_JOURS_DEBIT},
     budgetHistorique: { nourriture: [], perso: [] }, // [{date:'YYYY-MM-DD', montant}] — permet au budget de changer sans affecter les périodes déjà passées
     rappelsPersonnalises: [], // [{id, desc, montant, dateEcheance, categorie, paye}]
     epargne: { soldeDepart: 0, mouvements: [] }, // [{id, type:'depot'|'retrait'|'interet', montant, date, desc}]
@@ -1816,6 +1847,7 @@ function loadState() {
       const s = JSON.parse(raw);
       if (s.detteIRCC === undefined) s.detteIRCC = 2000;
       if (s.detteAnnulee === undefined) s.detteAnnulee = null;
+      if (!s.joursDebit) s.joursDebit = {...DEFAUT_JOURS_DEBIT};
       if (s.detteLoyerLogement === undefined) s.detteLoyerLogement = 6080;
       // Firebase supprime les null — on les restitue
       if (s.soldeRef === undefined) s.soldeRef = null;
@@ -2245,8 +2277,8 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
   if (p) {
     const debutPeriode = new Date(p.anneeDebut, p.moisDebut - 1, 16);
     // Gym réellement prélevé le 23 du 1er mois et le 7 du 2e mois de la période (observé sur le relevé)
-    const gymDate1 = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 23);
-    const gymDate2 = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 7);
+    const gymDate1 = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('gym1'));
+    const gymDate2 = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, getJourDebit('gym2'));
     const ref = new Date(dateRef);
     // Gym : 1 prélèvement par demi-période (23 puis 7 du mois suivant)
     if (!hasFixeEntrees('gym', periodeKey)) {
@@ -2255,17 +2287,17 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
     }
     // Fido : réellement prélevé le 29 du 1er mois de la période (observé sur le relevé)
     if (!hasFixeEntrees('fido', periodeKey) && state.fixes.fido > 0) {
-      const fidoDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 29);
+      const fidoDate = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('fido'));
       if (fidoDate <= ref) total += state.fixes.fido;
     }
     // Netflix : le 25 du mois
     if (!hasFixeEntrees('netflix', periodeKey) && state.fixes.netflix > 0) {
-      const netflixDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 25);
+      const netflixDate = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('netflix'));
       if (netflixDate >= debutPeriode && netflixDate <= ref) total += state.fixes.netflix;
     }
     // Métro : le 1er du mois suivant le début de période
     if (!hasFixeEntrees('metro', periodeKey)) {
-      const metroDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 1);
+      const metroDate = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, getJourDebit('metro'));
       if (metroDate <= ref) {
         const isAEC = state.mode === 'aec' && isAECPeriode(periodeKey);
         total += isAEC ? state.fixes.metro_etudiant : state.fixes.metro_normal;
@@ -2503,14 +2535,14 @@ function getLastGym(fromDate) {
 function getNextNetflix(fromDate) {
   // Netflix : autour du 25 du mois, on prend le 25 du mois courant ou suivant
   const from = new Date(fromDate);
-  let d = new Date(from.getFullYear(), from.getMonth(), 25);
-  if (d <= from) d = new Date(from.getFullYear(), from.getMonth() + 1, 25);
+  let d = dateDebit(from.getFullYear(), from.getMonth(), getJourDebit('netflix'));
+  if (d <= from) d = dateDebit(from.getFullYear(), from.getMonth() + 1, getJourDebit('netflix'));
   return d;
 }
 
 function getNextMetro(fromDate) {
   const from = new Date(fromDate);
-  let d = new Date(from.getFullYear(), from.getMonth() + 1, 1);
+  let d = dateDebit(from.getFullYear(), from.getMonth() + 1, getJourDebit('metro'));
   return d;
 }
 
@@ -2558,15 +2590,15 @@ function renderFixesBloc() {
   const debutPeriode = getDateDebutPeriode(curKey);
   let gymDebite1 = false, gymDebite2 = false, fidoDebite = false, netflixDebite = false, metroDebite = false;
   if (debutPeriode) {
-    const gymDate1 = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 23);
-    const gymDate2 = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 7);
+    const gymDate1 = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('gym1'));
+    const gymDate2 = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, getJourDebit('gym2'));
     gymDebite1 = gymDate1 <= today;
     gymDebite2 = gymDate2 <= today;
-    const fidoDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 29);
+    const fidoDate = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('fido'));
     fidoDebite = fidoDate <= today;
-    const netflixDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth(), 25);
+    const netflixDate = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('netflix'));
     netflixDebite = netflixDate >= debutPeriode && netflixDate <= today;
-    const metroDate = new Date(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, 1);
+    const metroDate = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, getJourDebit('metro'));
     metroDebite = metroDate <= today;
   }
 
@@ -2575,7 +2607,7 @@ function renderFixesBloc() {
   html += renderFixeEntreeCard('electricite', 'Électricité', '⚡', curKey, fixes.electricite, fixes.electricite === 0 ? 'non actif' : 'mensuel', null, false);
   html += renderFixeEntreeCard('assurance', 'Assurance log.', '🛡️', curKey, fixes.assurance, fixes.assurance === 0 ? 'non actif' : 'mensuel', null, false);
   html += renderGymCard(curKey, gym, nextGym, gymDebite1, gymDebite2);
-  html += renderFixeEntreeCard('netflix', 'Netflix', '🎬', curKey, fixes.netflix, '~25 du mois', 'Prochain : ' + fmtDate(nextNetflix), netflixDebite);
+  html += renderFixeEntreeCard('netflix', 'Netflix', '🎬', curKey, fixes.netflix, '~' + getJourDebit('netflix') + ' du mois', 'Prochain : ' + fmtDate(nextNetflix), netflixDebite);
   html += renderFixeEntreeCard('fido', 'Fido (tél)', '📱', curKey, fixes.fido, 'irrégulier', null, fidoDebite);
   html += renderFixeEntreeCard('metro', 'Métro', '🚇', curKey, metroMontant, isAEC ? 'tarif étudiant' : 'tarif normal', 'Prochain : ' + fmtDate(nextMetro), metroDebite);
   html += renderFixeEntreeCard('bixi', 'Bixi', '🚲', curKey, fixes.bixi, fixes.bixi === 0 ? 'non actif' : '1 mois', null, false);
@@ -4583,8 +4615,12 @@ const AIDES = {
     en: { titre: "🎁 Leftover", aquoi: "What is left of the Food and Personal budgets at the end of a period. A green bubble appears at the start of the next period.", etapes: ["Click the green bubble to see the amount.", "Choose: carry over to the <b>Food</b> or <b>Personal</b> budget, move it to <b>💰 Savings</b>, or apply it to the <b>debt</b>.", "Or close with ✕ to do nothing."], notes: "The bubble expires after 10 days. If a category was overspent, the leftover can be negative: that is a deficit, not a bonus." }
   },
   fraisFixes: {
-    fr: { titre: "🔒 Frais fixes", aquoi: "Les dépenses qui reviennent chaque période : métro, gym, Fido, Netflix. Elles sont calculées automatiquement.", etapes: ["Métro 110 $ (62,50 $ en statut AEC étudiant), débité le 1er du mois suivant.", "Gym 40,80 $ en deux fois : 20,40 $ le 23 et 20,40 $ le 7 du mois suivant.", "Fido 33,96 $, première moitié de période. Netflix 21,46 $, le 25.", "Le badge <b>✅ Débité</b> ou <b>⏳ Pas encore débité</b> indique si le prélèvement est passé."], notes: "Ces montants se modifient dans <b>🔧 Paramètres</b>. Le loyer et la dette n'en font pas partie : ils se saisissent à la main." },
-    en: { titre: "🔒 Fixed costs", aquoi: "The costs that recur every period: metro, gym, Fido, Netflix. They are calculated automatically.", etapes: ["Metro $110 ($62.50 with AEC student status), charged on the 1st of the next month.", "Gym $40.80 in two parts: $20.40 on the 23rd and $20.40 on the 7th of the next month.", "Fido $33.96, first half of the period. Netflix $21.46, on the 25th.", "The <b>✅ Débité</b> or <b>⏳ Pas encore débité</b> badge shows whether the charge has gone through."], notes: "These amounts are changed in <b>🔧 Paramètres</b>. Rent and debt are not included: they are entered manually." }
+    fr: { titre: "🔒 Frais fixes", aquoi: "Les dépenses qui reviennent chaque période : métro, gym, Fido, Netflix. L'app les compte toute seule, sans aucune saisie, en se calant sur la vraie date de prélèvement de la banque.", etapes: ["<b>Gym — 40,80 $ en deux fois.</b> 20,40 $ le <b>23</b> du 1er mois de la période, puis 20,40 $ le <b>7</b> du 2e mois. La carte Gym affiche les deux prélèvements séparément, chacun avec son propre statut.", "<b>Fido — 33,96 $</b>, prélevé le <b>29</b> du 1er mois de la période.", "<b>Netflix — 21,46 $</b>, prélevé le <b>25</b> du mois.", "<b>Métro — 110 $</b> (62,50 $ en statut AEC étudiant), prélevé le <b>1er du mois suivant</b> le début de la période.", "Le badge <b>✅ Débité</b> ou <b>⏳ Pas encore débité</b> sur chaque carte dit si la date est passée."], notes: "<b>Pourquoi ces dates comptent :</b> le solde « réel jour J » n'ajoute un frais fixe que si sa date de prélèvement est déjà passée. C'est ce qui permet au solde affiché de correspondre au vrai solde bancaire, et pas à une moyenne théorique. Un frais prévu plus tard dans la période n'est donc pas encore déduit — il apparaît en revanche dans « prévi fin pér. »." },
+    en: { titre: "🔒 Fixed costs", aquoi: "The costs that come back every period: metro, gym, Fido, Netflix. The app counts them automatically, with no data entry, using the real bank charge date.", etapes: ["<b>Gym — $40.80 in two parts.</b> $20.40 on the <b>23rd</b> of the period's first month, then $20.40 on the <b>7th</b> of the second month. The Gym card shows both charges separately, each with its own status.", "<b>Fido — $33.96</b>, charged on the <b>29th</b> of the period's first month.", "<b>Netflix — $21.46</b>, charged on the <b>25th</b> of the month.", "<b>Metro — $110</b> ($62.50 with AEC student status), charged on the <b>1st of the month following</b> the start of the period.", "The <b>✅ Débité</b> or <b>⏳ Pas encore débité</b> badge on each card says whether the date has passed."], notes: "<b>Why these dates matter:</b> the \"réel jour J\" balance only adds a fixed cost once its charge date has passed. That is what makes the displayed balance match the real bank balance instead of a theoretical average. A cost due later in the period is therefore not deducted yet — it does show up in \"prévi fin pér.\" though." }
+  },
+  changerDatesDebit: {
+    fr: { titre: "📅 Changer une date ou un montant de prélèvement", aquoi: "Les montants ET les jours de prélèvement se règlent maintenant depuis les Paramètres, sans toucher au code.", etapes: ["<b>Changer un jour de prélèvement :</b> ouvre <b>🔧 Paramètres</b>, section <b>📅 Jours de prélèvement</b>. Modifie le jour voulu et enregistre. S'applique à toutes les périodes, passées comme futures.", "<b>Changer un montant :</b> même fenêtre, section du haut (gym, fido, netflix, métro normal, métro étudiant).", "<b>Cas particulier d'une seule période :</b> si un prélèvement est tombé à une date inhabituelle un mois donné, ajoute une <b>entrée manuelle</b> sur la carte du frais avec la date réelle. Le calcul automatique est alors désactivé pour ce frais et cette période uniquement.", "Pour revenir à l'automatique, supprime l'entrée manuelle."], notes: "Le gym a <b>deux</b> réglages séparés (1er et 2e prélèvement) car il tombe une fois dans chaque moitié de période. Un jour au-delà de la fin du mois est ramené au dernier jour réel : régler 31 donne le 28 en février, le 30 en avril. ⚠️ Pour la saisie manuelle, c'est <b>tout ou rien par période et par frais</b> : si le gym a été prélevé deux fois, saisis bien les <b>deux</b> lignes, sinon il en manquera une." },
+    en: { titre: "📅 Changing a charge date or amount", aquoi: "Both amounts AND charge days are now set from Settings, with no code changes needed.", etapes: ["<b>Change a charge day:</b> open <b>🔧 Paramètres</b>, section <b>📅 Jours de prélèvement</b>. Edit the day and save. Applies to every period, past and future.", "<b>Change an amount:</b> same window, top section (gym, fido, netflix, normal metro, student metro).", "<b>One-off case:</b> if a charge landed on an unusual date in a given month, add a <b>manual entry</b> on that cost's card with the real date. The automatic calculation is then disabled for that cost and that period only.", "To go back to automatic, delete the manual entry."], notes: "The gym has <b>two</b> separate settings (1st and 2nd charge) because it falls once in each half of the period. A day beyond the end of the month is clamped to the last real day: setting 31 gives the 28th in February, the 30th in April. ⚠️ For manual entries it is <b>all or nothing, per period and per cost</b>: if the gym was charged twice, enter <b>both</b> lines or one will be missing." }
   },
   parametres: {
     fr: { titre: "🔧 Paramètres", aquoi: "Change les montants de référence : salaire, frais fixes, budgets Nourriture et Perso par défaut.", etapes: ["Ouvre <b>🔧 Paramètres</b>.", "Modifie les champs voulus.", "Enregistre."], notes: "⚠️ Ça change le budget <b>par défaut</b>, pour maintenant et les périodes à venir. Ça ne corrige PAS une période passée : pour ça, utilise <b>🔧 Corriger budget période</b>." },
@@ -6455,6 +6491,30 @@ function renderSimFixesGrid() {
       <input type="number" id="fix_${f2.key}" value="${f[f2.key]}" step="0.01">
     </div>`;
   }
+
+  // ---- Jours de prélèvement (réglables, plus besoin de saisie manuelle) ----
+  const jours = [
+    {key:'gym1',    label:'Gym — 1er prélèvement', aide:'jour du 1er mois de la période'},
+    {key:'gym2',    label:'Gym — 2e prélèvement',  aide:'jour du 2e mois de la période'},
+    {key:'fido',    label:'Fido',                  aide:'jour du 1er mois'},
+    {key:'netflix', label:'Netflix',               aide:'jour du 1er mois'},
+    {key:'metro',   label:'Métro',                 aide:'jour du 2e mois'},
+  ];
+  html += `<div class="sim-item" style="grid-column:1/-1;border-top:1px solid var(--border);
+       margin-top:8px;padding-top:10px;">
+    <div style="font-size:11px;font-weight:700;color:var(--yellow);margin-bottom:2px;">
+      📅 Jours de prélèvement</div>
+    <div style="font-size:10px;color:var(--muted);line-height:1.4;">
+      Jour du mois où la banque débite réellement. Sert à savoir si le frais est déjà
+      compté dans le solde « réel jour J ». Un jour au-delà de la fin du mois est ramené
+      au dernier jour réel (le 31 devient le 28 en février).
+    </div>
+  </div>`;
+  for (const j of jours) {
+    html += `<div class="sim-item"><label>${j.label}<span style="color:var(--muted);font-weight:400;"> — ${j.aide}</span></label>
+      <input type="number" id="jour_${j.key}" value="${getJourDebit(j.key)}" min="1" max="31" step="1">
+    </div>`;
+  }
   document.getElementById('simFixesGrid').innerHTML = html;
 }
 
@@ -6484,6 +6544,14 @@ function saveSimFixe() {
       state.budgetHistorique[type].push({ date: dateEffet, montant: nouvelleValeur });
     }
     state.fixes[k] = nouvelleValeur;
+  }
+  // Jours de prélèvement — bornés 1..31, valeur invalide = on garde l'ancienne
+  if (!state.joursDebit) state.joursDebit = {...DEFAUT_JOURS_DEBIT};
+  for (const jk of ['gym1','gym2','fido','netflix','metro']) {
+    const el = document.getElementById('jour_' + jk);
+    if (!el) continue;
+    const n = parseInt(el.value, 10);
+    if (!isNaN(n) && n >= 1 && n <= 31) state.joursDebit[jk] = n;
   }
   saveState();
   closeModal('modalSimFrequence');

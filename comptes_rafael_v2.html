@@ -2776,8 +2776,16 @@ function renderFixeEntreeCard(fixKey, label, icon, curKey, defaultMontant, note,
     });
   }
 
+  const aideCle = 'fixe_' + fixKey;
+  const aideHTML = AIDES[aideCle]
+    ? '<span onclick="event.stopPropagation();ouvrirAide(\'' + aideCle + '\')" title="Aide / Help"'
+      + ' style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;'
+      + 'border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:8px;'
+      + 'font-weight:800;cursor:pointer;margin-left:4px;vertical-align:middle;">?</span>'
+    : '';
+
   return '<div class="' + cls + '" id="fixes_card_' + fixKey + '">'
-    + '<div class="fixes-item-label">' + icon + ' ' + label + '</div>'
+    + '<div class="fixes-item-label">' + icon + ' ' + label + aideHTML + '</div>'
     + '<div class="fixes-item-montant">' + (total > 0 ? fmt(total) : '—') + '</div>'
     + badgeHTML
     + (nextInfo ? '<div class="fixes-item-next">' + nextInfo + '</div>' : '')
@@ -4613,6 +4621,34 @@ const AIDES = {
   reliquat: {
     fr: { titre: "🎁 Reliquat", aquoi: "Ce qui reste des budgets Nourriture et Perso à la fin d'une période. Une bulle verte apparaît au début de la période suivante.", etapes: ["Clique sur la bulle verte pour voir le montant.", "Choisis : reporter sur le budget <b>Nourriture</b> ou <b>Perso</b>, verser au <b>💰 Compte Épargne</b>, ou l'appliquer à la <b>dette</b>.", "Ou ferme avec ✕ pour ne rien faire."], notes: "La bulle expire après 10 jours. Si une catégorie a été dépassée, le reliquat peut être négatif : c'est un déficit, pas un bonus." },
     en: { titre: "🎁 Leftover", aquoi: "What is left of the Food and Personal budgets at the end of a period. A green bubble appears at the start of the next period.", etapes: ["Click the green bubble to see the amount.", "Choose: carry over to the <b>Food</b> or <b>Personal</b> budget, move it to <b>💰 Savings</b>, or apply it to the <b>debt</b>.", "Or close with ✕ to do nothing."], notes: "The bubble expires after 10 days. If a category was overspent, the leftover can be negative: that is a deficit, not a bonus." }
+  },
+  fixe_gym: {
+    fr: { titre: "🏋️ Gym", aquoi: "40,80 $ par période, prélevés en deux fois.", etapes: ["20,40 $ le <b>23</b>, puis 20,40 $ le <b>7</b> du mois suivant.", "La carte affiche les deux prélèvements séparément, chacun avec son ✅ ou ⏳.", "Changer les jours : <b>🔧 Paramètres → 📅 Jours de prélèvement</b>."], notes: "C'est le seul frais prélevé deux fois par période." },
+    en: { titre: "🏋️ Gym", aquoi: "$40.80 per period, charged in two parts.", etapes: ["$20.40 on the <b>23rd</b>, then $20.40 on the <b>7th</b> of the next month.", "The card shows both charges separately, each with its own ✅ or ⏳.", "Change the days: <b>🔧 Paramètres → 📅 Jours de prélèvement</b>."], notes: "It is the only cost charged twice per period." }
+  },
+  fixe_fido: {
+    fr: { titre: "📱 Fido (téléphone)", aquoi: "33,96 $ par mois, prélevés le 29.", etapes: ["Un seul prélèvement, dans le 1er mois de la période.", "Changer le montant ou le jour : <b>🔧 Paramètres</b>."], notes: "La carte indique « irrégulier » car le montant peut varier selon la facture." },
+    en: { titre: "📱 Fido (phone)", aquoi: "$33.96 per month, charged on the 29th.", etapes: ["A single charge, in the period's first month.", "Change the amount or day: <b>🔧 Paramètres</b>."], notes: "The card says \"irrégulier\" because the amount can vary with the bill." }
+  },
+  fixe_netflix: {
+    fr: { titre: "🎬 Netflix", aquoi: "21,46 $ par mois, prélevés le 25.", etapes: ["Un seul prélèvement, dans le 1er mois de la période.", "La carte affiche la date du prochain prélèvement.", "Changer le montant ou le jour : <b>🔧 Paramètres</b>."], notes: "" },
+    en: { titre: "🎬 Netflix", aquoi: "$21.46 per month, charged on the 25th.", etapes: ["A single charge, in the period's first month.", "The card shows the next charge date.", "Change the amount or day: <b>🔧 Paramètres</b>."], notes: "" }
+  },
+  fixe_metro: {
+    fr: { titre: "🚇 Métro", aquoi: "La passe mensuelle, prélevée le 1er du mois suivant le début de la période.", etapes: ["<b>110 $</b> en statut Visiteur, <b>62,50 $</b> en statut AEC Étudiant.", "Le tarif suit automatiquement le statut choisi dans le bandeau.", "Changer les montants ou le jour : <b>🔧 Paramètres</b>."], notes: "C'est le plus gros frais fixe : c'est lui qui fait chuter le solde en début de mois." },
+    en: { titre: "🚇 Metro", aquoi: "The monthly pass, charged on the 1st of the month following the start of the period.", etapes: ["<b>$110</b> as Visitor, <b>$62.50</b> as AEC Student.", "The fare follows the status selected in the banner automatically.", "Change the amounts or day: <b>🔧 Paramètres</b>."], notes: "It is the largest fixed cost: it is what drops the balance at the start of the month." }
+  },
+  fixe_electricite: {
+    fr: { titre: "⚡ Électricité", aquoi: "Facture Hydro-Québec. Aucun montant automatique : elle se saisit à la main.", etapes: ["Entre le montant, une description et la date réelle de la facture.", "Clique sur <b>+ Ajouter</b>."], notes: "Une alerte orange apparaît dans le bandeau tant qu'aucune facture n'est saisie pour la période." },
+    en: { titre: "⚡ Electricity", aquoi: "Hydro-Québec bill. No automatic amount: it is entered by hand.", etapes: ["Enter the amount, a description and the bill's real date.", "Click <b>+ Ajouter</b>."], notes: "An orange alert shows in the banner while no bill has been entered for the period." }
+  },
+  fixe_assurance: {
+    fr: { titre: "🛡️ Assurance logement", aquoi: "Assurance habitation. Se saisit à la main, comme l'électricité.", etapes: ["Entre le montant, une description et la date.", "Clique sur <b>+ Ajouter</b>."], notes: "Affichée « non actif » tant que le montant par défaut est à 0 dans les Paramètres." },
+    en: { titre: "🛡️ Home insurance", aquoi: "Home insurance. Entered by hand, like electricity.", etapes: ["Enter the amount, a description and the date.", "Click <b>+ Ajouter</b>."], notes: "Shown as \"non actif\" while the default amount is 0 in Settings." }
+  },
+  fixe_bixi: {
+    fr: { titre: "🚲 Bixi", aquoi: "Abonnement vélo, saisi à la main quand il est actif.", etapes: ["Entre le montant et la date.", "Clique sur <b>+ Ajouter</b>."], notes: "Affiché « non actif » tant que le montant par défaut est à 0." },
+    en: { titre: "🚲 Bixi", aquoi: "Bike subscription, entered by hand when active.", etapes: ["Enter the amount and date.", "Click <b>+ Ajouter</b>."], notes: "Shown as \"non actif\" while the default amount is 0." }
   },
   fraisFixes: {
     fr: { titre: "🔒 Frais fixes", aquoi: "Les dépenses qui reviennent chaque période : métro, gym, Fido, Netflix. L'app les compte toute seule, sans aucune saisie, en se calant sur la vraie date de prélèvement de la banque.", etapes: ["<b>Gym — 40,80 $ en deux fois.</b> 20,40 $ le <b>23</b> du 1er mois de la période, puis 20,40 $ le <b>7</b> du 2e mois. La carte Gym affiche les deux prélèvements séparément, chacun avec son propre statut.", "<b>Fido — 33,96 $</b>, prélevé le <b>29</b> du 1er mois de la période.", "<b>Netflix — 21,46 $</b>, prélevé le <b>25</b> du mois.", "<b>Métro — 110 $</b> (62,50 $ en statut AEC étudiant), prélevé le <b>1er du mois suivant</b> le début de la période.", "Le badge <b>✅ Débité</b> ou <b>⏳ Pas encore débité</b> sur chaque carte dit si la date est passée."], notes: "<b>Pourquoi ces dates comptent :</b> le solde « réel jour J » n'ajoute un frais fixe que si sa date de prélèvement est déjà passée. C'est ce qui permet au solde affiché de correspondre au vrai solde bancaire, et pas à une moyenne théorique. Un frais prévu plus tard dans la période n'est donc pas encore déduit — il apparaît en revanche dans « prévi fin pér. »." },

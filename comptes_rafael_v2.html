@@ -2735,7 +2735,7 @@ function renderLogementFixeCard(curKey, logementMontant, detteFixeMensuelle) {
     : '';
 
   return '<div class="' + cls + '" id="fixes_card_logement" style="min-width:200px;">' +
-    '<div class="fixes-item-label">🏠 Logement' + '<span class="aide-btn" onclick="event.stopPropagation();ouvrirAide(\'fixe_logement\')" title="Aide / Help">?</span>' +
+    '<div class="fixes-item-label">🏠 Logement' + '<span class="aide-btn" onclick="event.stopPropagation();ouvrirAide(\'fixe_logement\')" title="Aide / Help">?</span>' + '</div>' +
     (total > 0 ? '<div class="fixes-item-montant">' + fmt(total) + '</div>' : '<div class="fixes-item-montant">—</div>') +
     detteHTML +
     '<div style="margin-top:6px;">' + listeHTML + '</div>' +
@@ -2856,7 +2856,7 @@ function renderGymCard(curKey, gym, nextGym, gymDebite1, gymDebite2) {
   }
 
   return '<div class="' + cls + '" id="fixes_card_gym">'
-    + '<div class="fixes-item-label">🏋️ Gym' + '<span class="aide-btn" onclick="event.stopPropagation();ouvrirAide(\'fixe_gym\')" title="Aide / Help">?</span>'
+    + '<div class="fixes-item-label">🏋️ Gym' + '<span class="aide-btn" onclick="event.stopPropagation();ouvrirAide(\'fixe_gym\')" title="Aide / Help">?</span>' + '</div>'
     + corpsHTML
     + '<div class="fixes-item-next">Prochain : ' + fmtDate(nextGym) + '</div>'
     + '<div style="font-size:9px;color:var(--muted);">' + gym.count + 'x ' + montantUnitaire.toFixed(2).replace('.',',') + ' $</div>'

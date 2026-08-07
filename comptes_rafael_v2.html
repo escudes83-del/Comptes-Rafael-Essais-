@@ -521,7 +521,34 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
+    position: relative;   /* ancre du bouton d'aide en haut a droite */
   }
+  /* Bouton "?" isole en haut a droite du cadre, plutot qu'accole au titre :
+     plus facile a reperer, et n'allonge pas le libelle de la categorie. */
+  .aide-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid var(--accent2);
+    color: var(--accent2);
+    background: var(--surface);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+    opacity: .55;
+    transition: opacity .15s, background .15s;
+    z-index: 2;
+  }
+  .aide-btn:hover { opacity: 1; background: var(--accent2); color: #fff; }
+  /* Variante en flux, pour les titres de fenetres et de blocs */
+  .aide-btn.inline { position: static; margin-left: 6px; vertical-align: middle; opacity: .8; }
   .fixes-item.actif { border-color: rgba(79,142,247,.3); }
   .fixes-item.inactif { opacity: .65; border-style: dashed; }
   .fixes-item-label {
@@ -1194,7 +1221,7 @@ input, textarea, select { cursor: text; }
       <div class="subtitle" style="font-size:11px;line-height:1.2;">Relevés du 16 au 15</div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:1px solid var(--border);border-radius:8px;padding:5px 8px;min-height:38px;">
-      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Changement de statut<span onclick="event.stopPropagation();ouvrirAide('statut')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;flex-shrink:0;">?</span></div>
+      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Changement de statut<span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('statut')" title="Aide / Help">?</span></div>
       <div class="mode-toggle">
         <button class="mode-btn active-visitor" id="btnVisiteur" onclick="setMode('visiteur')">Visiteur</button>
         <button class="mode-btn" id="btnAEC" onclick="confirmSwitchAEC()">AEC Étudiant</button>
@@ -1217,11 +1244,11 @@ input, textarea, select { cursor: text; }
   </div>
   <div class="header-right">
     <div style="display:flex;flex-direction:column;gap:6px;">
-      <div style="display:flex;align-items:center;"><button class="btn btn-purple btn-sm" onclick="openModal('modalSimFrequence')" style="font-size:11px;">🔧 Paramètres</button><span onclick="event.stopPropagation();ouvrirAide('parametres')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;flex-shrink:0;">?</span></div>
-      <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" onclick="ouvrirModalNouveauRappel()" style="font-size:11px;">🔔 Nouveau rappel</button><span onclick="event.stopPropagation();ouvrirAide('rappels')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span></div>
-      <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" onclick="ouvrirCorrectionBudget()" style="font-size:11px;">🔧 Corriger budget période</button><span onclick="event.stopPropagation();ouvrirAide('correctionBudget')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span></div>
-      <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" onclick="openModal('modalSimulation')" style="font-size:11px;">📊 Simuler</button><span onclick="event.stopPropagation();ouvrirAide('simuler')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span></div>
-      <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" id="btnTableau" onclick="toggleTableau()" style="font-size:11px;">📊 Tableau</button><span onclick="event.stopPropagation();ouvrirAide('tableau')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;flex-shrink:0;">?</span></div>
+      <div style="display:flex;align-items:center;"><button class="btn btn-purple btn-sm" onclick="openModal('modalSimFrequence')" style="font-size:11px;">🔧 Paramètres</button><span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('parametres')" title="Aide / Help">?</span></div>
+      <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" onclick="ouvrirModalNouveauRappel()" style="font-size:11px;">🔔 Nouveau rappel</button><span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('rappels')" title="Aide / Help">?</span></div>
+      <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" onclick="ouvrirCorrectionBudget()" style="font-size:11px;">🔧 Corriger budget période</button><span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('correctionBudget')" title="Aide / Help">?</span></div>
+      <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" onclick="openModal('modalSimulation')" style="font-size:11px;">📊 Simuler</button><span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('simuler')" title="Aide / Help">?</span></div>
+      <div style="display:flex;align-items:center;"><button class="btn btn-secondary btn-sm" id="btnTableau" onclick="toggleTableau()" style="font-size:11px;">📊 Tableau</button><span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('tableau')" title="Aide / Help">?</span></div>
       <button class="btn btn-secondary btn-sm" onclick="ouvrirSommaireAide()" style="font-size:11px;color:var(--accent2);border-color:var(--accent2);">❓ Aide</button>
     </div>
   </div>
@@ -1330,7 +1357,7 @@ input, textarea, select { cursor: text; }
            border-left:3px solid var(--yellow);border-radius:var(--radius);padding:8px 14px;">
         <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
           <div>
-            <div style="font-size:10px;color:var(--muted);">Dette propriétaire<span onclick="event.stopPropagation();ouvrirAide('dette')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span></div>
+            <div style="font-size:10px;color:var(--muted);">Dette propriétaire<span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('dette')" title="Aide / Help">?</span></div>
             <div id="dettePermMontant" style="font-size:18px;font-weight:700;color:var(--yellow);font-family:var(--font-mono);">—</div>
           </div>
           <div style="flex:1;min-width:120px;">
@@ -1346,14 +1373,14 @@ input, textarea, select { cursor: text; }
                      color:var(--text);font-size:12px;font-family:var(--font-mono);padding:4px 8px;">
             <button onclick="saveDettePaiementCourant()"
               style="background:var(--yellow);color:#000;border:none;border-radius:5px;
-                     font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;">💸 Rembourser</button><span onclick="event.stopPropagation();ouvrirAide('rembourserDette')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span>
+                     font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;">💸 Rembourser</button><span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('rembourserDette')" title="Aide / Help">?</span>
           </div>
           <button onclick="toggleDetteCalendrier()" id="btnDetteCalBtn"
             style="background:transparent;border:1px solid rgba(247,217,79,.4);border-radius:5px;
                    color:var(--yellow);font-size:11px;padding:5px 10px;cursor:pointer;">▶ Voir détail</button>
           <button onclick="annulerDette()" id="btnAnnulerDette"
             style="background:transparent;border:1px solid rgba(242,92,92,.4);border-radius:5px;
-                   color:var(--red);font-size:11px;padding:5px 10px;cursor:pointer;">🚫 Annuler la dette</button><span onclick="event.stopPropagation();ouvrirAide('annulerDette')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;">?</span>
+                   color:var(--red);font-size:11px;padding:5px 10px;cursor:pointer;">🚫 Annuler la dette</button><span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('annulerDette')" title="Aide / Help">?</span>
         </div>
         <!-- Bandeau affiché uniquement quand la dette est annulée -->
         <div id="detteAnnuleeBanner" style="display:none;margin-top:8px;padding:8px 12px;
@@ -1428,7 +1455,7 @@ input, textarea, select { cursor: text; }
   <!-- FRAIS DIVERS -->
   <div class="fixes-bloc" id="fixesBloc">
     <div class="fixes-header">
-      <div class="fixes-title">🔒 Frais divers du mois<span onclick="event.stopPropagation();ouvrirAide('fraisFixes')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:6px;vertical-align:middle;flex-shrink:0;">?</span><span onclick="event.stopPropagation();ouvrirAide('changerDatesDebit')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:9px;font-weight:800;cursor:pointer;margin-left:6px;vertical-align:middle;flex-shrink:0;">?</span></div>
+      <div class="fixes-title">🔒 Frais divers du mois<span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('fraisFixes')" title="Aide / Help">?</span><span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('changerDatesDebit')" title="Aide / Help">?</span></div>
       <div class="fixes-total" id="fixesTotal">—</div>
     </div>
     <div class="fixes-grid" id="fixesGrid"></div>
@@ -2708,7 +2735,7 @@ function renderLogementFixeCard(curKey, logementMontant, detteFixeMensuelle) {
     : '';
 
   return '<div class="' + cls + '" id="fixes_card_logement" style="min-width:200px;">' +
-    '<div class="fixes-item-label">🏠 Logement' + '<span onclick="event.stopPropagation();ouvrirAide(\'fixe_logement\')" title="Aide / Help"' + ' style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;' + 'border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:8px;' + 'font-weight:800;cursor:pointer;margin-left:4px;vertical-align:middle;">?</span>' + '</div>' +
+    '<div class="fixes-item-label">🏠 Logement' + '<span class="aide-btn" onclick="event.stopPropagation();ouvrirAide(\'fixe_logement\')" title="Aide / Help">?</span>' +
     (total > 0 ? '<div class="fixes-item-montant">' + fmt(total) + '</div>' : '<div class="fixes-item-montant">—</div>') +
     detteHTML +
     '<div style="margin-top:6px;">' + listeHTML + '</div>' +
@@ -2762,10 +2789,7 @@ function renderSanteCard(curKey) {
     + '<button onclick="addSanteEntree(\'' + curKey + '\',\'' + (sens === 'remb' ? 'remboursement' : 'depense') + '\')" style="background:' + couleur + ';color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;padding:3px 10px;cursor:pointer;">' + libelle + '</button>'
     + '</div>';
 
-  const aide = '<span onclick="event.stopPropagation();ouvrirAide(\'fixe_sante\')" title="Aide / Help"'
-    + ' style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;'
-    + 'border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:8px;'
-    + 'font-weight:800;cursor:pointer;margin-left:4px;vertical-align:middle;">?</span>';
+  const aide = '<span class="aide-btn" onclick="event.stopPropagation();ouvrirAide(\'fixe_sante\')" title="Aide / Help">?</span>';
 
   return '<div class="' + cls + '" id="fixes_card_sante" style="min-width:230px;">'
     + '<div class="fixes-item-label">🏥 Santé' + aide + '</div>'
@@ -2832,7 +2856,7 @@ function renderGymCard(curKey, gym, nextGym, gymDebite1, gymDebite2) {
   }
 
   return '<div class="' + cls + '" id="fixes_card_gym">'
-    + '<div class="fixes-item-label">🏋️ Gym' + '<span onclick="event.stopPropagation();ouvrirAide(\'fixe_gym\')" title="Aide / Help"' + ' style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;' + 'border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:8px;' + 'font-weight:800;cursor:pointer;margin-left:4px;vertical-align:middle;">?</span>' + '</div>'
+    + '<div class="fixes-item-label">🏋️ Gym' + '<span class="aide-btn" onclick="event.stopPropagation();ouvrirAide(\'fixe_gym\')" title="Aide / Help">?</span>'
     + corpsHTML
     + '<div class="fixes-item-next">Prochain : ' + fmtDate(nextGym) + '</div>'
     + '<div style="font-size:9px;color:var(--muted);">' + gym.count + 'x ' + montantUnitaire.toFixed(2).replace('.',',') + ' $</div>'
@@ -2890,10 +2914,7 @@ function renderFixeEntreeCard(fixKey, label, icon, curKey, defaultMontant, note,
 
   const aideCle = 'fixe_' + fixKey;
   const aideHTML = AIDES[aideCle]
-    ? '<span onclick="event.stopPropagation();ouvrirAide(\'' + aideCle + '\')" title="Aide / Help"'
-      + ' style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;'
-      + 'border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:8px;'
-      + 'font-weight:800;cursor:pointer;margin-left:4px;vertical-align:middle;">?</span>'
+    ? '<span class="aide-btn" onclick="event.stopPropagation();ouvrirAide(\'' + aideCle + '\')" title="Aide / Help">?</span>'
     : '';
 
   return '<div class="' + cls + '" id="fixes_card_' + fixKey + '">'
@@ -3158,7 +3179,7 @@ function renderRappels() {
       elDette.style.display = 'flex';
       elDette.innerHTML = `<div style="background:rgba(247,197,72,.15);border:2px solid var(--yellow);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;min-height:40px;animation:pulse-dette 1.8s ease-in-out infinite;">
         <div style="font-size:10px;font-weight:800;color:var(--yellow);letter-spacing:.5px;">RAPPEL · ${fmt(detteRestante)}</div>
-        <div style="font-size:11px;font-weight:700;color:var(--text);margin-top:4px;">Dette propriétaire<span onclick="event.stopPropagation();ouvrirAide('rappelDetteBandeau')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:8px;font-weight:800;cursor:pointer;margin-left:4px;vertical-align:middle;">?</span></div>
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-top:4px;">Dette propriétaire<span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('rappelDetteBandeau')" title="Aide / Help">?</span></div>
       </div>`;
     } else {
       elDette.style.display = 'none';
@@ -3239,7 +3260,7 @@ function renderRappels() {
     if (resteTotal > 0) {
       elIRCC.style.display = 'flex';
       elIRCC.innerHTML = `<div onclick="ouvrirRemboursementAides()" style="cursor:pointer;background:rgba(79,142,247,.10);border:2px solid var(--accent);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:56px;gap:4px;">
-        <div style="font-size:10px;font-weight:800;color:var(--accent);letter-spacing:.5px;">💵 AIDE PILOU<span onclick="event.stopPropagation();ouvrirAide('aidePilou')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:8px;font-weight:800;cursor:pointer;margin-left:4px;vertical-align:middle;">?</span></div>
+        <div style="font-size:10px;font-weight:800;color:var(--accent);letter-spacing:.5px;">💵 AIDE PILOU<span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('aidePilou')" title="Aide / Help">?</span></div>
         <div style="font-size:9px;font-weight:800;letter-spacing:.3px;"><span style="color:var(--accent);">SUIVI IRCC</span> · <span style="color:#fff;">${fmt(resteIRCC)}</span></div>
         <div style="font-size:9px;font-weight:800;letter-spacing:.3px;"><span style="color:var(--accent);">SUIVI LOGEMENT</span> · <span style="color:#fff;">${fmt(resteLoyer)}</span></div>
       </div>`;
@@ -3386,7 +3407,7 @@ function renderRappels() {
     const soldeEpargne = keyAfficheEpargne ? getSoldeEpargneAPeriode(keyAfficheEpargne) : getSoldeEpargne();
     elEpargne.style.display = 'flex';
     elEpargne.innerHTML = `<div onclick="ouvrirEpargne()" style="cursor:pointer;background:rgba(62,207,142,.10);border:2px solid var(--green);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:130px;min-height:38px;">
-      <div style="font-size:10px;font-weight:800;color:var(--green);letter-spacing:.5px;">💰 ÉPARGNE<span onclick="event.stopPropagation();ouvrirAide('epargne')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:8px;font-weight:800;cursor:pointer;margin-left:4px;vertical-align:middle;">?</span></div>
+      <div style="font-size:10px;font-weight:800;color:var(--green);letter-spacing:.5px;">💰 ÉPARGNE<span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('epargne')" title="Aide / Help">?</span></div>
       <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:1px;">${fmt(soldeEpargne)}</div>
     </div>`;
   }
@@ -3472,7 +3493,7 @@ function ouvrirEpargne() {
   overlay.innerHTML = `
     <div class="modal" style="width:460px;max-width:95vw;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h2 style="margin:0;">💰 Compte Épargne<span onclick="event.stopPropagation();ouvrirAide('epargne')" title="À quoi ça sert ?" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:10px;font-weight:800;cursor:pointer;margin-left:7px;vertical-align:middle;">?</span></h2>
+        <h2 style="margin:0;">💰 Compte Épargne<span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('epargne')" title="Aide / Help">?</span></h2>
         <span onclick="document.getElementById('modalEpargne').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
       </div>
       <p style="font-size:22px;font-weight:800;color:var(--green);margin:10px 0 2px;">${fmt(soldeEpargne)}</p>
@@ -3520,7 +3541,7 @@ function ouvrirEpargne() {
       </div>` : ''}
       <div style="max-height:220px;overflow-y:auto;">${historiqueHtml}</div>
       <div class="form-actions" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
-        <button class="btn" style="background:var(--accent2);color:#fff;" onclick="ouvrirProjectionEpargne()">📊 Voir la projection</button><span onclick="event.stopPropagation();ouvrirAide('projectionEpargne')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:10px;font-weight:800;cursor:pointer;margin-left:7px;vertical-align:middle;">?</span>
+        <button class="btn" style="background:var(--accent2);color:#fff;" onclick="ouvrirProjectionEpargne()">📊 Voir la projection</button><span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('projectionEpargne')" title="Aide / Help">?</span>
         <button class="btn btn-secondary" onclick="document.getElementById('modalEpargne').classList.remove('open')">Fermer</button>
       </div>
     </div>`;
@@ -3574,7 +3595,7 @@ function ouvrirProjectionEpargne() {
   overlay.innerHTML = `
     <div class="modal" style="width:560px;max-width:95vw;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h2 style="margin:0;">📊 Projection épargne<span onclick="event.stopPropagation();ouvrirAide('projectionEpargne')" title="Aide / Help" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:10px;font-weight:800;cursor:pointer;margin-left:7px;vertical-align:middle;">?</span></h2>
+        <h2 style="margin:0;">📊 Projection épargne<span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('projectionEpargne')" title="Aide / Help">?</span></h2>
         <span onclick="document.getElementById('modalProjectionEpargne').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
       </div>
       <p style="font-size:12px;color:var(--muted);margin:10px 0;">Simule un maintien du compte courant à au moins 100$ chaque période, en puisant dans l'épargne (${fmt(epargneDepart)} actuellement) selon les vrais soldes prévus.</p>
@@ -4874,10 +4895,7 @@ function setAideLangue(l) {
 }
 
 function btnAide(cle) {
-  return `<span onclick="event.stopPropagation();ouvrirAide('${cle}')" title="Aide / Help"
-    style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
-           border-radius:50%;border:1px solid var(--accent2);color:var(--accent2);font-size:10px;
-           font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle;flex-shrink:0;">?</span>`;
+  return `<span class="aide-btn inline" onclick="event.stopPropagation();ouvrirAide('${cle}')" title="Aide / Help">?</span>`;
 }
 
 function getPanneauAide() {

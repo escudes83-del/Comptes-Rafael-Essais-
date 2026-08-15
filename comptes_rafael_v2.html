@@ -1705,6 +1705,10 @@ input, textarea, select { cursor: text; }
 
 const STORAGE_KEY = 'comptes_rafael_v1';
 const DETTE_INITIALE = 1955.88; // corrigé 03/07/2026 (montant confirmé avec le propriétaire)
+// Remboursement effectué en juin 2026 hors de l'application. Il était déduit dans
+// getDetteCalendrier() mais PAS dans getDetteAuMois() : l'affichage était donc 200 $
+// trop élevé et ne pouvait jamais atteindre 0. Constante unique depuis le 17/08/2026.
+const DETTE_REMB_JUIN = 200;
 
 // Périodes : du 16 d'un mois au 15 du suivant
 // On nomme chaque période par sa date de fin (le 15)
@@ -2162,7 +2166,7 @@ function getDetteCalendrier() {
   // Dette initiale = 1700$ - 200$ remboursés en juin (hors app) = 1500$
   // Remboursement 100% manuel via state.detteCalManuel[key] — pas de valeur auto
   const DETTE_INITIALE_EFF = state.detteInitiale || DETTE_INITIALE;
-  const DETTE_APRES_JUIN = DETTE_INITIALE_EFF - 200; // 200 payés en juin
+  const DETTE_APRES_JUIN = DETTE_INITIALE_EFF - DETTE_REMB_JUIN;
   let restant = DETTE_APRES_JUIN;
   const cal = {};
   const periodes = PERIODES.filter(p => p.key >= '2026-07');
@@ -2191,8 +2195,8 @@ function getDetteAuMois(targetKey) {
   if (state.detteAnnulee) return 0;
   if (!targetKey) return DETTE_INITIALE;
   const cal = getDetteCalendrier();
-  // Partir de 1700, déduire le 200 de juin automatiquement
-  let restant = DETTE_INITIALE; // 1700$
+  // Même point de départ que getDetteCalendrier() : après le remboursement de juin.
+  let restant = (state.detteInitiale || DETTE_INITIALE) - DETTE_REMB_JUIN;
   for (let i = 0; i < PERIODES.length; i++) {
     const k = PERIODES[i].key;
     if (cal[k] && cal[k].fixe !== false) restant -= cal[k].paye || 0;

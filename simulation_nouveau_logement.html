@@ -940,11 +940,6 @@
     flex: 1;
     gap: 6px;
   }
-  /* FIX (04/08/2026) : placement explicite des colonnes du grid des pilules.
-     Empeche l'auto-placement CSS Grid de faire basculer une rangee de pilules
-     dans la colonne label (80px) si un label venait a etre masque. */
-  #pills2026grid > .tl-label { grid-column: 1; }
-  #pills2026grid > .tl-pills { grid-column: 2; min-width: 0; }
   .timeline-year-pill {
     border-radius: 50px;
     border: 1.5px solid var(--border);
@@ -1663,6 +1658,9 @@ input, textarea, select { cursor: text; }
 const STORAGE_KEY = 'comptes_rafael_v1_simu_logement';
 const VRAI_STORAGE_KEY = 'comptes_rafael_v1'; // pour recharger les vraies saisies (lecture seule)
 const DETTE_INITIALE = 1955.88; // corrigé 03/07/2026 (montant confirmé avec le propriétaire)
+// Remboursement de juin 2026 (hors app) — corrigé le 19/08/2026 : il était déduit dans
+// getDetteCalendrier() mais PAS dans getDetteAuMois(), d'où un affichage 200 $ trop élevé.
+const DETTE_REMB_JUIN = 200;
 
 // Périodes : du 16 d'un mois au 15 du suivant
 // On nomme chaque période par sa date de fin (le 15)
@@ -2063,7 +2061,7 @@ function getDetteCalendrier() {
   // Dette initiale = 1700$ - 200$ remboursés en juin (hors app) = 1500$
   // Remboursement 100% manuel via state.detteCalManuel[key] — pas de valeur auto
   const DETTE_INITIALE_EFF = state.detteInitiale || DETTE_INITIALE;
-  const DETTE_APRES_JUIN = DETTE_INITIALE_EFF - 200; // 200 payés en juin
+  const DETTE_APRES_JUIN = DETTE_INITIALE_EFF - DETTE_REMB_JUIN;
   let restant = DETTE_APRES_JUIN;
   const cal = {};
   const periodes = PERIODES.filter(p => p.key >= '2026-07');
@@ -2090,7 +2088,7 @@ function getDetteAuMois(targetKey) {
   if (!targetKey) return DETTE_INITIALE;
   const cal = getDetteCalendrier();
   // Partir de 1700, déduire le 200 de juin automatiquement
-  let restant = DETTE_INITIALE; // 1700$
+  let restant = (state.detteInitiale || DETTE_INITIALE) - DETTE_REMB_JUIN;
   for (let i = 0; i < PERIODES.length; i++) {
     const k = PERIODES[i].key;
     if (cal[k] && cal[k].fixe !== false) restant -= cal[k].paye || 0;
@@ -2753,7 +2751,7 @@ function addFixeEntree(fixKey, periodeKey) {
   const amt = parseFloat(document.getElementById('fixe_' + fixKey + '_amt')?.value);
   const desc = (document.getElementById('fixe_' + fixKey + '_desc')?.value || '').trim();
   const date = document.getElementById('fixe_' + fixKey + '_date')?.value || getDatePourPeriode(periodeKey);
-  if (!amt || amt <= 0) return;
+  if (isNaN(amt) || amt < 0) { alert("Entre un montant (0 est accepté : « pas de prélèvement ce mois-ci »)."); return; }
   if (!state.fixesEntrees) state.fixesEntrees = {};
   if (!state.fixesEntrees[fixKey]) state.fixesEntrees[fixKey] = {};
   if (!state.fixesEntrees[fixKey][periodeKey]) state.fixesEntrees[fixKey][periodeKey] = [];
@@ -2783,7 +2781,7 @@ function saveEditFixeEntree(rowId, id, fixKey, periodeKey) {
   const amt = parseFloat(document.getElementById(rowId + '_amt')?.value);
   const desc = (document.getElementById(rowId + '_desc')?.value || '').trim();
   const date = document.getElementById(rowId + '_date')?.value;
-  if (!amt || amt <= 0) return;
+  if (isNaN(amt) || amt < 0) { alert("Entre un montant (0 est accepté : « pas de prélèvement ce mois-ci »)."); return; }
   const list = state.fixesEntrees?.[fixKey]?.[periodeKey] || [];
   const entry = list.find(e => e.id === id);
   if (entry) { entry.montant = amt; entry.desc = desc || fixKey; entry.date = date; }

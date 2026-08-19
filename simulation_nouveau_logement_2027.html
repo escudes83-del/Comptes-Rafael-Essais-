@@ -941,11 +941,6 @@
     flex: 1;
     gap: 6px;
   }
-  /* FIX (04/08/2026) : placement explicite des colonnes du grid des pilules.
-     Empeche l'auto-placement CSS Grid de faire basculer une rangee de pilules
-     dans la colonne label (80px) si un label venait a etre masque. */
-  #pills2027grid > .tl-label { grid-column: 1; }
-  #pills2027grid > .tl-pills { grid-column: 2; min-width: 0; }
   .timeline-year-pill {
     border-radius: 50px;
     border: 1.5px solid var(--border);
@@ -2744,7 +2739,7 @@ function addFixeEntree(fixKey, periodeKey) {
   const amt = parseFloat(document.getElementById('fixe_' + fixKey + '_amt')?.value);
   const desc = (document.getElementById('fixe_' + fixKey + '_desc')?.value || '').trim();
   const date = document.getElementById('fixe_' + fixKey + '_date')?.value || getDatePourPeriode(periodeKey);
-  if (!amt || amt <= 0) return;
+  if (isNaN(amt) || amt < 0) { alert("Entre un montant (0 est accepté : « pas de prélèvement ce mois-ci »)."); return; }
   if (!state.fixesEntrees) state.fixesEntrees = {};
   if (!state.fixesEntrees[fixKey]) state.fixesEntrees[fixKey] = {};
   if (!state.fixesEntrees[fixKey][periodeKey]) state.fixesEntrees[fixKey][periodeKey] = [];
@@ -2774,7 +2769,7 @@ function saveEditFixeEntree(rowId, id, fixKey, periodeKey) {
   const amt = parseFloat(document.getElementById(rowId + '_amt')?.value);
   const desc = (document.getElementById(rowId + '_desc')?.value || '').trim();
   const date = document.getElementById(rowId + '_date')?.value;
-  if (!amt || amt <= 0) return;
+  if (isNaN(amt) || amt < 0) { alert("Entre un montant (0 est accepté : « pas de prélèvement ce mois-ci »)."); return; }
   const list = state.fixesEntrees?.[fixKey]?.[periodeKey] || [];
   const entry = list.find(e => e.id === id);
   if (entry) { entry.montant = amt; entry.desc = desc || fixKey; entry.date = date; }
@@ -6779,7 +6774,7 @@ function addFixeEntree(fixKey, periodeKey) {
   const amt = parseFloat(document.getElementById('fixe_' + fixKey + '_amt')?.value);
   const desc = (document.getElementById('fixe_' + fixKey + '_desc')?.value || '').trim();
   const date = document.getElementById('fixe_' + fixKey + '_date')?.value || getDatePourPeriode(periodeKey);
-  if (!amt || amt <= 0) return;
+  if (isNaN(amt) || amt < 0) { alert("Entre un montant (0 est accepté : « pas de prélèvement ce mois-ci »)."); return; }
   if (!d.fixesEntrees) d.fixesEntrees = {};
   if (!d.fixesEntrees[fixKey]) d.fixesEntrees[fixKey] = {};
   if (!d.fixesEntrees[fixKey][periodeKey]) d.fixesEntrees[fixKey][periodeKey] = [];
@@ -6809,7 +6804,7 @@ function saveEditFixeEntree(rowId, id, fixKey, periodeKey) {
   const amt = parseFloat(document.getElementById(rowId + '_amt')?.value);
   const desc = (document.getElementById(rowId + '_desc')?.value || '').trim();
   const date = document.getElementById(rowId + '_date')?.value;
-  if (!amt || amt <= 0) return;
+  if (isNaN(amt) || amt < 0) { alert("Entre un montant (0 est accepté : « pas de prélèvement ce mois-ci »)."); return; }
   const list = d.fixesEntrees?.[fixKey]?.[periodeKey] || [];
   const entry = list.find(e => e.id === id);
   if (entry) { entry.montant = amt; entry.desc = desc || fixKey; entry.date = date; }

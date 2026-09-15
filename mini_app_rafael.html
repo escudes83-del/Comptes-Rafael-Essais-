@@ -157,6 +157,14 @@
   .drawer-tab.sante {
     background: linear-gradient(135deg,#1a4a3a,#268a5f); border-color: #35b07e; color: #a8f0d5;
   }
+  .drawer-tab.alerte {
+    background: linear-gradient(135deg,#5a1414,#a02020); border-color: #e24b4a; color: #ffd0d0;
+    animation: pulseTab 1.6s ease-in-out infinite;
+  }
+  @keyframes pulseTab {
+    0%,100% { box-shadow: -4px 0 18px rgba(226,75,74,.35); }
+    50%     { box-shadow: -4px 0 26px rgba(226,75,74,.85); }
+  }
   .drawer-tab.epargne {
     background: linear-gradient(135deg,#0d3d30,#12735a); border-color: #1d9e75; color: #9fe8cd;
   }
@@ -769,6 +777,7 @@ function mettreAJourUI() {
   renderMiniHist('hist-perso', 'perso', '🧴', 'hist-perso');
   renderMiniHist('hist-except', 'exceptionnel', '⚡', 'hist-except');
   renderRappels();
+  renderAlerteVirement();
   if (document.getElementById('drawer')?.classList.contains('show')) renderDrawer();
 }
 
@@ -967,7 +976,8 @@ function fermerModal() { document.getElementById('modal-overlay').classList.remo
 
 const DRAWER_TITRES = { credit: '💵 Crédits', logement: '🏠 Logement',
                         divers: '🔒 Frais divers', sante: '🏥 Santé',
-                        epargne: '💰 Compte Épargne' };
+                        epargne: '💰 Compte Épargne' ,
+                        alerte: '⚠️ Virement conseillé' };
 
 function ouvrirDrawer(groupe) {
   groupe = groupe || 'credit';
@@ -1127,6 +1137,8 @@ function renderDrawer() {
     const i = mv.filter(m => m.type === 'interet').reduce((s,m) => s + m.montant, 0);
     elInt.textContent = i ? 'Intérêts perçus : ' + fmt(i) : '';
   }
+  renderAlerteVirement();
+
   const elEL = document.getElementById('ep-liste');
   if (elEL) {
     if (!mv.length) elEL.innerHTML = '<div class="vide">Aucun mouvement.</div>';
@@ -1314,6 +1326,126 @@ async function supprimerSante(id) {
     mettreAJourUI(); renderDrawer();
     await sauvegarderDansFirebase();
   } catch(e) { setSyncStatus('error','⚠️ Erreur suppression'); }
+}
+
+// ============================================================
+//  SOLDE PROJETÉ DE FIN DE PÉRIODE + ALERTE DE VIREMENT
+//  Le solde de DÉBUT de période et les montants automatiques des frais viennent de
+//  l'app principale (state.miniAppCtx), qui seule sait remonter la chaîne depuis
+//  janvier. Tout le reste est calculé ici, en direct, à chaque saisie de Rafael.
+// ============================================================
+function _sommeEntrees(type) {
+  const arr = _asArray((state && state.entrees || {})[periodeKey]);
+  return arr.filter(e => e.type === type).reduce((s,e) => s + e.montant, 0);
+}
+
+function getFraisTotalPeriode() {
+  const ctx = (state && state.miniAppCtx) || null;
+  const auto = (ctx && ctx.key === periodeKey && ctx.fraisAuto) ? ctx.fraisAuto : null;
+  let total = 0;
+  // Frais à montant automatique : la saisie manuelle le remplace entièrement.
+  ['gym','netflix','fido','metro','bixi','electricite','assurance'].forEach(cle => {
+    const manuel = _asArray(((state.fixesEntrees || {})[cle] || {})[periodeKey]);
+    if (manuel.length) total += manuel.reduce((s,e) => s + e.montant, 0);
+    else if (auto && auto[cle] != null) total += auto[cle];
+  });
+  // Loyer : saisie manuelle uniquement
+  total += _asArray((state.loyerEntrees || {})[periodeKey]).reduce((s,e) => s + e.montant, 0);
+  // Santé : net (soins − remboursements)
+  const sante = getSanteEntrees();
+  total += sante.reduce((s,e) => s + (e.sens === 'remboursement' ? -e.montant : e.montant), 0);
+  return total;
+}
+
+// Retourne null si l'app principale n'a pas encore publié le contexte de cette période.
+function getSoldeFinPeriode() {
+  const ctx = (state && state.miniAppCtx) || null;
+  if (!ctx || ctx.key !== periodeKey || typeof ctx.debut !== 'number') return null;
+  const mv = getEpargneMouvements().filter(m => getPeriodeKeyPourDate(m.date) === periodeKey);
+  // Les mouvements d'épargne récents ont une écriture liée déjà comptée dans les entrées ;
+  // seuls les anciens (sans lien) sont ajoutés ici — même règle que l'app principale.
+  const retraitsNonLies = mv.filter(m => m.type === 'retrait' && !m._linkedEntreeId).reduce((s,m)=>s+m.montant,0);
+  const depotsNonLies   = mv.filter(m => m.type === 'depot'   && !m._linkedEntreeId).reduce((s,m)=>s+m.montant,0);
+  const revenus  = _sommeEntrees('salaire') + _sommeEntrees('autre') + retraitsNonLies;
+  const depenses = getFraisTotalPeriode() + _sommeEntrees('nourriture')
+                 + _sommeEntrees('perso') + _sommeEntrees('exceptionnel') + depotsNonLies;
+  return ctx.debut + revenus - depenses;
+}
+
+// Date conseillée du virement : 1er du 2e mois de la période, comme l'app principale.
+function getDateVirementConseillee() {
+  const p = getPeriodeCourante();
+  if (!p) return null;
+  const d = getDateDebutPeriodeMini();
+  if (!d) return null;
+  const dv = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  return `${dv.getFullYear()}-${String(dv.getMonth()+1).padStart(2,'0')}-01`;
+}
+
+function getDateDebutPeriodeMini() {
+  // periodeKey = 'YYYY-MM' = période se TERMINANT ce mois-là, donc début = 16 du mois précédent
+  const [y,m] = periodeKey.split('-').map(Number);
+  return new Date(y, m - 2, 16);
+}
+
+function renderAlerteVirement() {
+  const tab = document.getElementById('tabAlerte');
+  const box = document.getElementById('alerte-contenu');
+  if (!tab || !box) return;
+  const fin = getSoldeFinPeriode();
+  const epargne = getSoldeEpargne();
+  if (fin === null || fin >= 100 || epargne <= 0) {
+    tab.style.display = 'none';
+    if (document.getElementById('grp-alerte').style.display !== 'none') fermerDrawer();
+    return;
+  }
+  const montant = Math.min(Math.ceil(100 - fin), epargne);
+  const dateV = getDateVirementConseillee();
+  const aujourdhui = getDateAujourdhui();
+  const aVenir = dateV && aujourdhui < dateV;
+  const MOIS = ['janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'];
+  const libDate = dateV ? '1er ' + MOIS[Number(dateV.slice(5,7)) - 1] + ' ' + dateV.slice(0,4) : '';
+
+  tab.style.display = 'block';
+  box.innerHTML = `
+    <div style="background:#2d0b0b;border:1px solid #7a1e1e;border-radius:14px;padding:14px;margin-bottom:12px;">
+      <div style="font-size:12px;color:#e8b0b0;line-height:1.55;">
+        Sans virement, la période se terminerait à
+        <b style="color:#e24b4a;">${fmt(fin)}</b>.
+      </div>
+      <div style="text-align:center;margin:14px 0 6px;">
+        <div style="font-size:11px;color:#8fa6bd;letter-spacing:.5px;">VIRER DE L'ÉPARGNE</div>
+        <div style="font-size:30px;font-weight:800;color:#5dcaa5;font-family:ui-monospace,monospace;">${fmt(montant)}</div>
+      </div>
+      <div style="text-align:center;font-size:12px;color:${aVenir ? '#e8c07a' : '#e24b4a'};line-height:1.5;">
+        ${aVenir
+          ? `à faire le <b>${libDate}</b><br><span style="color:#8fa6bd;font-size:11px;">l'argent reste en épargne d'ici là</span>`
+          : `<b>à faire maintenant</b>`}
+      </div>
+      <div style="font-size:11px;color:#8fa6bd;margin-top:10px;line-height:1.5;">
+        Épargne disponible : <b style="color:#5dcaa5;">${fmt(epargne)}</b>.
+        Ce montant est le minimum pour finir la période au-dessus de 100 $ — il change
+        tout seul si les dépenses évoluent.
+      </div>
+      <button class="f-btn vert2" style="width:100%;margin-top:14px;padding:13px;font-size:14px;"
+        onclick="resetSessionTimer();virerDepuisAlerte(${montant},'${dateV || ''}')">
+        ⬆️ Faire le virement de ${fmt(montant)}</button>
+    </div>`;
+}
+
+// Pré-remplit la section Retrait de l'épargne avec le montant et la date conseillés.
+function virerDepuisAlerte(montant, dateV) {
+  ouvrirDrawer('epargne');
+  setTimeout(() => {
+    const a = document.getElementById('ep-ret-amt');
+    const d = document.getElementById('ep-ret-dsc');
+    const t = document.getElementById('ep-ret-dt');
+    if (a) a.value = montant.toFixed(2);
+    if (d) d.value = 'Pour garder le compte positif';
+    if (t && dateV) t.value = dateV;
+    const sect = document.getElementById('sect-ep-retrait');
+    if (sect) { document.querySelectorAll('.sect').forEach(x=>x.classList.remove('open')); sect.classList.add('open'); }
+  }, 60);
 }
 
 // ---- COMPTE ÉPARGNE ----
@@ -1555,7 +1687,9 @@ chargerDepuisFirebase();
     ><span style="font-size:15px;">🔒</span><br>D<br>I<br>V<br>E<br>R<br>S</div>
   <div class="drawer-tab sante" onclick="resetSessionTimer();ouvrirDrawer('sante')"
     ><span style="font-size:15px;">🏥</span><br>S<br>A<br>N<br>T<br>É</div>
-  <div class="drawer-tab epargne" onclick="resetSessionTimer();ouvrirDrawer('epargne')"
+  <div class="drawer-tab alerte" id="tabAlerte" style="display:none;"
+    onclick="resetSessionTimer();ouvrirDrawer('alerte')"
+    ><span style="font-size:15px;">⚠️</span><br>V<br>I<br>R<br>E<br>R</div>  <div class="drawer-tab epargne" onclick="resetSessionTimer();ouvrirDrawer('epargne')"
     ><span style="font-size:15px;">💰</span><br>É<br>P<br>A<br>R<br>G<br>N<br>E</div>
 </div>
 <div class="drawer-back" id="drawerBack" onclick="fermerDrawer()"></div>
@@ -1887,6 +2021,10 @@ chargerDepuisFirebase();
         <div class="sect-body"><div id="ep-liste"></div></div>
       </div>
     </div><!-- /grp-epargne -->
+
+    <div class="drawer-group" id="grp-alerte" style="display:none;">
+      <div id="alerte-contenu"></div>
+    </div><!-- /grp-alerte -->
 
   </div>
 </div>

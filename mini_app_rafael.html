@@ -165,6 +165,9 @@
     0%,100% { box-shadow: -4px 0 18px rgba(226,75,74,.35); }
     50%     { box-shadow: -4px 0 26px rgba(226,75,74,.85); }
   }
+  .drawer-tab.dette {
+    background: linear-gradient(135deg,#5a4a0d,#8a7318); border-color: #b09a28; color: #f0e5a8;
+  }
   .drawer-tab.epargne {
     background: linear-gradient(135deg,#0d3d30,#12735a); border-color: #1d9e75; color: #9fe8cd;
   }
@@ -752,12 +755,13 @@ function mettreAJourUI() {
   const renderMiniHist = (containerId, type, icone, cls) => {
     const parType = allEntries.filter(e=>e.type===type);
     const expanded = histExpanded[type];
-    // Vue repliée : les 10 DERNIÈRES saisies, quelle que soit leur date.
-    // Avant, le filtre ne gardait que « aujourd'hui ou hier » : quand Rafael rattrapait
-    // plusieurs jours d'un coup, ses saisies étaient bien enregistrées mais la carte
-    // affichait « Aucune saisie récente », ce qui laissait croire à une perte.
+    // Vue repliée : les 5 DERNIÈRES saisies, quelle que soit leur date.
+    // Volontairement PAS de filtre sur les N derniers jours : quand Rafael rattrape
+    // plusieurs jours d'un coup, aucune saisie ne serait « récente » et la carte
+    // afficherait « Aucune saisie » alors que tout est bien enregistré (bug corrigé
+    // le 15/09/2026). Le nombre limite l'affichage, la date ne filtre rien.
     const triees = [...parType].sort((a,b)=>b.date.localeCompare(a.date));
-    const saisies = expanded ? triees : triees.slice(0, 10);
+    const saisies = expanded ? triees : triees.slice(0, 5);
     const container = document.getElementById(containerId);
     if (saisies.length===0) { container.innerHTML='<div class="hist-empty">Aucune saisie</div>'; }
     else {
@@ -774,7 +778,7 @@ function mettreAJourUI() {
     }
     const toggleBtn = document.getElementById('toggle-'+type);
     if (toggleBtn) {
-      if (parType.length > 10) {
+      if (parType.length > 5) {
         toggleBtn.style.display = 'block';
         toggleBtn.textContent = expanded
           ? 'Voir moins ▴'
@@ -988,6 +992,7 @@ function fermerModal() { document.getElementById('modal-overlay').classList.remo
 const DRAWER_TITRES = { credit: '💵 Crédits', logement: '🏠 Logement',
                         divers: '🔒 Frais divers', sante: '🏥 Santé',
                         epargne: '💰 Compte Épargne' ,
+                        dette: '🏠 Dette propriétaire',
                         alerte: '⚠️ Virement conseillé' };
 
 function ouvrirDrawer(groupe) {
@@ -1002,7 +1007,7 @@ function ouvrirDrawer(groupe) {
   document.getElementById('drawerTabs').classList.add('hidden');
   ['salaire-dt','autre-dt','loyer-dt','electricite-dt','assurance-dt',
    'gym-dt','netflix-dt','fido-dt','metro-dt','bixi-dt','sante-dt',
-   'ep-ret-dt','ep-dep-dt','ep-int-dt'].forEach(id => {
+   'ep-ret-dt','ep-dep-dt','ep-int-dt','dette-dt'].forEach(id => {
     const d = document.getElementById(id);
     if (d && !d.value) d.value = getDateAujourdhui();
   });
@@ -1148,6 +1153,30 @@ function renderDrawer() {
     const i = mv.filter(m => m.type === 'interet').reduce((s,m) => s + m.montant, 0);
     elInt.textContent = i ? 'Intérêts perçus : ' + fmt(i) : '';
   }
+  // --- Dette ---
+  const ctxD = (state && state.miniAppCtx) || null;
+  const elDV = document.getElementById('dette-val');
+  const elDN = document.getElementById('dette-note');
+  if (elDV) {
+    if (ctxD && ctxD.detteAnnulee) { elDV.textContent = fmt(0); if (elDN) elDN.textContent = 'Dette annulée'; }
+    else if (ctxD && typeof ctxD.detteRestante === 'number') {
+      elDV.textContent = fmt(ctxD.detteRestante);
+      if (elDN) elDN.textContent = ctxD.detteRestante > 0 ? 'au propriétaire' : 'dette soldée 🎉';
+    } else { elDV.textContent = '—'; if (elDN) elDN.textContent = "Ouvre l'app principale une fois."; }
+  }
+  const elDL = document.getElementById('dette-liste');
+  if (elDL) {
+    const ex = getDetteExtras();
+    if (!ex.length) elDL.innerHTML = '<div class="vide">Aucun remboursement sur cette période.</div>';
+    else elDL.innerHTML = [...ex].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(e => `
+      <div class="lg-item">
+        <span class="d">${(e.date||'').slice(8)}/${(e.date||'').slice(5,7)}</span>
+        <span class="l">💸 Remboursement</span>
+        <span class="m" style="color:#f0e5a8;">−${fmt(e.montant)}</span>
+        <button class="lg-del" onclick="resetSessionTimer();supprimerRemboursementDette('${e.id}')" title="Supprimer">🗑️</button>
+      </div>`).join('');
+  }
+
   renderAlerteVirement();
 
   const elEL = document.getElementById('ep-liste');
@@ -1301,7 +1330,7 @@ function getSanteEntrees() {
   return _asArray((state && state.santeEntrees || {})[periodeKey]);
 }
 
-async function ajouterSante(sens) {
+async function ajouterSante(sens, libelleDefaut) {
   const montant = parseFloat(document.getElementById('sante-amt').value);
   const desc    = (document.getElementById('sante-dsc').value || '').trim();
   const date    = document.getElementById('sante-dt').value || getDateAujourdhui();
@@ -1309,7 +1338,7 @@ async function ajouterSante(sens) {
   if (!state) { alert('Données non chargées.'); return; }
   const cible = getPeriodeKeyPourDate(date);
   const entry = { id: uid(), montant,
-                  desc: desc || (sens === 'remboursement' ? 'Remboursement santé' : 'Soins'),
+                  desc: desc || libelleDefaut || (sens === 'remboursement' ? 'Remboursement santé' : 'Soins'),
                   date, sens };
   setSyncStatus('loading','⏳ Sauvegarde...');
   try {
@@ -1545,6 +1574,63 @@ function virerDepuisAlerte(montant, dateV) {
     const sect = document.getElementById('sect-ep-retrait');
     if (sect) { document.querySelectorAll('.sect').forEach(x=>x.classList.remove('open')); sect.classList.add('open'); }
   }, 60);
+}
+
+// ---- DETTE PROPRIÉTAIRE ----
+// ⚠️ Un remboursement touche DEUX endroits, comme dans l'app principale :
+//   1. state.detteExtras[periode]  → fait baisser la dette
+//   2. state.loyerEntrees[periode] → crée la vraie dépense sur le compte
+// N'en faire qu'un seul casserait soit la dette, soit le solde.
+function getDetteExtras() {
+  return _asArray((state && state.detteExtras || {})[periodeKey]);
+}
+
+async function ajouterRemboursementDette() {
+  const montant = parseFloat(document.getElementById('dette-amt').value);
+  const date    = document.getElementById('dette-dt').value || getDateAujourdhui();
+  if (!montant || montant <= 0) { alert('Entre un montant valide.'); return; }
+  if (!state) { alert('Données non chargées.'); return; }
+  const ctx = state.miniAppCtx;
+  const reste = (ctx && typeof ctx.detteRestante === 'number') ? ctx.detteRestante : null;
+  if (reste !== null && montant > reste) {
+    alert('Montant supérieur à la dette restante.\n\nReste : ' + fmt(reste));
+    return;
+  }
+  if (!confirm(`Rembourser ${fmt(montant)} ?\n\nLa dette baissera d'autant et la dépense sera créée sur le compte.`)) return;
+  const cible = getPeriodeKeyPourDate(date);
+  setSyncStatus('loading','⏳ Sauvegarde...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    const extraId = uid();
+    // 1. Baisse de la dette
+    if (!state.detteExtras) state.detteExtras = {};
+    state.detteExtras[cible] = _asArray(state.detteExtras[cible]);
+    state.detteExtras[cible].push({ id: extraId, montant, date });
+    // 2. Dépense réelle sur le compte (comme l'app principale : ligne de loyer)
+    if (!state.loyerEntrees) state.loyerEntrees = {};
+    state.loyerEntrees[cible] = _asArray(state.loyerEntrees[cible]);
+    state.loyerEntrees[cible].push({ id: uid(), montant, desc: 'Remb. dette (compte)', date, _detteExtraId: extraId });
+    document.getElementById('dette-amt').value = '';
+    mettreAJourUI(); renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur sauvegarde'); }
+}
+
+async function supprimerRemboursementDette(id) {
+  if (!confirm('Supprimer ce remboursement ?\n\nLa dette remontera d\'autant et la dépense sera retirée du compte.')) return;
+  setSyncStatus('loading','⏳ Suppression...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    state.detteExtras[periodeKey] = _asArray((state.detteExtras||{})[periodeKey]).filter(e => e.id !== id);
+    // Retirer aussi la dépense liée, sinon l'argent resterait déduit du compte.
+    state.loyerEntrees[periodeKey] = _asArray((state.loyerEntrees||{})[periodeKey]).filter(e => e._detteExtraId !== id);
+    mettreAJourUI(); renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur suppression'); }
 }
 
 // ---- COMPTE ÉPARGNE ----
@@ -1788,7 +1874,9 @@ chargerDepuisFirebase();
     ><span style="font-size:15px;">🏥</span><br>S<br>A<br>N<br>T<br>É</div>
   <div class="drawer-tab alerte" id="tabAlerte" style="display:none;"
     onclick="resetSessionTimer();ouvrirDrawer('alerte')"
-    ><span style="font-size:15px;">⚠️</span><br>V<br>I<br>R<br>E<br>R</div>  <div class="drawer-tab epargne" onclick="resetSessionTimer();ouvrirDrawer('epargne')"
+    ><span style="font-size:15px;">⚠️</span><br>V<br>I<br>R<br>E<br>R</div>  <div class="drawer-tab dette" onclick="resetSessionTimer();ouvrirDrawer('dette')"
+    ><span style="font-size:15px;">🏠</span><br>D<br>E<br>T<br>T<br>E</div>
+  <div class="drawer-tab epargne" onclick="resetSessionTimer();ouvrirDrawer('epargne')"
     ><span style="font-size:15px;">💰</span><br>É<br>P<br>A<br>R<br>G<br>N<br>E</div>
 </div>
 <div class="drawer-back" id="drawerBack" onclick="fermerDrawer()"></div>
@@ -2043,6 +2131,10 @@ chargerDepuisFirebase();
             <button class="f-btn rouge" onclick="resetSessionTimer();ajouterSante('depense')">− Soin payé</button>
             <button class="f-btn vert2" onclick="resetSessionTimer();ajouterSante('remboursement')">+ Remboursement</button>
           </div>
+          <div class="f-row">
+            <button class="f-btn rouge" style="width:100%;"
+              onclick="resetSessionTimer();ajouterSante('depense','Assurance santé')">🛡️ Prime d'assurance santé</button>
+          </div>
           <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
           <div id="sante-liste"></div>
         </div>
@@ -2124,6 +2216,41 @@ chargerDepuisFirebase();
     <div class="drawer-group" id="grp-alerte" style="display:none;">
       <div id="alerte-contenu"></div>
     </div><!-- /grp-alerte -->
+
+    <div class="drawer-group" id="grp-dette" style="display:none;">
+      <div style="background:linear-gradient(135deg,#2e2a0b,#3d370f);border:1px solid #6e6318;
+           border-radius:14px;padding:14px;text-align:center;margin-bottom:12px;">
+        <div style="font-size:11px;color:#d4c65a;letter-spacing:.5px;">RESTE À REMBOURSER</div>
+        <div id="dette-val" style="font-size:28px;font-weight:800;color:#f0e5a8;font-family:ui-monospace,monospace;">—</div>
+        <div id="dette-note" style="font-size:11px;color:#8fa6bd;margin-top:3px;"></div>
+      </div>
+
+      <div class="sect" id="sect-dette-remb">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-dette-remb')">
+          <span class="t"><span class="chev">▶</span>💸 Enregistrer un remboursement</span>
+        </div>
+        <div class="sect-body">
+          <div style="font-size:12px;color:#8fa6bd;line-height:1.5;">
+            La dette baisse <b>et</b> la dépense est créée sur le compte, d'un seul geste.
+            Mets la <b>date réelle</b> à laquelle l'argent sort du compte.
+          </div>
+          <div class="f-row">
+            <input class="amt" type="number" id="dette-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="dt" type="date" id="dette-dt">
+          </div>
+          <div class="f-row">
+            <button class="f-btn" style="background:#8a7318;width:100%;"
+              onclick="resetSessionTimer();ajouterRemboursementDette()">💸 Rembourser</button>
+          </div>
+          <div style="font-size:11px;color:#e8c07a;margin-top:10px;line-height:1.5;">
+            ⚠️ Si ce remboursement est inclus dans un virement plus large (loyer + dette),
+            ne saisis <b>que la part dette</b> ici. Le reste va dans 🏠 Logement.
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
+          <div id="dette-liste"></div>
+        </div>
+      </div>
+    </div><!-- /grp-dette -->
 
   </div>
 </div>

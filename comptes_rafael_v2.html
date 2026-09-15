@@ -2531,6 +2531,9 @@ function publierContexteMiniApp(soldes) {
     const ctx = {
       key,
       debut: soldes[key].debut,
+      joursDebit: { gym1: getJourDebit('gym1'), gym2: getJourDebit('gym2'),
+                    fido: getJourDebit('fido'), netflix: getJourDebit('netflix'),
+                    metro: getJourDebit('metro') },
       fraisAuto: {
         gym:         getGymAuto(key),
         netflix:     getNetflixAuto(key),

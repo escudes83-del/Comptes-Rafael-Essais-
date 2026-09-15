@@ -2212,6 +2212,9 @@ function isAECPeriode(key) {
 
 function getMetroPeriode(key) {
   if (hasFixeEntrees('metro', key)) return sommeFixeEntrees('metro', key);
+  return getMetroAuto(key);
+}
+function getMetroAuto(key) {
   // Historique réel
   const hist = {
     '2026-01': 0,
@@ -2229,6 +2232,11 @@ function getMetroPeriode(key) {
 
 function getGymPeriode(key) {
   if (hasFixeEntrees('gym', key)) return sommeFixeEntrees('gym', key);
+  return getGymAuto(key);
+}
+// Montant AUTOMATIQUE, avant toute saisie manuelle. Extrait pour pouvoir le publier
+// vers la mini-app sans dupliquer les tables historiques (19/09/2026).
+function getGymAuto(key) {
   const hist = {
     '2026-01': 40.80,
     '2026-02': 40.80,
@@ -2244,11 +2252,15 @@ function getGymPeriode(key) {
 
 function getNetflixPeriode(key) {
   if (hasFixeEntrees('netflix', key)) return sommeFixeEntrees('netflix', key);
-  return state.fixes.netflix;
+  return getNetflixAuto(key);
 }
+function getNetflixAuto(key) { return state.fixes.netflix; }
 
 function getFidoPeriode(key) {
   if (hasFixeEntrees('fido', key)) return sommeFixeEntrees('fido', key);
+  return getFidoAuto(key);
+}
+function getFidoAuto(key) {
   const hist = {
     '2026-01': 0,
     '2026-02': 34.02,
@@ -2264,19 +2276,24 @@ function getFidoPeriode(key) {
 
 function getBixiPeriode(key) {
   if (hasFixeEntrees('bixi', key)) return sommeFixeEntrees('bixi', key);
+  return getBixiAuto(key);
+}
+function getBixiAuto(key) {
   if (key === '2026-06') return 27.59;
   return 0;
 }
 
 function getElectricitePeriode(key) {
   if (hasFixeEntrees('electricite', key)) return sommeFixeEntrees('electricite', key);
-  return state.fixes.electricite;
+  return getElectriciteAuto(key);
 }
+function getElectriciteAuto(key) { return state.fixes.electricite; }
 
 function getAssurancePeriode(key) {
   if (hasFixeEntrees('assurance', key)) return sommeFixeEntrees('assurance', key);
-  return state.fixes.assurance;
+  return getAssuranceAuto(key);
 }
+function getAssuranceAuto(key) { return state.fixes.assurance; }
 
 function getLogementPeriode(key) {
   // Somme des entrées loyer saisies pour la période
@@ -2498,6 +2515,44 @@ function getAutresPeriode(key) {
 }
 
 // Calcul solde fin de période
+// ============================================================
+//  CONTEXTE POUR LA MINI-APP (19/09/2026)
+//  La mini-app ne sait pas remonter la chaîne des soldes depuis janvier. Plutôt que
+//  d'y dupliquer tout le calcul — ce qui finirait par diverger — l'app principale
+//  publie ici les deux seules choses qu'elle seule sait établir :
+//    • le solde de DÉBUT de la période en cours (figé une fois la période entamée)
+//    • les montants AUTOMATIQUES des frais divers (avant toute saisie manuelle)
+//  La mini-app fait ensuite l'addition elle-même, en temps réel.
+// ============================================================
+function publierContexteMiniApp(soldes) {
+  try {
+    const key = PERIODES[getCurrentPeriodeIndex()]?.key;
+    if (!key || !soldes || !soldes[key]) return;
+    const ctx = {
+      key,
+      debut: soldes[key].debut,
+      fraisAuto: {
+        gym:         getGymAuto(key),
+        netflix:     getNetflixAuto(key),
+        fido:        getFidoAuto(key),
+        metro:       getMetroAuto(key),
+        bixi:        getBixiAuto(key),
+        electricite: getElectriciteAuto(key),
+        assurance:   getAssuranceAuto(key),
+      },
+      maj: getDateRef()
+    };
+    const ancien = state.miniAppCtx;
+    // N'écrire que si quelque chose a changé, pour ne pas provoquer une sauvegarde
+    // Firebase inutile à chaque rendu.
+    if (JSON.stringify(ancien) !== JSON.stringify(ctx)) {
+      state.miniAppCtx = ctx;
+      return true;
+    }
+  } catch(e) { /* jamais bloquant */ }
+  return false;
+}
+
 function calculerSoldes() {
   let solde = state.soldeDepart;
   const soldes = {};
@@ -3089,6 +3144,8 @@ function render() {
     renderVueMois(selectedMois);
   }
   ajusterPillsStickyTop();
+  // Publier le contexte pour la mini-app (n'écrit que si ça a changé)
+  if (publierContexteMiniApp(calculerSoldes())) saveState();
 }
 
 // Le bandeau du haut (app-header) a grandi avec le temps (beaucoup de cartes ajoutées) —

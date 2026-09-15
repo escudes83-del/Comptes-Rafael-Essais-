@@ -12,7 +12,9 @@
 <link rel="manifest" href="manifest.json">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #111827; color: #fff; font-family: -apple-system, BlinkMacSystemFont, sans-serif; min-height: 100vh; padding: 16px; }
+  /* padding-right élargi (19/09/2026) : réserve une bande pour l'onglet du tiroir,
+     sinon les cartes passent dessous et le rendent illisible. */
+  body { background: #111827; color: #fff; font-family: -apple-system, BlinkMacSystemFont, sans-serif; min-height: 100vh; padding: 16px 46px 16px 16px; }
 
   .header { background: #0f3460; border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
   .header-periode-wrap { flex: 1; text-align: center; }
@@ -127,6 +129,82 @@
   .alerte { background: #2d0b0b; border-radius: 12px; padding: 10px 14px; border: 0.5px solid #7a1e1e; margin-bottom: 12px; display: none; }
   .alerte.show { display: block; }
   .alerte-text { font-size: 13px; color: #e24b4a; }
+
+  /* ---- TIROIR LATÉRAL (19/09/2026) ----
+     Onglet à DROITE (Rafael est droitier, accessible au pouce). Il ouvre un panneau
+     qui glisse depuis la droite. Chaque section se referme et ramène à la page
+     principale (nourriture / perso / exceptionnel). */
+  .drawer-tab {
+    position: fixed; right: 0; top: 45%; transform: translateY(-50%);
+    background: linear-gradient(135deg,#1e4a7a,#2d6ba8); color: #cfe6ff;
+    border: 1px solid #3d7ab8; border-right: none; border-radius: 12px 0 0 12px;
+    padding: 12px 8px; font-size: 12px; font-weight: 800; line-height: 1.35;
+    text-align: center; cursor: pointer;
+    z-index: 90; box-shadow: -4px 0 18px rgba(0,0,0,.55);
+  }
+  .drawer-tab:active { opacity: .7; }
+  .drawer-back {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6);
+    opacity: 0; pointer-events: none; transition: opacity .22s; z-index: 95;
+  }
+  .drawer-back.show { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 88%; max-width: 420px;
+    background: #101d33; border-left: 2px solid #2d6ba8; z-index: 96;
+    transform: translateX(100%); transition: transform .26s ease;
+    display: flex; flex-direction: column; box-shadow: -8px 0 30px rgba(0,0,0,.6);
+  }
+  .drawer.show { transform: translateX(0); }
+  /* Onglet masqué pendant que le tiroir est ouvert */
+  .drawer-tab.hidden { opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .drawer-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; border-bottom: 1px solid #1e3355; flex-shrink: 0;
+  }
+  .drawer-head h2 { font-size: 15px; color: #7eb8f7; margin: 0; }
+  .drawer-close {
+    background: transparent; border: 1px solid #2d4a72; border-radius: 8px;
+    color: #8fa6bd; font-size: 18px; padding: 4px 12px; cursor: pointer;
+  }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 14px 16px 30px; }
+  .sect {
+    border: 1px solid #1e3355; border-radius: 14px; margin-bottom: 12px;
+    overflow: hidden; background: #16243d;
+  }
+  .sect-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 15px; cursor: pointer; user-select: none;
+  }
+  .sect-head span.t { font-size: 14px; font-weight: 700; color: #cfe6ff; }
+  .sect-head span.v { font-size: 13px; font-weight: 700; font-family: ui-monospace,monospace; }
+  .sect-body { display: none; padding: 0 15px 15px; }
+  .sect.open .sect-body { display: block; }
+  .sect.open .sect-head { border-bottom: 1px solid #1e3355; margin-bottom: 12px; }
+  .sect .chev { transition: transform .2s; display: inline-block; color: #6b8bb5; margin-right: 7px; }
+  .sect.open .chev { transform: rotate(90deg); }
+  .f-row { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; margin-top: 9px; }
+  .f-row input {
+    background: #0b1524; border: 1px solid #24405f; border-radius: 8px;
+    color: #e8eef7; font-size: 14px; padding: 9px 10px;
+  }
+  .f-row input.amt { width: 92px; font-family: ui-monospace,monospace; }
+  .f-row input.dsc { flex: 1; min-width: 100px; }
+  .f-row input.dt  { width: 140px; }
+  .f-btn {
+    border: none; border-radius: 8px; font-size: 13px; font-weight: 700;
+    padding: 9px 14px; cursor: pointer; color: #fff;
+  }
+  .f-btn.green { background: #1d7a56; }
+  .f-btn:active { opacity: .7; }
+  .lg-item {
+    display: flex; align-items: center; gap: 8px; padding: 7px 0;
+    border-bottom: 1px solid rgba(255,255,255,.05); font-size: 13px;
+  }
+  .lg-item .d { color: #6b8bb5; font-size: 11px; font-family: ui-monospace,monospace; flex-shrink: 0; }
+  .lg-item .l { flex: 1; min-width: 0; color: #c9d6e6; }
+  .lg-item .m { font-family: ui-monospace,monospace; font-weight: 700; white-space: nowrap; }
+  .lg-del { background: transparent; border: none; color: #7a8ba0; font-size: 15px; cursor: pointer; padding: 2px 5px; }
+  .vide { color: #6b8bb5; font-size: 12px; padding: 6px 0; }
 
   .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); display: none; justify-content: center; align-items: flex-end; z-index: 100; }
   .modal-overlay.show { display: flex; }
@@ -617,12 +695,14 @@ function mettreAJourUI() {
   const renderMiniHist = (containerId, type, icone, cls) => {
     const parType = allEntries.filter(e=>e.type===type);
     const expanded = histExpanded[type];
-    const saisies = (expanded
-      ? parType
-      : parType.filter(e => e.date===aujourdhui || e.date===hierDate)
-    ).sort((a,b)=>b.date.localeCompare(a.date));
+    // Vue repliée : les 10 DERNIÈRES saisies, quelle que soit leur date.
+    // Avant, le filtre ne gardait que « aujourd'hui ou hier » : quand Rafael rattrapait
+    // plusieurs jours d'un coup, ses saisies étaient bien enregistrées mais la carte
+    // affichait « Aucune saisie récente », ce qui laissait croire à une perte.
+    const triees = [...parType].sort((a,b)=>b.date.localeCompare(a.date));
+    const saisies = expanded ? triees : triees.slice(0, 10);
     const container = document.getElementById(containerId);
-    if (saisies.length===0) { container.innerHTML='<div class="hist-empty">Aucune saisie récente</div>'; }
+    if (saisies.length===0) { container.innerHTML='<div class="hist-empty">Aucune saisie</div>'; }
     else {
       container.innerHTML = saisies.map(e => `<div class="hist-item">
         <span class="hist-desc">${icone} ${e.desc||e.type}<span class="hist-date">${fmtDateCourt(e.date)}</span></span>
@@ -637,9 +717,11 @@ function mettreAJourUI() {
     }
     const toggleBtn = document.getElementById('toggle-'+type);
     if (toggleBtn) {
-      if (parType.length > 0 && (expanded || parType.length > saisies.length || (!expanded && parType.some(e=>e.date!==aujourdhui && e.date!==hierDate)))) {
+      if (parType.length > 10) {
         toggleBtn.style.display = 'block';
-        toggleBtn.textContent = expanded ? 'Voir moins ▴' : 'Voir plus ▾';
+        toggleBtn.textContent = expanded
+          ? 'Voir moins ▴'
+          : `Voir les ${parType.length} saisies ▾`;
       } else {
         toggleBtn.style.display = 'none';
       }
@@ -649,6 +731,7 @@ function mettreAJourUI() {
   renderMiniHist('hist-perso', 'perso', '🧴', 'hist-perso');
   renderMiniHist('hist-except', 'exceptionnel', '⚡', 'hist-except');
   renderRappels();
+  if (document.getElementById('drawer')?.classList.contains('show')) renderDrawer();
 }
 
 // ---- Rappels personnalisés (créés depuis l'app principale) ----
@@ -839,6 +922,115 @@ function ouvrirModal(cat) {
 
 function fermerModal() { document.getElementById('modal-overlay').classList.remove('show'); }
 
+// ================= TIROIR LATÉRAL =================
+// Rafael met ses comptes à jour depuis son téléphone, en lisant son relevé bancaire
+// ligne par ligne. Il lui faut donc pouvoir saisir autre chose que nourriture/perso/
+// exceptionnel. Le tiroir regroupe ces saisies sans encombrer la page principale.
+
+function ouvrirDrawer() {
+  document.getElementById('drawer').classList.add('show');
+  document.getElementById('drawerBack').classList.add('show');
+  document.getElementById('drawerTab').classList.add('hidden');
+  ['salaire-dt','autre-dt'].forEach(id => {
+    const d = document.getElementById(id);
+    if (d && !d.value) d.value = getDateAujourdhui();
+  });
+  renderDrawer();
+}
+
+function fermerDrawer() {
+  document.getElementById('drawer').classList.remove('show');
+  document.getElementById('drawerBack').classList.remove('show');
+  document.getElementById('drawerTab').classList.remove('hidden');
+  // Toutes les sections se referment : on revient à l'état neutre.
+  document.querySelectorAll('.sect').forEach(el => el.classList.remove('open'));
+}
+
+// Une seule section ouverte à la fois — sur un écran de téléphone, deux sections
+// ouvertes obligeraient à scroller pour retrouver la première.
+function toggleSect(id) {
+  const el = document.getElementById(id);
+  const etait = el.classList.contains('open');
+  document.querySelectorAll('.sect').forEach(x => x.classList.remove('open'));
+  if (!etait) el.classList.add('open');
+}
+
+// Crédits = tout ce qui ENTRE sur le compte. Deux types séparés dans le tiroir :
+// 'salaire' (les paies) et 'autre' (virements reçus, remboursements, aides).
+function getCreditsPeriode(type) {
+  const arr = (state && state.entrees && state.entrees[periodeKey]) || [];
+  const list = Array.isArray(arr) ? arr : Object.values(arr);
+  return list.filter(e => e.type === type);
+}
+
+function renderDrawer() {
+  [['salaire','💰'],['autre','💵']].forEach(([type, icone]) => {
+    const list  = getCreditsPeriode(type);
+    const total = list.reduce((s,e) => s + e.montant, 0);
+
+    const elV = document.getElementById('sect-' + type + '-val');
+    if (elV) elV.textContent = list.length ? '+' + fmt(total) : '—';
+
+    const elL = document.getElementById(type + '-liste');
+    if (!elL) return;
+    if (!list.length) {
+      elL.innerHTML = '<div class="vide">Rien de saisi sur cette période.</div>';
+      return;
+    }
+    elL.innerHTML = [...list].sort((a,b) => b.date.localeCompare(a.date)).map(e => `
+      <div class="lg-item">
+        <span class="d">${e.date.slice(8)}/${e.date.slice(5,7)}</span>
+        <span class="l">${icone} ${e.desc || e.type}</span>
+        <span class="m" style="color:#5dcaa5;">+${fmt(e.montant)}</span>
+        <button class="lg-del" onclick="resetSessionTimer();supprimerCredit('${e.id}')" title="Supprimer">🗑️</button>
+      </div>`).join('');
+  });
+}
+
+async function ajouterCredit(type) {
+  const montant = parseFloat(document.getElementById(type + '-amt').value);
+  const desc    = (document.getElementById(type + '-dsc').value || '').trim();
+  const date    = document.getElementById(type + '-dt').value || getDateAujourdhui();
+  if (!montant || montant <= 0) { alert('Entre un montant valide.'); return; }
+  if (!state) { alert('Données non chargées.'); return; }
+  const cible = getPeriodeKeyPourDate(date);
+  const entry = { id: uid(), type, montant,
+                  desc: desc || (type === 'salaire' ? 'Salaire' : 'Autre revenu'),
+                  date, rembourse: false, rembDesc: '' };
+  setSyncStatus('loading','⏳ Sauvegarde...');
+  try {
+    // Repartir de la version fraîche de Firebase avant d'écrire, comme les saisies
+    // normales : rien ne doit écraser une modification faite depuis l'app principale.
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    if (!state.entrees) state.entrees = {};
+    if (!state.entrees[cible]) state.entrees[cible] = [];
+    if (!Array.isArray(state.entrees[cible])) state.entrees[cible] = Object.values(state.entrees[cible]);
+    state.entrees[cible].push(entry);
+    document.getElementById(type + '-amt').value = '';
+    document.getElementById(type + '-dsc').value = '';
+    mettreAJourUI();
+    renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur sauvegarde'); }
+}
+
+async function supprimerCredit(id) {
+  if (!confirm('Supprimer cette entrée ?')) return;
+  setSyncStatus('loading','⏳ Suppression...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    const arr = state.entrees[periodeKey] || [];
+    state.entrees[periodeKey] = (Array.isArray(arr) ? arr : Object.values(arr)).filter(e => e.id !== id);
+    mettreAJourUI();
+    renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur suppression'); }
+}
+
 async function validerSaisie() {
   const montant = parseFloat(document.getElementById('montant-input').value);
   const desc = document.getElementById('desc-input').value.trim();
@@ -929,6 +1121,65 @@ chargerDepuisFirebase();
       <button onclick="changerPin()"
         style="background:#378add;border:none;border-radius:10px;padding:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Changer</button>
     </div>
+  </div>
+</div>
+
+<!-- ================= TIROIR LATÉRAL ================= -->
+<div class="drawer-tab" id="drawerTab" onclick="resetSessionTimer();ouvrirDrawer()"
+  ><span style="font-size:15px;">💵</span><br>C<br>R<br>É<br>D<br>I<br>T</div>
+<div class="drawer-back" id="drawerBack" onclick="fermerDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h2>💵 Crédits</h2>
+    <button class="drawer-close" onclick="resetSessionTimer();fermerDrawer()">✕</button>
+  </div>
+  <div class="drawer-body">
+
+    <div class="sect" id="sect-salaire">
+      <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-salaire')">
+        <span class="t"><span class="chev">▶</span>💰 Salaire</span>
+        <span class="v" id="sect-salaire-val" style="color:#5dcaa5;">—</span>
+      </div>
+      <div class="sect-body">
+        <div style="font-size:12px;color:#8fa6bd;line-height:1.5;">
+          Les dépôts de paie de la clinique.
+        </div>
+        <div class="f-row">
+          <input class="amt" type="number" id="salaire-amt" placeholder="Montant $" step="0.01" min="0">
+          <input class="dsc" type="text" id="salaire-dsc" placeholder="ex : Paie du 3 sept">
+        </div>
+        <div class="f-row">
+          <input class="dt" type="date" id="salaire-dt">
+          <button class="f-btn green" onclick="resetSessionTimer();ajouterCredit('salaire')">+ Ajouter</button>
+        </div>
+        <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
+        <div id="salaire-liste"></div>
+      </div>
+    </div>
+
+    <div class="sect" id="sect-autre">
+      <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-autre')">
+        <span class="t"><span class="chev">▶</span>💵 Autres revenus</span>
+        <span class="v" id="sect-autre-val" style="color:#5dcaa5;">—</span>
+      </div>
+      <div class="sect-body">
+        <div style="font-size:12px;color:#8fa6bd;line-height:1.5;">
+          Virements reçus, remboursements, aides — tout ce qui entre sur le compte
+          et qui n'est pas la paie.
+        </div>
+        <div class="f-row">
+          <input class="amt" type="number" id="autre-amt" placeholder="Montant $" step="0.01" min="0">
+          <input class="dsc" type="text" id="autre-dsc" placeholder="ex : Interac reçu">
+        </div>
+        <div class="f-row">
+          <input class="dt" type="date" id="autre-dt">
+          <button class="f-btn green" onclick="resetSessionTimer();ajouterCredit('autre')">+ Ajouter</button>
+        </div>
+        <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
+        <div id="autre-liste"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 

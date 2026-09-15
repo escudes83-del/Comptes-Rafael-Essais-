@@ -134,13 +134,50 @@
      Onglet à DROITE (Rafael est droitier, accessible au pouce). Il ouvre un panneau
      qui glisse depuis la droite. Chaque section se referme et ramène à la page
      principale (nourriture / perso / exceptionnel). */
+  /* Les onglets sont empilés dans un conteneur centré verticalement : en ajouter
+     un nouveau ne demande plus de recalculer les positions à la main. */
+  .drawer-tabs {
+    position: fixed; right: 0; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 8px; z-index: 90;
+  }
+  .drawer-tabs.hidden { opacity: 0; pointer-events: none; transition: opacity .2s; }
   .drawer-tab {
-    position: fixed; right: 0; top: 45%; transform: translateY(-50%);
     background: linear-gradient(135deg,#1e4a7a,#2d6ba8); color: #cfe6ff;
     border: 1px solid #3d7ab8; border-right: none; border-radius: 12px 0 0 12px;
     padding: 12px 8px; font-size: 12px; font-weight: 800; line-height: 1.35;
     text-align: center; cursor: pointer;
-    z-index: 90; box-shadow: -4px 0 18px rgba(0,0,0,.55);
+    box-shadow: -4px 0 18px rgba(0,0,0,.55);
+  }
+  .drawer-tab.logement {
+    background: linear-gradient(135deg,#5a3a1a,#8a5a26); border-color: #b07a35; color: #f0d5a8;
+  }
+  .drawer-tab.divers {
+    background: linear-gradient(135deg,#3d2a5a,#5c4189); border-color: #7d5fb5; color: #ddd0f5;
+  }
+  .drawer-tab.sante {
+    background: linear-gradient(135deg,#1a4a3a,#268a5f); border-color: #35b07e; color: #a8f0d5;
+  }
+  .drawer-tab.epargne {
+    background: linear-gradient(135deg,#0d3d30,#12735a); border-color: #1d9e75; color: #9fe8cd;
+  }
+  .drawer-tabs { gap: 5px; }
+  .drawer-tab { padding: 7px 7px; font-size: 10.5px; line-height: 1.2; }
+  .solde-ep {
+    background: linear-gradient(135deg,#0b2a22,#0f3b2e); border: 1px solid #1d6e56;
+    border-radius: 14px; padding: 14px; text-align: center; margin-bottom: 12px;
+  }
+  .solde-ep .lbl { font-size: 11px; color: #5dcaa5; letter-spacing: .5px; }
+  .solde-ep .val { font-size: 27px; font-weight: 800; color: #5dcaa5; font-family: ui-monospace,monospace; }
+  /* Onglets plus compacts maintenant qu'il y en a quatre */
+  .drawer-tabs { gap: 6px; }
+  .drawer-tab { padding: 9px 7px; font-size: 11px; line-height: 1.25; }
+  .f-btn.violet { background: #5c4189; }
+  .f-btn.vert2  { background: #1d7a56; }
+  .f-btn.rouge  { background: #a03838; }
+  .note-auto {
+    background: rgba(125,95,181,.12); border: 1px solid rgba(125,95,181,.35);
+    border-radius: 9px; padding: 9px 11px; font-size: 11.5px; line-height: 1.5;
+    color: #c9b8e8; margin-top: 9px;
   }
   .drawer-tab:active { opacity: .7; }
   .drawer-back {
@@ -195,6 +232,7 @@
     padding: 9px 14px; cursor: pointer; color: #fff;
   }
   .f-btn.green { background: #1d7a56; }
+  .f-btn.orange { background: #a06a28; }
   .f-btn:active { opacity: .7; }
   .lg-item {
     display: flex; align-items: center; gap: 8px; padding: 7px 0;
@@ -927,11 +965,23 @@ function fermerModal() { document.getElementById('modal-overlay').classList.remo
 // ligne par ligne. Il lui faut donc pouvoir saisir autre chose que nourriture/perso/
 // exceptionnel. Le tiroir regroupe ces saisies sans encombrer la page principale.
 
-function ouvrirDrawer() {
+const DRAWER_TITRES = { credit: '💵 Crédits', logement: '🏠 Logement',
+                        divers: '🔒 Frais divers', sante: '🏥 Santé',
+                        epargne: '💰 Compte Épargne' };
+
+function ouvrirDrawer(groupe) {
+  groupe = groupe || 'credit';
+  document.querySelectorAll('.drawer-group').forEach(g => g.style.display = 'none');
+  const g = document.getElementById('grp-' + groupe);
+  if (g) g.style.display = 'block';
+  const t = document.querySelector('.drawer-head h2');
+  if (t) t.textContent = DRAWER_TITRES[groupe] || '';
   document.getElementById('drawer').classList.add('show');
   document.getElementById('drawerBack').classList.add('show');
-  document.getElementById('drawerTab').classList.add('hidden');
-  ['salaire-dt','autre-dt'].forEach(id => {
+  document.getElementById('drawerTabs').classList.add('hidden');
+  ['salaire-dt','autre-dt','loyer-dt','electricite-dt','assurance-dt',
+   'gym-dt','netflix-dt','fido-dt','metro-dt','bixi-dt','sante-dt',
+   'ep-ret-dt','ep-dep-dt','ep-int-dt'].forEach(id => {
     const d = document.getElementById(id);
     if (d && !d.value) d.value = getDateAujourdhui();
   });
@@ -941,7 +991,7 @@ function ouvrirDrawer() {
 function fermerDrawer() {
   document.getElementById('drawer').classList.remove('show');
   document.getElementById('drawerBack').classList.remove('show');
-  document.getElementById('drawerTab').classList.remove('hidden');
+  document.getElementById('drawerTabs').classList.remove('hidden');
   // Toutes les sections se referment : on revient à l'état neutre.
   document.querySelectorAll('.sect').forEach(el => el.classList.remove('open'));
 }
@@ -985,6 +1035,377 @@ function renderDrawer() {
         <button class="lg-del" onclick="resetSessionTimer();supprimerCredit('${e.id}')" title="Supprimer">🗑️</button>
       </div>`).join('');
   });
+
+  // --- Logement (débits) ---
+  ['loyer','electricite','assurance'].forEach(kind => {
+    const list  = getLogementEntrees(kind);
+    const total = list.reduce((s,e) => s + e.montant, 0);
+    const meta  = LOGEMENT_META[kind];
+
+    const elV = document.getElementById('sect-' + kind + '-val');
+    if (elV) elV.textContent = list.length ? fmt(total) : '—';
+
+    const elL = document.getElementById(kind + '-liste');
+    if (!elL) return;
+    if (!list.length) {
+      elL.innerHTML = '<div class="vide">Rien de saisi sur cette période.</div>';
+      return;
+    }
+    elL.innerHTML = [...list].sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(e => `
+      <div class="lg-item">
+        <span class="d">${(e.date||'').slice(8)}/${(e.date||'').slice(5,7)}</span>
+        <span class="l">${meta.icone} ${e.desc || meta.defaut}</span>
+        <span class="m" style="color:#e0a060;">−${fmt(e.montant)}</span>
+        <button class="lg-del" onclick="resetSessionTimer();supprimerLogement('${kind}','${e.id}')" title="Supprimer">🗑️</button>
+      </div>`).join('');
+  });
+
+  // --- Frais divers (montant automatique, remplaçable) ---
+  Object.keys(DIVERS_META).forEach(cle => {
+    const meta = DIVERS_META[cle];
+    const list = getDiversEntrees(cle);
+    const ref  = meta.ref();
+
+    const elV = document.getElementById('sect-' + cle + '-val');
+    if (elV) {
+      const total = list.reduce((s,e) => s + e.montant, 0);
+      elV.textContent = list.length ? fmt(total) : (ref ? fmt(ref) : '—');
+      elV.style.color = list.length ? '#c4abf0' : '#6b8bb5';
+    }
+
+    const elI = document.getElementById(cle + '-info');
+    if (elI) {
+      elI.innerHTML = (list.length
+        ? `<b style="color:#c4abf0;">Saisie manuelle active</b> — l'automatique de ${fmt(ref)} ne s'applique plus pour cette période.`
+        : `Compté automatiquement : <b style="color:#c4abf0;">${fmt(ref)}</b>. Rien à saisir si c'est le bon montant.`)
+        + (meta.avert ? `<div style="margin-top:6px;color:#e8c07a;">⚠️ ${meta.avert}</div>` : '');
+    }
+
+    const elL = document.getElementById(cle + '-liste');
+    if (!elL) return;
+    if (!list.length) { elL.innerHTML = '<div class="vide">Aucune saisie — montant automatique.</div>'; return; }
+    elL.innerHTML = [...list].sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(e => `
+      <div class="lg-item">
+        <span class="d">${(e.date||'').slice(8)}/${(e.date||'').slice(5,7)}</span>
+        <span class="l">${meta.icone} ${e.desc || meta.nom}</span>
+        <span class="m" style="color:#c4abf0;">−${fmt(e.montant)}</span>
+        <button class="lg-del" onclick="resetSessionTimer();supprimerFraisDivers('${cle}','${e.id}')" title="Supprimer">🗑️</button>
+      </div>`).join('');
+  });
+
+  // --- Santé : net = soins − remboursements ---
+  const sante = getSanteEntrees();
+  const dep  = sante.filter(e => e.sens !== 'remboursement').reduce((s,e) => s + e.montant, 0);
+  const remb = sante.filter(e => e.sens === 'remboursement').reduce((s,e) => s + e.montant, 0);
+  const net  = dep - remb;
+  const elSV = document.getElementById('sect-sante-val');
+  if (elSV) {
+    elSV.textContent = sante.length ? (net >= 0 ? fmt(net) : '+' + fmt(-net)) : '—';
+    elSV.style.color = net > 0 ? '#e8907a' : net < 0 ? '#5dcaa5' : '#6b8bb5';
+  }
+  const elSL = document.getElementById('sante-liste');
+  if (elSL) {
+    if (!sante.length) elSL.innerHTML = '<div class="vide">Rien de saisi sur cette période.</div>';
+    else elSL.innerHTML = `<div style="font-size:11px;color:#8fa6bd;margin-bottom:6px;">
+        soins ${fmt(dep)} · remboursés <span style="color:#5dcaa5;">${fmt(remb)}</span></div>`
+      + [...sante].sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(e => {
+        const r = e.sens === 'remboursement';
+        return `<div class="lg-item">
+          <span class="d">${(e.date||'').slice(8)}/${(e.date||'').slice(5,7)}</span>
+          <span class="l">${r ? '↩' : '🩺'} ${e.desc || (r ? 'Remboursement' : 'Soins')}</span>
+          <span class="m" style="color:${r ? '#5dcaa5' : '#e8907a'};">${r ? '+' : '−'}${fmt(e.montant)}</span>
+          <button class="lg-del" onclick="resetSessionTimer();supprimerSante('${e.id}')" title="Supprimer">🗑️</button>
+        </div>`; }).join('');
+  }
+
+  // --- Épargne ---
+  const elEp = document.getElementById('ep-solde');
+  if (elEp) elEp.textContent = fmt(getSoldeEpargne());
+  const mv = getEpargneMouvements();
+  const elInt = document.getElementById('ep-interets');
+  if (elInt) {
+    const i = mv.filter(m => m.type === 'interet').reduce((s,m) => s + m.montant, 0);
+    elInt.textContent = i ? 'Intérêts perçus : ' + fmt(i) : '';
+  }
+  const elEL = document.getElementById('ep-liste');
+  if (elEL) {
+    if (!mv.length) elEL.innerHTML = '<div class="vide">Aucun mouvement.</div>';
+    else elEL.innerHTML = [...mv].sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(m => {
+      const plus = (m.type === 'depot' || m.type === 'interet');
+      const ic = m.type === 'depot' ? '⬇️' : m.type === 'retrait' ? '⬆️' : '📈';
+      const lib = m.type === 'depot' ? 'Dépôt' : m.type === 'retrait' ? 'Retrait' : 'Intérêts';
+      return `<div class="lg-item">
+        <span class="d">${(m.date||'').slice(8)}/${(m.date||'').slice(5,7)}</span>
+        <span class="l">${ic} ${lib}${m.desc ? ' — ' + m.desc : ''}</span>
+        <span class="m" style="color:${plus ? '#5dcaa5' : '#e8907a'};">${plus ? '+' : '−'}${fmt(m.montant)}</span>
+        <button class="lg-del" onclick="resetSessionTimer();supprimerEpargne('${m.id}')" title="Supprimer">🗑️</button>
+      </div>`; }).join('');
+  }
+}
+
+// ---- LOGEMENT ----
+// Trois stockages DIFFÉRENTS dans Firebase, d'où les deux accesseurs :
+//   loyer       → state.loyerEntrees[periode]
+//   électricité → state.fixesEntrees.electricite[periode]
+//   assurance   → state.fixesEntrees.assurance[periode]
+// Firebase peut renvoyer un objet au lieu d'un tableau : on normalise à chaque lecture.
+function _asArray(x) {
+  if (!x) return [];
+  return Array.isArray(x) ? x : Object.values(x);
+}
+
+function getLogementEntrees(kind) {
+  if (!state) return [];
+  if (kind === 'loyer') return _asArray((state.loyerEntrees || {})[periodeKey]);
+  return _asArray(((state.fixesEntrees || {})[kind] || {})[periodeKey]);
+}
+
+const LOGEMENT_META = {
+  loyer:       { icone: '🏠', defaut: 'Loyer' },
+  electricite: { icone: '⚡', defaut: 'Électricité' },
+  assurance:   { icone: '🛡️', defaut: 'Assurance' },
+};
+
+async function ajouterLogement(kind) {
+  const montant = parseFloat(document.getElementById(kind + '-amt').value);
+  const desc    = (document.getElementById(kind + '-dsc').value || '').trim();
+  const date    = document.getElementById(kind + '-dt').value || getDateAujourdhui();
+  // 0 est accepté : c'est ainsi qu'on dit « pas de prélèvement ce mois-ci ».
+  if (isNaN(montant) || montant < 0) { alert('Entre un montant (0 est accepté).'); return; }
+  if (!state) { alert('Données non chargées.'); return; }
+  const cible = getPeriodeKeyPourDate(date);
+  const entry = { id: uid(), montant, desc: desc || LOGEMENT_META[kind].defaut, date };
+  setSyncStatus('loading','⏳ Sauvegarde...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    if (kind === 'loyer') {
+      if (!state.loyerEntrees) state.loyerEntrees = {};
+      state.loyerEntrees[cible] = _asArray(state.loyerEntrees[cible]);
+      state.loyerEntrees[cible].push(entry);
+    } else {
+      if (!state.fixesEntrees) state.fixesEntrees = {};
+      if (!state.fixesEntrees[kind]) state.fixesEntrees[kind] = {};
+      state.fixesEntrees[kind][cible] = _asArray(state.fixesEntrees[kind][cible]);
+      state.fixesEntrees[kind][cible].push(entry);
+    }
+    document.getElementById(kind + '-amt').value = '';
+    document.getElementById(kind + '-dsc').value = '';
+    mettreAJourUI();
+    renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur sauvegarde'); }
+}
+
+async function supprimerLogement(kind, id) {
+  if (!confirm('Supprimer cette ligne ?')) return;
+  setSyncStatus('loading','⏳ Suppression...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    if (kind === 'loyer') {
+      state.loyerEntrees[periodeKey] = _asArray((state.loyerEntrees||{})[periodeKey]).filter(e => e.id !== id);
+    } else {
+      state.fixesEntrees[kind][periodeKey] = _asArray(((state.fixesEntrees||{})[kind]||{})[periodeKey]).filter(e => e.id !== id);
+    }
+    mettreAJourUI();
+    renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur suppression'); }
+}
+
+// ---- FRAIS DIVERS ----
+// Ces frais ont un montant AUTOMATIQUE dans l'app principale. Une saisie manuelle
+// le remplace entièrement pour la période (règle du « tout ou rien »).
+// Stockage : state.fixesEntrees[cle][periode]
+const DIVERS_META = {
+  gym:     { icone:'🏋️', nom:'Gym',     ref:() => state.fixes?.gym ?? 40.80,
+             avert:"Le gym est prélevé <b>deux fois</b> par période. Si tu saisis à la main, saisis bien <b>les deux</b> lignes, sinon il en manquera une." },
+  netflix: { icone:'🎬', nom:'Netflix', ref:() => state.fixes?.netflix ?? 21.46, avert:'' },
+  fido:    { icone:'📱', nom:'Fido',    ref:() => state.fixes?.fido ?? 33.96, avert:'' },
+  metro:   { icone:'🚇', nom:'Métro',   ref:() => (state.mode === 'aec' ? (state.fixes?.metro_etudiant ?? 62.50) : (state.fixes?.metro_normal ?? 110)), avert:'' },
+  bixi:    { icone:'🚲', nom:'Bixi',    ref:() => state.fixes?.bixi ?? 0,
+             avert:"Abonnement et locations de vélos électriques vont tous les deux ici." },
+};
+
+function getDiversEntrees(cle) {
+  return _asArray(((state && state.fixesEntrees || {})[cle] || {})[periodeKey]);
+}
+
+async function ajouterFraisDivers(cle) {
+  const montant = parseFloat(document.getElementById(cle + '-amt').value);
+  const desc    = (document.getElementById(cle + '-dsc').value || '').trim();
+  const date    = document.getElementById(cle + '-dt').value || getDateAujourdhui();
+  if (isNaN(montant) || montant < 0) { alert('Entre un montant (0 est accepté : « rien prélevé ce mois-ci »).'); return; }
+  if (!state) { alert('Données non chargées.'); return; }
+  const cible = getPeriodeKeyPourDate(date);
+  const entry = { id: uid(), montant, desc: desc || DIVERS_META[cle].nom, date };
+  setSyncStatus('loading','⏳ Sauvegarde...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    if (!state.fixesEntrees) state.fixesEntrees = {};
+    if (!state.fixesEntrees[cle]) state.fixesEntrees[cle] = {};
+    state.fixesEntrees[cle][cible] = _asArray(state.fixesEntrees[cle][cible]);
+    state.fixesEntrees[cle][cible].push(entry);
+    document.getElementById(cle + '-amt').value = '';
+    document.getElementById(cle + '-dsc').value = '';
+    mettreAJourUI(); renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur sauvegarde'); }
+}
+
+async function supprimerFraisDivers(cle, id) {
+  if (!confirm('Supprimer cette ligne ?\n\nLe montant automatique reprendra si plus aucune ligne ne reste.')) return;
+  setSyncStatus('loading','⏳ Suppression...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    state.fixesEntrees[cle][periodeKey] = _asArray(((state.fixesEntrees||{})[cle]||{})[periodeKey]).filter(e => e.id !== id);
+    mettreAJourUI(); renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur suppression'); }
+}
+
+// ---- SANTÉ ----
+// state.santeEntrees[periode] = [{id, montant, desc, date, sens}]
+// sens : 'depense' (sort du compte) | 'remboursement' (rentre)
+function getSanteEntrees() {
+  return _asArray((state && state.santeEntrees || {})[periodeKey]);
+}
+
+async function ajouterSante(sens) {
+  const montant = parseFloat(document.getElementById('sante-amt').value);
+  const desc    = (document.getElementById('sante-dsc').value || '').trim();
+  const date    = document.getElementById('sante-dt').value || getDateAujourdhui();
+  if (!montant || montant <= 0) { alert('Entre un montant valide.'); return; }
+  if (!state) { alert('Données non chargées.'); return; }
+  const cible = getPeriodeKeyPourDate(date);
+  const entry = { id: uid(), montant,
+                  desc: desc || (sens === 'remboursement' ? 'Remboursement santé' : 'Soins'),
+                  date, sens };
+  setSyncStatus('loading','⏳ Sauvegarde...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    if (!state.santeEntrees) state.santeEntrees = {};
+    state.santeEntrees[cible] = _asArray(state.santeEntrees[cible]);
+    state.santeEntrees[cible].push(entry);
+    document.getElementById('sante-amt').value = '';
+    document.getElementById('sante-dsc').value = '';
+    mettreAJourUI(); renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur sauvegarde'); }
+}
+
+async function supprimerSante(id) {
+  if (!confirm('Supprimer cette ligne ?')) return;
+  setSyncStatus('loading','⏳ Suppression...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    state.santeEntrees[periodeKey] = _asArray((state.santeEntrees||{})[periodeKey]).filter(e => e.id !== id);
+    mettreAJourUI(); renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur suppression'); }
+}
+
+// ---- COMPTE ÉPARGNE ----
+// ⚠️ Chaque mouvement (sauf les intérêts) crée une ÉCRITURE LIÉE dans les comptes :
+//   retrait → entrée « Autre revenu »   (l'argent rentre sur le courant)
+//   dépôt   → dépense « Exceptionnel »  (l'argent quitte le courant)
+// Les deux sont reliés par _linkedEntreeId / _linkedEpargneId. Supprimer l'un doit
+// supprimer l'autre, sinon on crée des mouvements orphelins qui faussent le solde
+// (bug rencontré en août 2026). Logique reprise à l'identique de l'app principale.
+function getEpargneMouvements() {
+  return _asArray((state && state.epargne || {}).mouvements);
+}
+
+function getSoldeEpargne() {
+  const depart = (state && state.epargne && state.epargne.soldeDepart) || 0;
+  const mv = getEpargneMouvements();
+  const d = mv.filter(m => m.type === 'depot').reduce((s,m) => s + m.montant, 0);
+  const r = mv.filter(m => m.type === 'retrait').reduce((s,m) => s + m.montant, 0);
+  const i = mv.filter(m => m.type === 'interet').reduce((s,m) => s + m.montant, 0);
+  return depart + d - r + i;
+}
+
+async function ajouterEpargne(type) {
+  const pref = type === 'retrait' ? 'ep-ret' : type === 'depot' ? 'ep-dep' : 'ep-int';
+  const montant = parseFloat(document.getElementById(pref + '-amt').value);
+  const descEl  = document.getElementById(pref + '-dsc');
+  const desc    = descEl ? (descEl.value || '').trim() : '';
+  const date    = document.getElementById(pref + '-dt').value || getDateAujourdhui();
+  if (!montant || montant <= 0) { alert('Entre un montant valide.'); return; }
+  if (!state) { alert('Données non chargées.'); return; }
+  if (type === 'retrait' && montant > getSoldeEpargne()) {
+    alert('Épargne insuffisante.\n\nSolde : ' + fmt(getSoldeEpargne()));
+    return;
+  }
+  setSyncStatus('loading','⏳ Sauvegarde...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    if (!state.epargne) state.epargne = { soldeDepart: 0, mouvements: [] };
+    state.epargne.mouvements = _asArray(state.epargne.mouvements);
+
+    const mouvementId = uid();
+    const mouvement = { id: mouvementId, type, montant, desc, date };
+
+    if (type === 'retrait' || type === 'depot') {
+      const cible = getPeriodeKeyPourDate(date);
+      if (cible) {
+        const entreeId = uid();
+        if (!state.entrees) state.entrees = {};
+        state.entrees[cible] = _asArray(state.entrees[cible]);
+        state.entrees[cible].push({
+          id: entreeId,
+          type: type === 'retrait' ? 'autre' : 'exceptionnel',
+          montant,
+          desc: (type === 'retrait' ? 'Retrait épargne' : 'Dépôt épargne') + (desc ? ' — ' + desc : ''),
+          date, rembourse: false, rembDesc: '', _linkedEpargneId: mouvementId
+        });
+        mouvement._linkedEntreeId = entreeId;
+        mouvement._linkedPeriode = cible;
+      }
+    }
+    state.epargne.mouvements.push(mouvement);
+
+    document.getElementById(pref + '-amt').value = '';
+    if (descEl) descEl.value = '';
+    mettreAJourUI(); renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur sauvegarde'); }
+}
+
+async function supprimerEpargne(id) {
+  const mv = getEpargneMouvements().find(m => m.id === id);
+  if (!mv) return;
+  const lie = mv._linkedEntreeId && mv._linkedPeriode;
+  if (!confirm('Supprimer ce mouvement ?' + (lie
+      ? "\n\nL'écriture liée dans les comptes sera supprimée elle aussi." : ''))) return;
+  setSyncStatus('loading','⏳ Suppression...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    const m = _asArray(state.epargne.mouvements).find(x => x.id === id);
+    // Supprimer AUSSI l'écriture liée — sans ça, le mouvement devient orphelin.
+    if (m && m._linkedEntreeId && m._linkedPeriode) {
+      state.entrees[m._linkedPeriode] = _asArray(state.entrees[m._linkedPeriode])
+        .filter(e => e.id !== m._linkedEntreeId);
+    }
+    state.epargne.mouvements = _asArray(state.epargne.mouvements).filter(x => x.id !== id);
+    mettreAJourUI(); renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur suppression'); }
 }
 
 async function ajouterCredit(type) {
@@ -1125,8 +1546,18 @@ chargerDepuisFirebase();
 </div>
 
 <!-- ================= TIROIR LATÉRAL ================= -->
-<div class="drawer-tab" id="drawerTab" onclick="resetSessionTimer();ouvrirDrawer()"
-  ><span style="font-size:15px;">💵</span><br>C<br>R<br>É<br>D<br>I<br>T</div>
+<div class="drawer-tabs" id="drawerTabs">
+  <div class="drawer-tab" onclick="resetSessionTimer();ouvrirDrawer('credit')"
+    ><span style="font-size:15px;">💵</span><br>C<br>R<br>É<br>D<br>I<br>T</div>
+  <div class="drawer-tab logement" onclick="resetSessionTimer();ouvrirDrawer('logement')"
+    ><span style="font-size:15px;">🏠</span><br>L<br>O<br>G<br>E<br>M<br>E<br>N<br>T</div>
+  <div class="drawer-tab divers" onclick="resetSessionTimer();ouvrirDrawer('divers')"
+    ><span style="font-size:15px;">🔒</span><br>D<br>I<br>V<br>E<br>R<br>S</div>
+  <div class="drawer-tab sante" onclick="resetSessionTimer();ouvrirDrawer('sante')"
+    ><span style="font-size:15px;">🏥</span><br>S<br>A<br>N<br>T<br>É</div>
+  <div class="drawer-tab epargne" onclick="resetSessionTimer();ouvrirDrawer('epargne')"
+    ><span style="font-size:15px;">💰</span><br>É<br>P<br>A<br>R<br>G<br>N<br>E</div>
+</div>
 <div class="drawer-back" id="drawerBack" onclick="fermerDrawer()"></div>
 <div class="drawer" id="drawer">
   <div class="drawer-head">
@@ -1135,6 +1566,7 @@ chargerDepuisFirebase();
   </div>
   <div class="drawer-body">
 
+    <div class="drawer-group" id="grp-credit">
     <div class="sect" id="sect-salaire">
       <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-salaire')">
         <span class="t"><span class="chev">▶</span>💰 Salaire</span>
@@ -1179,6 +1611,282 @@ chargerDepuisFirebase();
         <div id="autre-liste"></div>
       </div>
     </div>
+
+    </div><!-- /grp-credit -->
+
+    <div class="drawer-group" id="grp-logement" style="display:none;">
+
+      <div class="sect" id="sect-loyer">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-loyer')">
+          <span class="t"><span class="chev">▶</span>🏠 Loyer</span>
+          <span class="v" id="sect-loyer-val" style="color:#e0a060;">—</span>
+        </div>
+        <div class="sect-body">
+          <div style="font-size:12px;color:#8fa6bd;line-height:1.5;">
+            Le loyer payé au propriétaire. Mets la <b>date réelle</b> du relevé bancaire.
+          </div>
+          <div class="f-row">
+            <input class="amt" type="number" id="loyer-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="dsc" type="text" id="loyer-dsc" placeholder="ex : Loyer octobre">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="loyer-dt">
+            <button class="f-btn orange" onclick="resetSessionTimer();ajouterLogement('loyer')">+ Ajouter</button>
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
+          <div id="loyer-liste"></div>
+        </div>
+      </div>
+
+      <div class="sect" id="sect-electricite">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-electricite')">
+          <span class="t"><span class="chev">▶</span>⚡ Électricité</span>
+          <span class="v" id="sect-electricite-val" style="color:#e0a060;">—</span>
+        </div>
+        <div class="sect-body">
+          <div style="font-size:12px;color:#8fa6bd;line-height:1.5;">
+            Facture Hydro-Québec. Rien n'est prélevé automatiquement : tant que tu ne
+            saisis rien, le montant n'est pas compté.
+          </div>
+          <div class="f-row">
+            <input class="amt" type="number" id="electricite-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="dsc" type="text" id="electricite-dsc" placeholder="ex : Hydro sept">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="electricite-dt">
+            <button class="f-btn orange" onclick="resetSessionTimer();ajouterLogement('electricite')">+ Ajouter</button>
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
+          <div id="electricite-liste"></div>
+        </div>
+      </div>
+
+      <div class="sect" id="sect-assurance">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-assurance')">
+          <span class="t"><span class="chev">▶</span>🛡️ Assurance logement</span>
+          <span class="v" id="sect-assurance-val" style="color:#e0a060;">—</span>
+        </div>
+        <div class="sect-body">
+          <div style="font-size:12px;color:#8fa6bd;line-height:1.5;">
+            Assurance habitation. Se saisit à la main, comme l'électricité.
+          </div>
+          <div class="f-row">
+            <input class="amt" type="number" id="assurance-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="dsc" type="text" id="assurance-dsc" placeholder="ex : Assurance">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="assurance-dt">
+            <button class="f-btn orange" onclick="resetSessionTimer();ajouterLogement('assurance')">+ Ajouter</button>
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
+          <div id="assurance-liste"></div>
+        </div>
+      </div>
+
+    </div><!-- /grp-logement -->
+
+    <div class="drawer-group" id="grp-divers" style="display:none;">
+      <div class="note-auto">
+        ⚠️ Ces frais sont <b>comptés automatiquement</b> chaque période. Tu n'as rien à saisir
+        tant que le montant et la date sont les bons.<br>
+        Ajoute une ligne <b>seulement</b> si le montant change, ou si rien n'a été prélevé
+        (saisis alors <b>0</b>). Une ligne saisie <b>remplace</b> l'automatique pour cette période.
+      </div>
+      <div class="sect" id="sect-gym">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-gym')">
+          <span class="t"><span class="chev">▶</span>🏋️ Gym</span>
+          <span class="v" id="sect-gym-val" style="color:#c4abf0;">—</span>
+        </div>
+        <div class="sect-body">
+          <div id="gym-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
+          <div class="f-row">
+            <input class="amt" type="number" id="gym-amt" placeholder="Montant (0 ok)" step="0.01" min="0">
+            <input class="dsc" type="text" id="gym-dsc" placeholder="ex : Gym 23/09">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="gym-dt">
+            <button class="f-btn violet" onclick="resetSessionTimer();ajouterFraisDivers('gym')">+ Ajouter</button>
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
+          <div id="gym-liste"></div>
+        </div>
+      </div>
+      <div class="sect" id="sect-netflix">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-netflix')">
+          <span class="t"><span class="chev">▶</span>🎬 Netflix</span>
+          <span class="v" id="sect-netflix-val" style="color:#c4abf0;">—</span>
+        </div>
+        <div class="sect-body">
+          <div id="netflix-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
+          <div class="f-row">
+            <input class="amt" type="number" id="netflix-amt" placeholder="Montant (0 ok)" step="0.01" min="0">
+            <input class="dsc" type="text" id="netflix-dsc" placeholder="ex : Netflix">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="netflix-dt">
+            <button class="f-btn violet" onclick="resetSessionTimer();ajouterFraisDivers('netflix')">+ Ajouter</button>
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
+          <div id="netflix-liste"></div>
+        </div>
+      </div>
+      <div class="sect" id="sect-fido">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-fido')">
+          <span class="t"><span class="chev">▶</span>📱 Fido (tél)</span>
+          <span class="v" id="sect-fido-val" style="color:#c4abf0;">—</span>
+        </div>
+        <div class="sect-body">
+          <div id="fido-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
+          <div class="f-row">
+            <input class="amt" type="number" id="fido-amt" placeholder="Montant (0 ok)" step="0.01" min="0">
+            <input class="dsc" type="text" id="fido-dsc" placeholder="ex : Fido sept">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="fido-dt">
+            <button class="f-btn violet" onclick="resetSessionTimer();ajouterFraisDivers('fido')">+ Ajouter</button>
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
+          <div id="fido-liste"></div>
+        </div>
+      </div>
+      <div class="sect" id="sect-metro">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-metro')">
+          <span class="t"><span class="chev">▶</span>🚇 Métro</span>
+          <span class="v" id="sect-metro-val" style="color:#c4abf0;">—</span>
+        </div>
+        <div class="sect-body">
+          <div id="metro-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
+          <div class="f-row">
+            <input class="amt" type="number" id="metro-amt" placeholder="Montant (0 ok)" step="0.01" min="0">
+            <input class="dsc" type="text" id="metro-dsc" placeholder="ex : Passe STM">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="metro-dt">
+            <button class="f-btn violet" onclick="resetSessionTimer();ajouterFraisDivers('metro')">+ Ajouter</button>
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
+          <div id="metro-liste"></div>
+        </div>
+      </div>
+      <div class="sect" id="sect-bixi">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-bixi')">
+          <span class="t"><span class="chev">▶</span>🚲 Bixi</span>
+          <span class="v" id="sect-bixi-val" style="color:#c4abf0;">—</span>
+        </div>
+        <div class="sect-body">
+          <div id="bixi-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
+          <div class="f-row">
+            <input class="amt" type="number" id="bixi-amt" placeholder="Montant (0 ok)" step="0.01" min="0">
+            <input class="dsc" type="text" id="bixi-dsc" placeholder="ex : Abonnement / vélo élec">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="bixi-dt">
+            <button class="f-btn violet" onclick="resetSessionTimer();ajouterFraisDivers('bixi')">+ Ajouter</button>
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
+          <div id="bixi-liste"></div>
+        </div>
+      </div>
+    </div><!-- /grp-divers -->
+
+    <div class="drawer-group" id="grp-sante" style="display:none;">
+      <div class="sect" id="sect-sante">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-sante')">
+          <span class="t"><span class="chev">▶</span>🏥 Soins et remboursements</span>
+          <span class="v" id="sect-sante-val" style="color:#5dcaa5;">—</span>
+        </div>
+        <div class="sect-body">
+          <div style="font-size:12px;color:#8fa6bd;line-height:1.5;">
+            Les soins payés et les remboursements reçus (assurance costaricienne, RAMQ…).
+            Mets la date réelle de chaque mouvement : le soin sort du compte le jour où
+            tu l'as payé, le remboursement rentre le jour où tu l'as reçu.
+          </div>
+          <div class="f-row">
+            <input class="amt" type="number" id="sante-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="dsc" type="text" id="sante-dsc" placeholder="ex : dentiste">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="sante-dt">
+            <button class="f-btn rouge" onclick="resetSessionTimer();ajouterSante('depense')">− Soin payé</button>
+            <button class="f-btn vert2" onclick="resetSessionTimer();ajouterSante('remboursement')">+ Remboursement</button>
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Cette période</div>
+          <div id="sante-liste"></div>
+        </div>
+      </div>
+    </div><!-- /grp-sante -->
+
+    <div class="drawer-group" id="grp-epargne" style="display:none;">
+      <div class="solde-ep">
+        <div class="lbl">SOLDE DU COMPTE ÉPARGNE</div>
+        <div class="val" id="ep-solde">—</div>
+        <div class="lbl" id="ep-interets" style="margin-top:3px;"></div>
+      </div>
+
+      <div class="sect" id="sect-ep-retrait">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-ep-retrait')">
+          <span class="t"><span class="chev">▶</span>⬆️ Retrait vers le compte courant</span>
+        </div>
+        <div class="sect-body">
+          <div style="font-size:12px;color:#8fa6bd;line-height:1.5;">
+            L'argent sort de l'épargne et <b>rentre sur le compte courant</b>.
+            Un « Autre revenu » est créé automatiquement dans les comptes.
+          </div>
+          <div class="f-row">
+            <input class="amt" type="number" id="ep-ret-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="dsc" type="text" id="ep-ret-dsc" placeholder="ex : virement">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="ep-ret-dt">
+            <button class="f-btn vert2" onclick="resetSessionTimer();ajouterEpargne('retrait')">⬆️ Retirer</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sect" id="sect-ep-depot">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-ep-depot')">
+          <span class="t"><span class="chev">▶</span>⬇️ Dépôt depuis le compte courant</span>
+        </div>
+        <div class="sect-body">
+          <div style="font-size:12px;color:#8fa6bd;line-height:1.5;">
+            L'argent <b>quitte le compte courant</b> pour aller à l'épargne.
+            Une dépense « Exceptionnel » est créée automatiquement.
+          </div>
+          <div class="f-row">
+            <input class="amt" type="number" id="ep-dep-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="dsc" type="text" id="ep-dep-dsc" placeholder="ex : mise de côté">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="ep-dep-dt">
+            <button class="f-btn orange" onclick="resetSessionTimer();ajouterEpargne('depot')">⬇️ Déposer</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sect" id="sect-ep-interet">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-ep-interet')">
+          <span class="t"><span class="chev">▶</span>📈 Intérêts</span>
+        </div>
+        <div class="sect-body">
+          <div style="font-size:12px;color:#8fa6bd;line-height:1.5;">
+            Les intérêts s'ajoutent à l'épargne <b>sans toucher au compte courant</b>.
+            C'est le seul mouvement qui ne crée aucune écriture.
+          </div>
+          <div class="f-row">
+            <input class="amt" type="number" id="ep-int-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="dt" type="date" id="ep-int-dt">
+            <button class="f-btn vert2" onclick="resetSessionTimer();ajouterEpargne('interet')">+ Créditer</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sect" id="sect-ep-hist">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-ep-hist')">
+          <span class="t"><span class="chev">▶</span>📋 Historique</span>
+        </div>
+        <div class="sect-body"><div id="ep-liste"></div></div>
+      </div>
+    </div><!-- /grp-epargne -->
 
   </div>
 </div>

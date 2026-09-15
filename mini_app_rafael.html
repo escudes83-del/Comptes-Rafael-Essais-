@@ -322,6 +322,17 @@
 
 <div class="sync-status loading" id="sync-status">⏳ Connexion à Firebase...</div>
 
+<div style="text-align:center;margin-bottom:10px;">
+  <span onclick="resetSessionTimer();basculerSolde()" style="display:inline-block;cursor:pointer;
+    background:#0d2137;border:1px solid #1e4a7a;border-radius:20px;color:#7eb8f7;
+    font-size:12px;font-weight:700;padding:7px 16px;">👁 Voir mon solde</span>
+</div>
+<div id="solde-box" style="display:none;background:linear-gradient(135deg,#0b2a4a,#123a63);
+     border:1px solid #378add;border-radius:14px;padding:14px;text-align:center;margin-bottom:12px;">
+  <div style="font-size:11px;color:#7eb8f7;letter-spacing:.5px;">SOLDE DU COMPTE AUJOURD'HUI</div>
+  <div id="solde-val" style="font-size:30px;font-weight:800;color:#a8d0f5;font-family:ui-monospace,monospace;">—</div>
+  <div id="solde-note" style="font-size:11px;color:#6b8bb5;margin-top:3px;"></div>
+</div>
 <div id="rappels-zone"></div>
 
 <div class="budgets">
@@ -1370,6 +1381,94 @@ function getSoldeFinPeriode() {
   const depenses = getFraisTotalPeriode() + _sommeEntrees('nourriture')
                  + _sommeEntrees('perso') + _sommeEntrees('exceptionnel') + depotsNonLies;
   return ctx.debut + revenus - depenses;
+}
+
+// Frais fixes DÉJÀ ENGAGÉS à la date du jour — logique portée de l'app principale.
+// Un frais n'est retiré du solde que si sa date de prélèvement est passée : c'est ce
+// qui fait correspondre le chiffre au solde réel de la banque.
+function _dateDebit(annee, mois, jour) {
+  const dernier = new Date(annee, mois + 1, 0).getDate();
+  return new Date(annee, mois, Math.min(jour, dernier));
+}
+
+function getFraisEngagesAujourdhui() {
+  const ctx  = (state && state.miniAppCtx) || null;
+  const auto = (ctx && ctx.key === periodeKey && ctx.fraisAuto) ? ctx.fraisAuto : null;
+  const jd   = (ctx && ctx.joursDebit) || { gym1:23, gym2:7, fido:29, netflix:25, metro:1 };
+  const ref  = getDateAujourdhui();
+  let total = 0;
+
+  // Loyer : lignes déjà datées
+  total += _asArray((state.loyerEntrees || {})[periodeKey])
+             .filter(e => e.date <= ref).reduce((s,e) => s + e.montant, 0);
+  // Santé : net déjà engagé
+  total += getSanteEntrees().filter(e => e.date <= ref)
+             .reduce((s,e) => s + (e.sens === 'remboursement' ? -e.montant : e.montant), 0);
+  // Saisies manuelles de frais, déjà datées
+  ['electricite','assurance','gym','netflix','fido','bixi','metro'].forEach(cle => {
+    total += _asArray(((state.fixesEntrees || {})[cle] || {})[periodeKey])
+               .filter(e => e.date <= ref).reduce((s,e) => s + e.montant, 0);
+  });
+  if (!auto) return total;
+
+  const deb = getDateDebutPeriodeMini();
+  const refD = new Date(ref);
+  const aSaisie = cle => _asArray(((state.fixesEntrees || {})[cle] || {})[periodeKey]).length > 0;
+
+  // Gym : deux prélèvements, un par demi-période
+  if (!aSaisie('gym')) {
+    if (_dateDebit(deb.getFullYear(), deb.getMonth(), jd.gym1) <= refD)     total += auto.gym / 2;
+    if (_dateDebit(deb.getFullYear(), deb.getMonth() + 1, jd.gym2) <= refD) total += auto.gym / 2;
+  }
+  if (!aSaisie('fido') && auto.fido > 0) {
+    if (_dateDebit(deb.getFullYear(), deb.getMonth(), jd.fido) <= refD) total += auto.fido;
+  }
+  if (!aSaisie('netflix') && auto.netflix > 0) {
+    const d = _dateDebit(deb.getFullYear(), deb.getMonth(), jd.netflix);
+    if (d >= deb && d <= refD) total += auto.netflix;
+  }
+  if (!aSaisie('metro')) {
+    if (_dateDebit(deb.getFullYear(), deb.getMonth() + 1, jd.metro) <= refD) total += auto.metro;
+  }
+  if (!aSaisie('bixi') && auto.bixi > 0) total += auto.bixi;
+  if (!aSaisie('electricite') && auto.electricite > 0) total += auto.electricite;
+  if (!aSaisie('assurance') && auto.assurance > 0) total += auto.assurance;
+  return total;
+}
+
+// Solde du compte AUJOURD'HUI — celui à comparer avec le relevé bancaire.
+function getSoldeAujourdhui() {
+  const ctx = (state && state.miniAppCtx) || null;
+  if (!ctx || ctx.key !== periodeKey || typeof ctx.debut !== 'number') return null;
+  const ref = getDateAujourdhui();
+  const arr = _asArray((state.entrees || {})[periodeKey]).filter(e => e.date <= ref);
+  let val = ctx.debut;
+  val += arr.filter(e => ['salaire','autre'].includes(e.type)).reduce((s,e) => s + e.montant, 0);
+  val -= arr.filter(e => ['nourriture','perso','exceptionnel'].includes(e.type) && !e.rembourse)
+            .reduce((s,e) => s + e.montant, 0);
+  val -= getFraisEngagesAujourdhui();
+  // Mouvements d'épargne anciens, sans écriture liée
+  const mv = getEpargneMouvements().filter(m => m.date <= ref && !m._linkedEntreeId
+                                           && getPeriodeKeyPourDate(m.date) === periodeKey);
+  val -= mv.filter(m => m.type === 'depot').reduce((s,m) => s + m.montant, 0);
+  val += mv.filter(m => m.type === 'retrait').reduce((s,m) => s + m.montant, 0);
+  return val;
+}
+
+function basculerSolde() {
+  const box = document.getElementById('solde-box');
+  if (!box) return;
+  const ouvert = box.style.display !== 'none';
+  if (ouvert) { box.style.display = 'none'; return; }
+  const v = getSoldeAujourdhui();
+  document.getElementById('solde-val').textContent = (v === null) ? '—' : fmt(v);
+  document.getElementById('solde-note').textContent = (v === null)
+    ? "Ouvre l'application principale une fois pour activer le calcul."
+    : "À comparer avec ton relevé bancaire";
+  box.style.display = 'block';
+  // Se referme tout seul au bout de 20 s
+  clearTimeout(window._soldeTimer);
+  window._soldeTimer = setTimeout(() => { box.style.display = 'none'; }, 20000);
 }
 
 // Date conseillée du virement : 1er du 2e mois de la période, comme l'app principale.

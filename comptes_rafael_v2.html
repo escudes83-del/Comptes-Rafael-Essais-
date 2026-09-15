@@ -2543,6 +2543,8 @@ function publierContexteMiniApp(soldes) {
         electricite: getElectriciteAuto(key),
         assurance:   getAssuranceAuto(key),
       },
+      detteRestante: getDetteRestante(),
+      detteAnnulee: !!state.detteAnnulee,
       maj: getDateRef()
     };
     const ancien = state.miniAppCtx;

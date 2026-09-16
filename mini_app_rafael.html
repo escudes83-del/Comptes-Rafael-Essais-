@@ -165,6 +165,14 @@
     0%,100% { box-shadow: -4px 0 18px rgba(226,75,74,.35); }
     50%     { box-shadow: -4px 0 26px rgba(226,75,74,.85); }
   }
+  @keyframes pulseBan {
+    0%,100% { box-shadow: 0 0 0 0 rgba(226,75,74,.45); }
+    50%     { box-shadow: 0 0 18px 3px rgba(226,75,74,.55); }
+  }
+  .tab-montant {
+    display: block; font-size: 8.5px; font-weight: 800; margin-top: 3px;
+    padding-top: 3px; border-top: 1px solid rgba(255,255,255,.22); letter-spacing: 0;
+  }
   .drawer-tab.dette {
     background: linear-gradient(135deg,#5a4a0d,#8a7318); border-color: #b09a28; color: #f0e5a8;
   }
@@ -335,6 +343,19 @@
   <div style="font-size:11px;color:#7eb8f7;letter-spacing:.5px;">SOLDE DU COMPTE AUJOURD'HUI</div>
   <div id="solde-val" style="font-size:30px;font-weight:800;color:#a8d0f5;font-family:ui-monospace,monospace;">—</div>
   <div id="solde-note" style="font-size:11px;color:#6b8bb5;margin-top:3px;"></div>
+</div>
+<div id="banniereAlerte" style="display:none;cursor:pointer;margin-bottom:12px;
+     background:linear-gradient(135deg,#5a1414,#8c2222);border:1.5px solid #e24b4a;
+     border-radius:14px;padding:11px 14px;animation:pulseBan 1.8s ease-in-out infinite;"
+     onclick="resetSessionTimer();ouvrirDrawer('alerte')">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span style="font-size:20px;">⚠️</span>
+    <div style="flex:1;min-width:0;text-align:left;">
+      <div style="font-size:12px;font-weight:800;color:#ffd0d0;letter-spacing:.4px;">VIREMENT CONSEILLÉ</div>
+      <div id="ban-txt" style="font-size:11px;color:#f0b8b8;margin-top:1px;"></div>
+    </div>
+    <span style="font-size:18px;color:#ffd0d0;">›</span>
+  </div>
 </div>
 <div id="rappels-zone"></div>
 
@@ -1516,8 +1537,22 @@ function getDateDebutPeriodeMini() {
   return new Date(y, m - 2, 16);
 }
 
+// Montant de la dette affiché directement sur l'onglet, pour le voir sans l'ouvrir.
+function majOngletDette() {
+  const el = document.getElementById('tabDetteMontant');
+  if (!el) return;
+  const ctx = (state && state.miniAppCtx) || null;
+  if (ctx && ctx.detteAnnulee) { el.textContent = '0'; return; }
+  if (!ctx || typeof ctx.detteRestante !== 'number') { el.textContent = ''; return; }
+  // Format compact : pas de décimales ni de symbole, la colonne fait 30 px de large.
+  el.textContent = Math.round(ctx.detteRestante).toLocaleString('fr-CA');
+}
+
 function renderAlerteVirement() {
-  const tab = document.getElementById('tabAlerte');
+  majOngletDette();
+  // L'alerte est une BANNIÈRE horizontale sous « Voir mon solde », pas un onglet :
+  // avec 7 onglets verticaux, la pile dépassait de l'écran (16/09/2026).
+  const tab = document.getElementById('banniereAlerte');
   const box = document.getElementById('alerte-contenu');
   if (!tab || !box) return;
   const fin = getSoldeFinPeriode();
@@ -1535,6 +1570,8 @@ function renderAlerteVirement() {
   const libDate = dateV ? '1er ' + MOIS[Number(dateV.slice(5,7)) - 1] + ' ' + dateV.slice(0,4) : '';
 
   tab.style.display = 'block';
+  const banTxt = document.getElementById('ban-txt');
+  if (banTxt) banTxt.textContent = `Virer ${fmt(montant)} — ${aVenir ? 'le ' + libDate : 'maintenant'}`;
   box.innerHTML = `
     <div style="background:#2d0b0b;border:1px solid #7a1e1e;border-radius:14px;padding:14px;margin-bottom:12px;">
       <div style="font-size:12px;color:#e8b0b0;line-height:1.55;">
@@ -1872,10 +1909,8 @@ chargerDepuisFirebase();
     ><span style="font-size:15px;">🔒</span><br>D<br>I<br>V<br>E<br>R<br>S</div>
   <div class="drawer-tab sante" onclick="resetSessionTimer();ouvrirDrawer('sante')"
     ><span style="font-size:15px;">🏥</span><br>S<br>A<br>N<br>T<br>É</div>
-  <div class="drawer-tab alerte" id="tabAlerte" style="display:none;"
-    onclick="resetSessionTimer();ouvrirDrawer('alerte')"
-    ><span style="font-size:15px;">⚠️</span><br>V<br>I<br>R<br>E<br>R</div>  <div class="drawer-tab dette" onclick="resetSessionTimer();ouvrirDrawer('dette')"
-    ><span style="font-size:15px;">🏠</span><br>D<br>E<br>T<br>T<br>E</div>
+  <div class="drawer-tab dette" onclick="resetSessionTimer();ouvrirDrawer('dette')"
+    ><span style="font-size:15px;">🏠</span><br>D<br>E<br>T<br>T<br>E<span class="tab-montant" id="tabDetteMontant"></span></div>
   <div class="drawer-tab epargne" onclick="resetSessionTimer();ouvrirDrawer('epargne')"
     ><span style="font-size:15px;">💰</span><br>É<br>P<br>A<br>R<br>G<br>N<br>E</div>
 </div>

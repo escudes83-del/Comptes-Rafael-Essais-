@@ -5951,6 +5951,7 @@ function saveDettePaiementCourant() {
   _pendingExtra = { curKey, montant };
 }
 
+// Retourne l'id de l'extra créé, pour pouvoir y relier la ligne de dépense (16/09/2026).
 function appliquerExtra(curKey, montant) {
   if (!state.detteExtras) state.detteExtras = {};
   if (!state.detteExtras[curKey]) state.detteExtras[curKey] = [];
@@ -5963,6 +5964,7 @@ function appliquerExtra(curKey, montant) {
 
   const el = document.getElementById('dette_perm_input');
   if (el) el.value = '';
+  return extraId;
 }
 
 function confirmerAnnulExtra(periodeKey, extraId, montantExtra) {
@@ -6070,14 +6072,17 @@ function confirmerExtra() {
       state.epargne.mouvements.push(mouvement);
     }
 
-    appliquerExtra(curKey, montant);
+    const _extraId = appliquerExtra(curKey, montant);
     // Toujours ajouter dans le loyer peu importe le budget choisi
     if (!state.loyerEntrees) state.loyerEntrees = {};
     if (!state.loyerEntrees[curKey]) state.loyerEntrees[curKey] = [];
     const descLoyer = choix === 'compte' ? 'Remb. dette (compte)'
                     : choix === 'epargne' ? 'Remb. dette (épargne)'
                     : 'Remb. dette (' + choix + ')';
-    state.loyerEntrees[curKey].push({ id: uid(), montant, desc: descLoyer, date: dateSortie });
+    // _detteExtraId relie cette dépense au remboursement de dette : les deux ne doivent
+    // jamais diverger. Sans ce lien, modifier ou supprimer l'un laissait l'autre en place
+    // (constaté le 16/09/2026 : dette réduite de 700 $, dépense restée à 1 100 $).
+    state.loyerEntrees[curKey].push({ id: uid(), montant, desc: descLoyer, date: dateSortie, _detteExtraId: _extraId });
     saveState();
     render();
     renderDette();
@@ -6451,6 +6456,16 @@ function addLoyerEntree(key) {
 
 function deleteLoyerEntree(key, id) {
   if (!state.loyerEntrees || !state.loyerEntrees[key]) return;
+  const ligne = state.loyerEntrees[key].find(e => e.id === id);
+  // Ligne liée à un remboursement de dette : supprimer les DEUX, sinon la dette
+  // resterait baissée alors que l'argent revient sur le compte.
+  if (ligne && ligne._detteExtraId) {
+    if (!confirm(`Cette ligne est un remboursement de dette de ${fmt(ligne.montant)}.\n\n`
+      + `La dette remontera d'autant.\n\nContinuer ?`)) return;
+    Object.keys(state.detteExtras || {}).forEach(k => {
+      state.detteExtras[k] = (state.detteExtras[k] || []).filter(x => x.id !== ligne._detteExtraId);
+    });
+  }
   state.loyerEntrees[key] = state.loyerEntrees[key].filter(e => e.id !== id);
   saveState();
   render();
@@ -6477,7 +6492,16 @@ function saveEditLoyer(rowId, id, key) {
   if (!montant || montant <= 0) return;
   const entries = (state.loyerEntrees || {})[key] || [];
   const e = entries.find(x => x.id === id);
-  if (e) { e.montant = montant; e.desc = desc; e.date = date; }
+  if (e) {
+    // Ligne liée à un remboursement de dette : le montant de l'extra suit, sinon
+    // la dette et la dépense divergent.
+    if (e._detteExtraId && montant !== e.montant) {
+      Object.keys(state.detteExtras || {}).forEach(k => {
+        (state.detteExtras[k] || []).forEach(x => { if (x.id === e._detteExtraId) x.montant = montant; });
+      });
+    }
+    e.montant = montant; e.desc = desc; e.date = date;
+  }
   saveState();
   render();
   renderVueMois(key);

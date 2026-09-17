@@ -4638,9 +4638,17 @@ function getDatePourPeriode(key) {
   return `${y}-${m}-16`;
 }
 
+// ⚠️ new Date().toISOString() convertit en UTC : après 20 h à Montréal, il renvoie
+// déjà la date de DEMAIN. Les champs de saisie proposaient donc le mauvais jour
+// (constaté le 16/09/2026 à 22 h 32). Cette fonction reste en heure locale.
+function aujourdhuiLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 function getDateRef() {
   // Retourne la date de référence sous forme YYYY-MM-DD
-  return state.dateRef || new Date().toISOString().slice(0,10);
+  return state.dateRef || aujourdhuiLocal();
 }
 
 function setDateRef(val) {
@@ -4669,7 +4677,7 @@ function setSoldeRef(val) {
 
 function updateDateRefUI() {
   const dateRef = getDateRef();
-  const today = new Date().toISOString().slice(0,10);
+  const today = aujourdhuiLocal();
   const isToday = !state.dateRef || state.dateRef === today;
   document.getElementById('inputDateRef').value = dateRef;
   document.getElementById('labelDateRef').textContent = isToday ? "= aujourd'hui" : `(${state.dateRef ? '' : 'auto – '}${dateRef})`;
@@ -6758,7 +6766,7 @@ function openModal(id) {
     makeDraggable(modal);
   }
   // Pré-remplir date
-  const today = new Date().toISOString().slice(0,10);
+  const today = aujourdhuiLocal();
   const dateFields = {
     modalDepense: 'depDate',
     modalAutreSource: 'asDate',
@@ -6923,7 +6931,10 @@ function saveSimFixe() {
   // Toujours ancré sur la période RÉELLE actuelle (aujourd'hui), jamais sur l'onglet affiché à l'écran —
   // sinon un changement peut s'appliquer à partir d'un mois différent selon la navigation en cours.
   const keyEffectif = PERIODES[getCurrentPeriodeIndex()]?.key;
-  const dateEffet = (getDateDebutPeriode(keyEffectif) || new Date(getDateRef())).toISOString().slice(0,10);
+  const _dEff = getDateDebutPeriode(keyEffectif);
+  const dateEffet = _dEff
+    ? `${_dEff.getFullYear()}-${String(_dEff.getMonth()+1).padStart(2,'0')}-${String(_dEff.getDate()).padStart(2,'0')}`
+    : getDateRef();
   for (const k of keys) {
     const el = document.getElementById('fix_' + k);
     if (!el) continue;
@@ -7045,14 +7056,14 @@ function confirmSwitchAEC() {
   // Pré-remplir date au prochain 1er du mois
   const today = new Date();
   const nextMonth = new Date(today.getFullYear(), today.getMonth()+1, 1);
-  document.getElementById('aecDate').value = nextMonth.toISOString().slice(0,10);
+  document.getElementById('aecDate').value = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth()+1).padStart(2,'0')}-${String(nextMonth.getDate()).padStart(2,'0')}`;
   openModal('modalConfirmAEC');
 }
 
 function activateAEC() {
   const dateStr = document.getElementById('aecDate').value;
   if (!dateStr) return;
-  const periode = dateToPeriode(new Date(dateStr).toISOString().slice(0,10));
+  const periode = dateToPeriode(dateStr);
   state.mode = 'aec';
   state.aecDepuis = periode;
   saveState();
@@ -7120,7 +7131,7 @@ if (state.mode === 'aec') {
 }
 
 // Init date de référence
-const _today = new Date().toISOString().slice(0,10);
+const _today = aujourdhuiLocal();
 document.getElementById('inputDateRef').value = state.dateRef || _today;
 if (state.soldeRef !== null && state.soldeRef !== undefined) {
   document.getElementById('inputSoldeRef').value = state.soldeRef;

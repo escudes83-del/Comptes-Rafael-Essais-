@@ -2569,7 +2569,13 @@ function calculerSoldes() {
     // Budget par défaut seulement pour les périodes FUTURES (pas en cours ni passées).
     // Comparaison directe par date (pas par index) — plus robuste.
     const debutPeriodeK = getDateDebutPeriode(k);
-    const aujourdhuiCS = new Date(getDateRef());
+    // ⚠️ new Date('2026-09-16') est interprété en UTC puis converti en heure locale :
+    // à Montréal il retombe au 15/09 à 20 h. Le 1er jour d'une période, celle-ci
+    // paraissait donc « future » et le budget complet (500 $) était projeté au lieu
+    // des dépenses réelles — d'où un écart de 500 $ avec la mini-app (16/09/2026).
+    // On construit la date en LOCAL, à minuit, comme getDateDebutPeriode().
+    const _ref = getDateRef().split('-').map(Number);
+    const aujourdhuiCS = new Date(_ref[0], _ref[1] - 1, _ref[2]);
     const isFuturePeriode = debutPeriodeK ? debutPeriodeK > aujourdhuiCS : (getPeriodeIndex(k) > getCurrentPeriodeIndex());
     const nourriture = getSommeEntreesAll(k, 'nourriture') ||
       (isFuturePeriode ? getBudgetNourriturePourPeriode(k) : 0);

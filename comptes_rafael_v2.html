@@ -3519,12 +3519,16 @@ function renderRappels() {
 
 
 
-  // Cadre ÉPARGNE — reflète le solde tel qu'il était à la fin de la période sélectionnée
-  // (pas toujours le total d'aujourd'hui), pour rester historiquement exact.
+  // Cadre ÉPARGNE — pour une période PASSÉE, le solde tel qu'il était à la fin de
+  // celle-ci (exactitude historique). Pour la période EN COURS, le solde d'aujourd'hui :
+  // afficher la fin de période y ferait apparaître des mouvements encore à venir,
+  // alors que tout le reste du bandeau parle du présent (corrigé le 17/09/2026).
   const elEpargne = document.getElementById('rappelEpargneBandeau');
   if (elEpargne) {
     const keyAfficheEpargne = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
-    const soldeEpargne = keyAfficheEpargne ? getSoldeEpargneAPeriode(keyAfficheEpargne) : getSoldeEpargne();
+    const _estPassee = keyAfficheEpargne
+      && getPeriodeIndex(keyAfficheEpargne) < getCurrentPeriodeIndex();
+    const soldeEpargne = _estPassee ? getSoldeEpargneAPeriode(keyAfficheEpargne) : getSoldeEpargne();
     elEpargne.style.display = 'flex';
     elEpargne.innerHTML = `<div onclick="ouvrirEpargne()" style="position:relative;cursor:pointer;background:rgba(62,207,142,.10);border:2px solid var(--green);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:130px;min-height:38px;">
       <div style="font-size:10px;font-weight:800;color:var(--green);letter-spacing:.5px;">💰 ÉPARGNE<span class="aide-btn mini" onclick="event.stopPropagation();ouvrirAide('epargne')" title="Aide / Help">?</span></div>

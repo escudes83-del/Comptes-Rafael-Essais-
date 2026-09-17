@@ -887,9 +887,11 @@ function rappelDejaPaye(id) {
 
 function rappelPlusTard(id) {
   majRappel(id, r => {
+    // Reconstruit la date en LOCAL : toISOString() convertit en UTC et décalerait
+    // d'un jour en soirée (heure de Montréal).
     const d = new Date(getDateAujourdhui() + 'T12:00:00');
     d.setDate(d.getDate() + RAPPEL_SNOOZE_JOURS);
-    r.snoozeJusqua = d.toISOString().slice(0,10);
+    r.snoozeJusqua = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     return true;
   });
 }

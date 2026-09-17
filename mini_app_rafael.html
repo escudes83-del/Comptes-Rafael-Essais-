@@ -1683,9 +1683,12 @@ function getEpargneMouvements() {
   return _asArray((state && state.epargne || {}).mouvements);
 }
 
+// Solde AUJOURD'HUI : les mouvements datés plus tard ne comptent pas encore,
+// comme pour le compte courant (corrigé le 17/09/2026).
 function getSoldeEpargne() {
   const depart = (state && state.epargne && state.epargne.soldeDepart) || 0;
-  const mv = getEpargneMouvements();
+  const ref = getDateAujourdhui();
+  const mv = getEpargneMouvements().filter(m => !m.date || m.date <= ref);
   const d = mv.filter(m => m.type === 'depot').reduce((s,m) => s + m.montant, 0);
   const r = mv.filter(m => m.type === 'retrait').reduce((s,m) => s + m.montant, 0);
   const i = mv.filter(m => m.type === 'interet').reduce((s,m) => s + m.montant, 0);

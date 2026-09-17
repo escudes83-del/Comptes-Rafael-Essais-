@@ -2130,9 +2130,13 @@ function calculerProjectionEpargne() {
   return resultats;
 }
 
+// Solde de l'épargne AUJOURD'HUI : les mouvements datés dans le futur ne sont pas
+// encore comptés, exactement comme pour le compte courant. Avant, un retrait programmé
+// au 2 octobre était déjà déduit dès sa saisie (constaté le 17/09/2026).
 function getSoldeEpargne() {
   const depart = (state.epargne && state.epargne.soldeDepart) || 0;
-  const mouvements = getEpargneMouvements();
+  const ref = getDateRef();
+  const mouvements = getEpargneMouvements().filter(m => !m.date || m.date <= ref);
   const depots = mouvements.filter(m => m.type === 'depot').reduce((s, m) => s + m.montant, 0);
   const retraits = mouvements.filter(m => m.type === 'retrait').reduce((s, m) => s + m.montant, 0);
   const interets = mouvements.filter(m => m.type === 'interet').reduce((s, m) => s + m.montant, 0);
@@ -2141,6 +2145,16 @@ function getSoldeEpargne() {
 
 // Solde épargne tel qu'il était (ou sera) à la fin de la période donnée — pour affichage
 // historiquement exact selon l'onglet sélectionné (pas toujours le total d'aujourd'hui).
+// Solde une fois TOUS les mouvements passés, y compris ceux programmés plus tard.
+function getSoldeEpargneTotal() {
+  const depart = (state.epargne && state.epargne.soldeDepart) || 0;
+  const mv = getEpargneMouvements();
+  return depart
+    + mv.filter(m => m.type === 'depot').reduce((s,m) => s + m.montant, 0)
+    - mv.filter(m => m.type === 'retrait').reduce((s,m) => s + m.montant, 0)
+    + mv.filter(m => m.type === 'interet').reduce((s,m) => s + m.montant, 0);
+}
+
 function getSoldeEpargneAPeriode(periodeKey) {
   const depart = (state.epargne && state.epargne.soldeDepart) || 0;
   const debut = getDateDebutPeriode(periodeKey);
@@ -3569,6 +3583,9 @@ function acquitterAlerteBudget(alerteKey) {
 // ============================================================
 function ouvrirEpargne() {
   const soldeEpargne = getSoldeEpargne();
+  // Mouvements datés après aujourd'hui : signalés à part, pas encore dans le solde.
+  const _mvAVenir = getEpargneMouvements().filter(m => m.date && m.date > getDateRef())
+                      .sort((a,b) => a.date.localeCompare(b.date));
   const totalInterets = getTotalInteretsEpargne();
   const mouvements = getEpargneMouvements().slice().sort((a, b) => b.date.localeCompare(a.date));
 
@@ -3603,7 +3620,14 @@ function ouvrirEpargne() {
         <span onclick="document.getElementById('modalEpargne').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
       </div>
       <p style="font-size:22px;font-weight:800;color:var(--green);margin:10px 0 2px;">${fmt(soldeEpargne)}</p>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">Intérêts totaux perçus : ${fmt(totalInterets)}</p>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:${_mvAVenir.length ? '8' : '14'}px;">Intérêts totaux perçus : ${fmt(totalInterets)}</p>
+      ${_mvAVenir.length ? `<div style="background:rgba(247,197,72,.08);border:1px solid rgba(247,197,72,.3);
+        border-radius:8px;padding:9px 12px;margin-bottom:14px;font-size:12px;line-height:1.5;">
+        ⏳ <b>${_mvAVenir.length} mouvement${_mvAVenir.length>1?'s':''} programmé${_mvAVenir.length>1?'s':''}</b>
+        (pas encore compté${_mvAVenir.length>1?'s':''} ci-dessus) :<br>
+        ${_mvAVenir.map(m => `${m.date} — ${m.type === 'retrait' ? '−' : '+'}${fmt(m.montant)}${m.desc ? ' ' + m.desc : ''}`).join('<br>')}
+        <br><span style="color:var(--muted);">Solde après : <b style="color:var(--text);">${fmt(getSoldeEpargneTotal())}</b></span>
+      </div>` : ''}
       <div class="form-row">
         <label>Solde déjà présent avant le suivi (n'affecte jamais le compte courant)</label>
         <input type="number" id="epargneSoldeDepart" step="0.01" value="${(state.epargne && state.epargne.soldeDepart) || 0}" onchange="modifierSoldeDepartEpargne(this.value)">

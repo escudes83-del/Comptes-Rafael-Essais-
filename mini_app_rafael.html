@@ -173,6 +173,17 @@
     display: block; font-size: 8.5px; font-weight: 800; margin-top: 3px;
     padding-top: 3px; border-top: 1px solid rgba(255,255,255,.22); letter-spacing: 0;
   }
+  .drawer-tab.rattrap {
+    background: linear-gradient(135deg,#4a2a5a,#6b3d8a); border-color: #9a5fc0; color: #e8d0f5;
+  }
+  .rattrap-cat {
+    display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px;
+  }
+  .rattrap-cat span {
+    border: 1px solid #2d4a72; border-radius: 16px; padding: 6px 12px;
+    font-size: 12px; cursor: pointer; color: #9fb4cc; background: #0d1a2d;
+  }
+  .rattrap-cat span.on { background: #6b3d8a; border-color: #9a5fc0; color: #fff; font-weight: 700; }
   .drawer-tab.dette {
     background: linear-gradient(135deg,#5a4a0d,#8a7318); border-color: #b09a28; color: #f0e5a8;
   }
@@ -1016,6 +1027,7 @@ const DRAWER_TITRES = { credit: '💵 Crédits', logement: '🏠 Logement',
                         divers: '🔒 Frais divers', sante: '🏥 Santé',
                         epargne: '💰 Compte Épargne' ,
                         dette: '🏠 Dette propriétaire',
+                        rattrap: '⏮ Compléter la période précédente',
                         alerte: '⚠️ Virement conseillé' };
 
 function ouvrirDrawer(groupe) {
@@ -1200,6 +1212,7 @@ function renderDrawer() {
       </div>`).join('');
   }
 
+  renderRattrapage();
   renderAlerteVirement();
 
   const elEL = document.getElementById('ep-liste');
@@ -1432,7 +1445,7 @@ function getSoldeFinPeriode() {
   const revenus  = _sommeEntrees('salaire') + _sommeEntrees('autre') + retraitsNonLies;
   const depenses = getFraisTotalPeriode() + _sommeEntrees('nourriture')
                  + _sommeEntrees('perso') + _sommeEntrees('exceptionnel') + depotsNonLies;
-  return ctx.debut + revenus - depenses;
+  return ctx.debut + revenus - depenses + getRattrapAjust();
 }
 
 // Frais fixes DÉJÀ ENGAGÉS à la date du jour — logique portée de l'app principale.
@@ -1504,6 +1517,9 @@ function getSoldeAujourdhui() {
                                            && getPeriodeKeyPourDate(m.date) === periodeKey);
   val -= mv.filter(m => m.type === 'depot').reduce((s,m) => s + m.montant, 0);
   val += mv.filter(m => m.type === 'retrait').reduce((s,m) => s + m.montant, 0);
+  // Saisies faites sur la période PRÉCÉDENTE depuis la mini-app : le solde de début
+  // publié par l'app principale ne les connaît pas encore.
+  val += getRattrapAjust();
   return val;
 }
 
@@ -1613,6 +1629,142 @@ function virerDepuisAlerte(montant, dateV) {
     const sect = document.getElementById('sect-ep-retrait');
     if (sect) { document.querySelectorAll('.sect').forEach(x=>x.classList.remove('open')); sect.classList.add('open'); }
   }, 60);
+}
+
+// ============================================================
+//  RATTRAPAGE — saisies sur la PÉRIODE PRÉCÉDENTE
+//  Quand le solde de la mini-app ne colle pas au relevé bancaire, c'est presque
+//  toujours qu'il manque des dépenses du mois d'avant. Rafael peut les ajouter ici
+//  sans ouvrir l'app principale.
+//
+//  ⚠️ Le solde affiché part de ctx.debut (solde de début de période) publié par
+//  l'app principale. Ajouter une dépense au PASSÉ rend ce chiffre faux jusqu'à la
+//  prochaine ouverture de v2. On garde donc un ajustement local, retranché du solde,
+//  pour que le chiffre soit juste TOUT DE SUITE — c'est le but même de l'écran.
+//  L'ajustement est remis à zéro dès que v2 republie un contexte plus récent.
+// ============================================================
+const RATTRAP_CATS = [
+  { id:'nourriture',   lib:'🛒 Nourriture',  signe:-1 },
+  { id:'perso',        lib:'🧴 Perso',        signe:-1 },
+  { id:'exceptionnel', lib:'⚡ Exceptionnel', signe:-1 },
+  { id:'salaire',      lib:'💰 Salaire',      signe:+1 },
+  { id:'autre',        lib:'💵 Autre revenu', signe:+1 },
+  { id:'loyer',        lib:'🏠 Loyer',        signe:-1 },
+  { id:'electricite',  lib:'⚡ Électricité',  signe:-1 },
+  { id:'assurance',    lib:'🛡️ Assurance',    signe:-1 },
+  { id:'gym',          lib:'🏋️ Gym',          signe:-1 },
+  { id:'netflix',      lib:'🎬 Netflix',      signe:-1 },
+  { id:'fido',         lib:'📱 Fido',         signe:-1 },
+  { id:'metro',        lib:'🚇 Métro',        signe:-1 },
+  { id:'bixi',         lib:'🚲 Bixi',         signe:-1 },
+  { id:'sante',        lib:'🏥 Soin',         signe:-1 },
+  { id:'sante_remb',   lib:'🏥 Remb. santé',  signe:+1 },
+];
+let RATTRAP_CAT = 'nourriture';
+
+function getPeriodePrecedente() {
+  const [y,m] = periodeKey.split('-').map(Number);
+  return m === 1 ? `${y-1}-12` : `${y}-${String(m-1).padStart(2,'0')}`;
+}
+
+// Ajustement local du solde, stocké sur l'appareil seulement.
+function getRattrapAjust() {
+  try {
+    const o = JSON.parse(localStorage.getItem('rafael_rattrap_ajust') || '{}');
+    const ctx = (state && state.miniAppCtx) || null;
+    // Le contexte republié par l'app principale intègre déjà ces saisies : on repart de zéro.
+    if (!ctx || o.majCtx !== ctx.maj || o.periode !== periodeKey) return 0;
+    return o.montant || 0;
+  } catch(e) { return 0; }
+}
+
+function addRattrapAjust(delta) {
+  try {
+    const ctx = (state && state.miniAppCtx) || null;
+    localStorage.setItem('rafael_rattrap_ajust', JSON.stringify({
+      periode: periodeKey, majCtx: ctx ? ctx.maj : null,
+      montant: getRattrapAjust() + delta
+    }));
+  } catch(e) {}
+}
+
+function renderRattrapage() {
+  const prec = getPeriodePrecedente();
+  const elP = document.getElementById('rattrap-periode');
+  if (elP) elP.textContent = getPeriodeLabel(prec);
+
+  const elC = document.getElementById('rattrap-cats');
+  if (elC) elC.innerHTML = RATTRAP_CATS.map(c =>
+    `<span class="${c.id === RATTRAP_CAT ? 'on' : ''}" onclick="resetSessionTimer();choisirRattrapCat('${c.id}')">${c.lib}</span>`).join('');
+
+  const d = document.getElementById('rattrap-dt');
+  if (d && !d.value) {
+    // Par défaut : le 15 du mois de fin de la période précédente (dernier jour).
+    const [y,m] = prec.split('-').map(Number);
+    d.value = `${y}-${String(m).padStart(2,'0')}-15`;
+    d.min = (() => { const mm = m===1?12:m-1, yy = m===1?y-1:y;
+      return `${yy}-${String(mm).padStart(2,'0')}-16`; })();
+    d.max = `${y}-${String(m).padStart(2,'0')}-15`;
+  }
+
+  const a = getRattrapAjust();
+  const elA = document.getElementById('rattrap-avert');
+  if (elA) elA.innerHTML = a
+    ? `Solde ajusté de <b>${fmt(a)}</b> en attendant la prochaine ouverture de l'app principale.`
+    : '';
+}
+
+function choisirRattrapCat(id) { RATTRAP_CAT = id; renderRattrapage(); }
+
+async function ajouterRattrapage() {
+  const montant = parseFloat(document.getElementById('rattrap-amt').value);
+  const desc    = (document.getElementById('rattrap-dsc').value || '').trim();
+  const date    = document.getElementById('rattrap-dt').value;
+  if (!montant || montant <= 0) { alert('Entre un montant valide.'); return; }
+  if (!date) { alert('Choisis une date.'); return; }
+  const cible = getPeriodeKeyPourDate(date);
+  const prec  = getPeriodePrecedente();
+  if (cible !== prec) {
+    alert(`Cette date (${date}) n'est pas dans la période précédente.\n\n`
+      + `Attendu : ${getPeriodeLabel(prec)}`);
+    return;
+  }
+  const cat = RATTRAP_CATS.find(c => c.id === RATTRAP_CAT);
+  setSyncStatus('loading','⏳ Sauvegarde...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+
+    if (['nourriture','perso','exceptionnel','salaire','autre'].includes(cat.id)) {
+      if (!state.entrees) state.entrees = {};
+      state.entrees[cible] = _asArray(state.entrees[cible]);
+      state.entrees[cible].push({ id: uid(), type: cat.id, montant,
+        desc: desc || cat.lib.replace(/^\S+\s/,''), date, rembourse: false, rembDesc: '' });
+    } else if (cat.id === 'loyer') {
+      if (!state.loyerEntrees) state.loyerEntrees = {};
+      state.loyerEntrees[cible] = _asArray(state.loyerEntrees[cible]);
+      state.loyerEntrees[cible].push({ id: uid(), montant, desc: desc || 'Loyer', date });
+    } else if (cat.id === 'sante' || cat.id === 'sante_remb') {
+      if (!state.santeEntrees) state.santeEntrees = {};
+      state.santeEntrees[cible] = _asArray(state.santeEntrees[cible]);
+      state.santeEntrees[cible].push({ id: uid(), montant, desc: desc || 'Santé', date,
+        sens: cat.id === 'sante_remb' ? 'remboursement' : 'depense' });
+    } else {
+      if (!state.fixesEntrees) state.fixesEntrees = {};
+      if (!state.fixesEntrees[cat.id]) state.fixesEntrees[cat.id] = {};
+      state.fixesEntrees[cat.id][cible] = _asArray(state.fixesEntrees[cat.id][cible]);
+      state.fixesEntrees[cat.id][cible].push({ id: uid(), montant, desc: desc || cat.id, date });
+    }
+
+    // Le solde de début de la période EN COURS doit refléter cette saisie passée.
+    addRattrapAjust(cat.signe * montant);
+
+    document.getElementById('rattrap-amt').value = '';
+    document.getElementById('rattrap-dsc').value = '';
+    mettreAJourUI(); renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(e) { setSyncStatus('error','⚠️ Erreur sauvegarde'); }
 }
 
 // ---- DETTE PROPRIÉTAIRE ----
@@ -1914,6 +2066,8 @@ chargerDepuisFirebase();
     ><span style="font-size:15px;">🔒</span><br>D<br>I<br>V<br>E<br>R<br>S</div>
   <div class="drawer-tab sante" onclick="resetSessionTimer();ouvrirDrawer('sante')"
     ><span style="font-size:15px;">🏥</span><br>S<br>A<br>N<br>T<br>É</div>
+  <div class="drawer-tab rattrap" onclick="resetSessionTimer();ouvrirDrawer('rattrap')"
+    ><span style="font-size:15px;">⏮</span><br>O<br>U<br>B<br>L<br>I<br>S</div>
   <div class="drawer-tab dette" onclick="resetSessionTimer();ouvrirDrawer('dette')"
     ><span style="font-size:15px;">🏠</span><br>D<br>E<br>T<br>T<br>E<span class="tab-montant" id="tabDetteMontant"></span></div>
   <div class="drawer-tab epargne" onclick="resetSessionTimer();ouvrirDrawer('epargne')"
@@ -2291,6 +2445,40 @@ chargerDepuisFirebase();
         </div>
       </div>
     </div><!-- /grp-dette -->
+
+    <div class="drawer-group" id="grp-rattrap" style="display:none;">
+      <div style="background:rgba(154,95,192,.10);border:1px solid rgba(154,95,192,.4);
+           border-radius:12px;padding:11px 13px;margin-bottom:12px;font-size:12px;line-height:1.55;color:#d8c4ec;">
+        Pour <b>compléter la période précédente</b> quand le solde de la mini-app ne
+        correspond pas à celui de ta banque.<br>
+        Compare ton relevé ligne par ligne et ajoute ici ce qui manque : le solde se met
+        à jour tout de suite.
+      </div>
+
+      <div class="sect open" id="sect-rattrap">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-rattrap')">
+          <span class="t"><span class="chev">▶</span>⏮ <span id="rattrap-periode">Période précédente</span></span>
+        </div>
+        <div class="sect-body">
+          <div style="font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Catégorie</div>
+          <div class="rattrap-cat" id="rattrap-cats"></div>
+
+          <div class="f-row">
+            <input class="amt" type="number" id="rattrap-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="dsc" type="text" id="rattrap-dsc" placeholder="Description">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="rattrap-dt">
+            <button class="f-btn" style="background:#6b3d8a;" onclick="resetSessionTimer();ajouterRattrapage()">+ Ajouter</button>
+          </div>
+          <div id="rattrap-avert" style="font-size:11px;color:#e8c07a;margin-top:8px;line-height:1.5;"></div>
+
+          <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">
+            Ajouté depuis la mini-app</div>
+          <div id="rattrap-liste"></div>
+        </div>
+      </div>
+    </div><!-- /grp-rattrap -->
 
   </div>
 </div>

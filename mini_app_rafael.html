@@ -344,10 +344,15 @@
 
 <div class="sync-status loading" id="sync-status">⏳ Connexion à Firebase...</div>
 
-<div style="text-align:center;margin-bottom:10px;">
-  <span onclick="resetSessionTimer();basculerSolde()" style="display:inline-block;cursor:pointer;
+<div style="display:flex;justify-content:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+  <span onclick="resetSessionTimer();basculerSolde()" style="cursor:pointer;
     background:#0d2137;border:1px solid #1e4a7a;border-radius:20px;color:#7eb8f7;
     font-size:12px;font-weight:700;padding:7px 16px;">👁 Voir mon solde</span>
+  <!-- Placé juste à côté du solde : quand le chiffre ne colle pas au relevé bancaire,
+       le bouton pour corriger est directement sous la main (20/09/2026). -->
+  <span onclick="resetSessionTimer();ouvrirDrawer('rattrap')" style="cursor:pointer;
+    background:#231636;border:1px solid #6b3d8a;border-radius:20px;color:#c9a8e8;
+    font-size:12px;font-weight:700;padding:7px 16px;">⏮ Corriger un oubli</span>
 </div>
 <div id="solde-box" style="display:none;background:linear-gradient(135deg,#0b2a4a,#123a63);
      border:1px solid #378add;border-radius:14px;padding:14px;text-align:center;margin-bottom:12px;">
@@ -2066,8 +2071,6 @@ chargerDepuisFirebase();
     ><span style="font-size:15px;">🔒</span><br>D<br>I<br>V<br>E<br>R<br>S</div>
   <div class="drawer-tab sante" onclick="resetSessionTimer();ouvrirDrawer('sante')"
     ><span style="font-size:15px;">🏥</span><br>S<br>A<br>N<br>T<br>É</div>
-  <div class="drawer-tab rattrap" onclick="resetSessionTimer();ouvrirDrawer('rattrap')"
-    ><span style="font-size:15px;">⏮</span><br>O<br>U<br>B<br>L<br>I<br>S</div>
   <div class="drawer-tab dette" onclick="resetSessionTimer();ouvrirDrawer('dette')"
     ><span style="font-size:15px;">🏠</span><br>D<br>E<br>T<br>T<br>E<span class="tab-montant" id="tabDetteMontant"></span></div>
   <div class="drawer-tab epargne" onclick="resetSessionTimer();ouvrirDrawer('epargne')"

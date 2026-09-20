@@ -1717,6 +1717,23 @@ function renderRattrapage() {
   if (elA) elA.innerHTML = a
     ? `Solde ajusté de <b>${fmt(a)}</b> en attendant la prochaine ouverture de l'app principale.`
     : '';
+
+  // Solde en haut du tiroir, recalculé à chaque saisie.
+  const elS = document.getElementById('rattrap-solde');
+  const elD = document.getElementById('rattrap-delta');
+  if (elS) {
+    const v = getSoldeAujourdhui();
+    elS.textContent = (v === null) ? '—' : fmt(v);
+    if (elD) {
+      if (v === null) {
+        elD.innerHTML = '<span style="color:#6b8bb5;">Ouvre l\'app principale une fois pour activer le calcul.</span>';
+      } else if (a) {
+        elD.innerHTML = `<span style="color:#c9a8e8;">dont ${fmt(a)} de corrections ajoutées ici</span>`;
+      } else {
+        elD.innerHTML = '<span style="color:#6b8bb5;">à comparer avec ton relevé bancaire</span>';
+      }
+    }
+  }
 }
 
 function choisirRattrapCat(id) { RATTRAP_CAT = id; renderRattrapage(); }
@@ -2450,12 +2467,18 @@ chargerDepuisFirebase();
     </div><!-- /grp-dette -->
 
     <div class="drawer-group" id="grp-rattrap" style="display:none;">
+      <!-- Solde affiché EN HAUT du tiroir : Rafael enchaîne les saisies en le
+           surveillant, sans avoir à fermer le tiroir entre chaque ligne. -->
+      <div style="background:linear-gradient(135deg,#0b2a4a,#123a63);border:1px solid #378add;
+           border-radius:14px;padding:13px;text-align:center;margin-bottom:10px;position:sticky;top:0;z-index:5;">
+        <div style="font-size:10.5px;color:#7eb8f7;letter-spacing:.5px;">SOLDE DU COMPTE AUJOURD'HUI</div>
+        <div id="rattrap-solde" style="font-size:27px;font-weight:800;color:#a8d0f5;font-family:ui-monospace,monospace;">—</div>
+        <div id="rattrap-delta" style="font-size:11px;margin-top:2px;"></div>
+      </div>
       <div style="background:rgba(154,95,192,.10);border:1px solid rgba(154,95,192,.4);
-           border-radius:12px;padding:11px 13px;margin-bottom:12px;font-size:12px;line-height:1.55;color:#d8c4ec;">
-        Pour <b>compléter la période précédente</b> quand le solde de la mini-app ne
-        correspond pas à celui de ta banque.<br>
-        Compare ton relevé ligne par ligne et ajoute ici ce qui manque : le solde se met
-        à jour tout de suite.
+           border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;line-height:1.5;color:#d8c4ec;">
+        Compare ce chiffre avec le solde de ta banque. S'il manque des dépenses de la
+        période précédente, ajoute-les ci-dessous : le solde se corrige à chaque saisie.
       </div>
 
       <div class="sect open" id="sect-rattrap">

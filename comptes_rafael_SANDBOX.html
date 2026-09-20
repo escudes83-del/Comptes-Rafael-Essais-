@@ -2392,7 +2392,12 @@ function addSanteEntree(key, sens) {
   const descEl = document.getElementById('sante_' + suffixe + '_desc');
   const dateEl = document.getElementById('sante_' + suffixe + '_date');
   const montant = parseFloat(amtEl.value);
-  if (isNaN(montant) || montant <= 0) { alert('Entre un montant.'); amtEl.focus(); return; }
+// Montants NÉGATIFS autorisés depuis le 20/09/2026 : un achat rendu, une avance
+// reçue pour un achat précis ou une vente s'écrivent comme une ligne négative dans
+// la catégorie concernée. Chaque mouvement garde ainsi sa vraie date — ce qu'un
+// simple marquage « remboursé » ne permettait pas — et le budget se recrédite.
+// Seul 0 reste refusé (sauf frais divers, où il signifie « rien prélevé ce mois »).
+  if (isNaN(montant) || montant === 0) { alert('Entre un montant (négatif autorisé).'); amtEl.focus(); return; }
   const desc = (descEl.value || '').trim() || (sens === 'remboursement' ? 'Remboursement santé' : 'Soins');
   const date = dateEl.value || getDatePourPeriode(key);
   if (!state.santeEntrees) state.santeEntrees = {};
@@ -3113,7 +3118,7 @@ function saveEditFixeEntree(rowId, id, fixKey, periodeKey) {
   const amt = parseFloat(document.getElementById(rowId + '_amt')?.value);
   const desc = (document.getElementById(rowId + '_desc')?.value || '').trim();
   const date = document.getElementById(rowId + '_date')?.value;
-  if (!amt || amt <= 0) return;
+  if (isNaN(amt)) return;   // 0 et négatifs autorisés
   const list = state.fixesEntrees?.[fixKey]?.[periodeKey] || [];
   const entry = list.find(e => e.id === id);
   if (entry) { entry.montant = amt; entry.desc = desc || fixKey; entry.date = date; }
@@ -3126,7 +3131,7 @@ function addLoyerEntreeFixe(key) {
   const amt  = parseFloat(document.getElementById('loyer_fix_amt')?.value);
   const desc = (document.getElementById('loyer_fix_desc')?.value || '').trim() || 'Loyer';
   const date = document.getElementById('loyer_fix_date')?.value || key + '-16';
-  if (!amt || amt <= 0) { document.getElementById('loyer_fix_amt')?.focus(); return; }
+  if (isNaN(amt) || amt === 0) { document.getElementById('loyer_fix_amt')?.focus(); return; }
   if (!state.loyerEntrees) state.loyerEntrees = {};
   if (!state.loyerEntrees[key]) state.loyerEntrees[key] = [];
   state.loyerEntrees[key].push({ id: uid(), montant: amt, desc, date });
@@ -6533,7 +6538,7 @@ function addLoyerEntree(key) {
   const montant = parseFloat(amtEl?.value);
   const desc  = (descEl?.value || '').trim() || 'Loyer';
   const date  = dateEl?.value || getDateRef();
-  if (!montant || montant <= 0) { amtEl && amtEl.focus(); return; }
+  if (isNaN(montant) || montant === 0) { amtEl && amtEl.focus(); return; }
   if (!state.loyerEntrees) state.loyerEntrees = {};
   if (!state.loyerEntrees[key]) state.loyerEntrees[key] = [];
   state.loyerEntrees[key].push({ id: uid(), montant, desc, date });
@@ -6579,7 +6584,7 @@ function saveEditLoyer(rowId, id, key) {
   const date  = document.getElementById(rowId + '_date')?.value;
   const desc  = document.getElementById(rowId + '_desc')?.value.trim() || 'Loyer';
   const montant = parseFloat(document.getElementById(rowId + '_amt')?.value);
-  if (!montant || montant <= 0) return;
+  if (isNaN(montant) || montant === 0) return;
   const entries = (state.loyerEntrees || {})[key] || [];
   const e = entries.find(x => x.id === id);
   if (e) {
@@ -6612,7 +6617,7 @@ function qaAddDate(periode, type, idAmt, idDesc, idDate) {
   const montant = parseFloat(amtEl?.value);
   const desc = descEl?.value?.trim() || type;
   const date = dateEl?.value || getDateRef();
-  if (!montant || montant <= 0) { amtEl?.focus(); return; }
+  if (isNaN(montant) || montant === 0) { amtEl?.focus(); return; }
   if (!state.entrees[periode]) state.entrees[periode] = [];
   state.entrees[periode].push({id: uid(), type, montant, desc, date, rembourse: false});
   saveState();

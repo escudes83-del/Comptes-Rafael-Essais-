@@ -1720,9 +1720,11 @@ input, textarea, select { cursor: text; }
 // ============================================================
 
 // ============================================================
-//  🧪 BAC À SABLE — copie de travail isolée
-//  Clé localStorage DIFFÉRENTE du vrai fichier et synchro Firebase COUPÉE :
-//  rien de ce qui est fait ici ne peut atteindre les comptes réels de Rafael.
+//  🧪 BAC À SABLE — copie isolée du vrai fichier
+//  Clé localStorage DIFFÉRENTE et synchro Firebase COUPÉE : rien de ce qui est
+//  fait ici ne peut atteindre les comptes réels de Rafael.
+//  ⚠️ Les données vivent dans la clé comptes_rafael_SANDBOX, PAS dans ce fichier :
+//  le remplacer ne touche donc jamais aux saisies déjà faites.
 // ============================================================
 const SANDBOX = true;
 const STORAGE_KEY_REEL = 'comptes_rafael_v1';
@@ -1900,7 +1902,7 @@ function defaultState() {
   };
 }
 
-// Premier lancement : on recopie les données réelles une seule fois. Lecture seule.
+// Amorçage UNIQUEMENT si la clé est vide : les saisies existantes sont préservées.
 function amorcerSandbox() {
   if (!SANDBOX) return;
   if (localStorage.getItem(STORAGE_KEY)) return;
@@ -2176,9 +2178,13 @@ function calculerProjectionEpargne() {
   return resultats;
 }
 
+// Solde de l'épargne AUJOURD'HUI : les mouvements datés dans le futur ne sont pas
+// encore comptés, exactement comme pour le compte courant. Avant, un retrait programmé
+// au 2 octobre était déjà déduit dès sa saisie (constaté le 17/09/2026).
 function getSoldeEpargne() {
   const depart = (state.epargne && state.epargne.soldeDepart) || 0;
-  const mouvements = getEpargneMouvements();
+  const ref = getDateRef();
+  const mouvements = getEpargneMouvements().filter(m => !m.date || m.date <= ref);
   const depots = mouvements.filter(m => m.type === 'depot').reduce((s, m) => s + m.montant, 0);
   const retraits = mouvements.filter(m => m.type === 'retrait').reduce((s, m) => s + m.montant, 0);
   const interets = mouvements.filter(m => m.type === 'interet').reduce((s, m) => s + m.montant, 0);
@@ -2187,6 +2193,16 @@ function getSoldeEpargne() {
 
 // Solde épargne tel qu'il était (ou sera) à la fin de la période donnée — pour affichage
 // historiquement exact selon l'onglet sélectionné (pas toujours le total d'aujourd'hui).
+// Solde une fois TOUS les mouvements passés, y compris ceux programmés plus tard.
+function getSoldeEpargneTotal() {
+  const depart = (state.epargne && state.epargne.soldeDepart) || 0;
+  const mv = getEpargneMouvements();
+  return depart
+    + mv.filter(m => m.type === 'depot').reduce((s,m) => s + m.montant, 0)
+    - mv.filter(m => m.type === 'retrait').reduce((s,m) => s + m.montant, 0)
+    + mv.filter(m => m.type === 'interet').reduce((s,m) => s + m.montant, 0);
+}
+
 function getSoldeEpargneAPeriode(periodeKey) {
   const depart = (state.epargne && state.epargne.soldeDepart) || 0;
   const debut = getDateDebutPeriode(periodeKey);
@@ -2258,6 +2274,9 @@ function isAECPeriode(key) {
 
 function getMetroPeriode(key) {
   if (hasFixeEntrees('metro', key)) return sommeFixeEntrees('metro', key);
+  return getMetroAuto(key);
+}
+function getMetroAuto(key) {
   // Historique réel
   const hist = {
     '2026-01': 0,
@@ -2275,6 +2294,11 @@ function getMetroPeriode(key) {
 
 function getGymPeriode(key) {
   if (hasFixeEntrees('gym', key)) return sommeFixeEntrees('gym', key);
+  return getGymAuto(key);
+}
+// Montant AUTOMATIQUE, avant toute saisie manuelle. Extrait pour pouvoir le publier
+// vers la mini-app sans dupliquer les tables historiques (19/09/2026).
+function getGymAuto(key) {
   const hist = {
     '2026-01': 40.80,
     '2026-02': 40.80,
@@ -2290,11 +2314,15 @@ function getGymPeriode(key) {
 
 function getNetflixPeriode(key) {
   if (hasFixeEntrees('netflix', key)) return sommeFixeEntrees('netflix', key);
-  return state.fixes.netflix;
+  return getNetflixAuto(key);
 }
+function getNetflixAuto(key) { return state.fixes.netflix; }
 
 function getFidoPeriode(key) {
   if (hasFixeEntrees('fido', key)) return sommeFixeEntrees('fido', key);
+  return getFidoAuto(key);
+}
+function getFidoAuto(key) {
   const hist = {
     '2026-01': 0,
     '2026-02': 34.02,
@@ -2310,19 +2338,24 @@ function getFidoPeriode(key) {
 
 function getBixiPeriode(key) {
   if (hasFixeEntrees('bixi', key)) return sommeFixeEntrees('bixi', key);
+  return getBixiAuto(key);
+}
+function getBixiAuto(key) {
   if (key === '2026-06') return 27.59;
   return 0;
 }
 
 function getElectricitePeriode(key) {
   if (hasFixeEntrees('electricite', key)) return sommeFixeEntrees('electricite', key);
-  return state.fixes.electricite;
+  return getElectriciteAuto(key);
 }
+function getElectriciteAuto(key) { return state.fixes.electricite; }
 
 function getAssurancePeriode(key) {
   if (hasFixeEntrees('assurance', key)) return sommeFixeEntrees('assurance', key);
-  return state.fixes.assurance;
+  return getAssuranceAuto(key);
 }
+function getAssuranceAuto(key) { return state.fixes.assurance; }
 
 function getLogementPeriode(key) {
   // Somme des entrées loyer saisies pour la période
@@ -2544,6 +2577,49 @@ function getAutresPeriode(key) {
 }
 
 // Calcul solde fin de période
+// ============================================================
+//  CONTEXTE POUR LA MINI-APP (19/09/2026)
+//  La mini-app ne sait pas remonter la chaîne des soldes depuis janvier. Plutôt que
+//  d'y dupliquer tout le calcul — ce qui finirait par diverger — l'app principale
+//  publie ici les deux seules choses qu'elle seule sait établir :
+//    • le solde de DÉBUT de la période en cours (figé une fois la période entamée)
+//    • les montants AUTOMATIQUES des frais divers (avant toute saisie manuelle)
+//  La mini-app fait ensuite l'addition elle-même, en temps réel.
+// ============================================================
+function publierContexteMiniApp(soldes) {
+  try {
+    const key = PERIODES[getCurrentPeriodeIndex()]?.key;
+    if (!key || !soldes || !soldes[key]) return;
+    const ctx = {
+      key,
+      debut: soldes[key].debut,
+      joursDebit: { gym1: getJourDebit('gym1'), gym2: getJourDebit('gym2'),
+                    fido: getJourDebit('fido'), netflix: getJourDebit('netflix'),
+                    metro: getJourDebit('metro') },
+      fraisAuto: {
+        gym:         getGymAuto(key),
+        netflix:     getNetflixAuto(key),
+        fido:        getFidoAuto(key),
+        metro:       getMetroAuto(key),
+        bixi:        getBixiAuto(key),
+        electricite: getElectriciteAuto(key),
+        assurance:   getAssuranceAuto(key),
+      },
+      detteRestante: getDetteRestante(),
+      detteAnnulee: !!state.detteAnnulee,
+      maj: getDateRef()
+    };
+    const ancien = state.miniAppCtx;
+    // N'écrire que si quelque chose a changé, pour ne pas provoquer une sauvegarde
+    // Firebase inutile à chaque rendu.
+    if (JSON.stringify(ancien) !== JSON.stringify(ctx)) {
+      state.miniAppCtx = ctx;
+      return true;
+    }
+  } catch(e) { /* jamais bloquant */ }
+  return false;
+}
+
 function calculerSoldes() {
   let solde = state.soldeDepart;
   const soldes = {};
@@ -2555,7 +2631,13 @@ function calculerSoldes() {
     // Budget par défaut seulement pour les périodes FUTURES (pas en cours ni passées).
     // Comparaison directe par date (pas par index) — plus robuste.
     const debutPeriodeK = getDateDebutPeriode(k);
-    const aujourdhuiCS = new Date(getDateRef());
+    // ⚠️ new Date('2026-09-16') est interprété en UTC puis converti en heure locale :
+    // à Montréal il retombe au 15/09 à 20 h. Le 1er jour d'une période, celle-ci
+    // paraissait donc « future » et le budget complet (500 $) était projeté au lieu
+    // des dépenses réelles — d'où un écart de 500 $ avec la mini-app (16/09/2026).
+    // On construit la date en LOCAL, à minuit, comme getDateDebutPeriode().
+    const _ref = getDateRef().split('-').map(Number);
+    const aujourdhuiCS = new Date(_ref[0], _ref[1] - 1, _ref[2]);
     const isFuturePeriode = debutPeriodeK ? debutPeriodeK > aujourdhuiCS : (getPeriodeIndex(k) > getCurrentPeriodeIndex());
     const nourriture = getSommeEntreesAll(k, 'nourriture') ||
       (isFuturePeriode ? getBudgetNourriturePourPeriode(k) : 0);
@@ -2738,13 +2820,13 @@ function renderFixesBloc() {
 
   let html = '';
   html += renderLogementFixeCard(curKey, logementMontant, detteFixeMensuelle);
-  html += renderFixeEntreeCard('electricite', 'Électricité', '⚡', curKey, fixes.electricite, fixes.electricite === 0 ? 'non actif' : 'mensuel', null, false);
-  html += renderFixeEntreeCard('assurance', 'Assurance log.', '🛡️', curKey, fixes.assurance, fixes.assurance === 0 ? 'non actif' : 'mensuel', null, false);
+  html += renderFixeEntreeCard('electricite', 'Électricité', '⚡', curKey, fixes.electricite, noteFraisManuel('electricite', curKey, fixes.electricite, 'mensuel'), null, false);
+  html += renderFixeEntreeCard('assurance', 'Assurance log.', '🛡️', curKey, fixes.assurance, noteFraisManuel('assurance', curKey, fixes.assurance, 'mensuel'), null, false);
   html += renderGymCard(curKey, gym, nextGym, gymDebite1, gymDebite2);
   html += renderFixeEntreeCard('netflix', 'Netflix', '🎬', curKey, fixes.netflix, '~' + getJourDebit('netflix') + ' du mois', 'Prochain : ' + fmtDate(nextNetflix), netflixDebite);
   html += renderFixeEntreeCard('fido', 'Fido (tél)', '📱', curKey, fixes.fido, 'irrégulier', null, fidoDebite);
   html += renderFixeEntreeCard('metro', 'Métro', '🚇', curKey, metroMontant, isAEC ? 'tarif étudiant' : 'tarif normal', 'Prochain : ' + fmtDate(nextMetro), metroDebite);
-  html += renderFixeEntreeCard('bixi', 'Bixi', '🚲', curKey, fixes.bixi, fixes.bixi === 0 ? 'non actif' : '1 mois', null, false);
+  html += renderFixeEntreeCard('bixi', 'Bixi', '🚲', curKey, fixes.bixi, noteFraisManuel('bixi', curKey, fixes.bixi, '1 mois'), null, false);
   html += renderSanteCard(curKey);
 
   document.getElementById('fixesGrid').innerHTML = html;
@@ -2920,6 +3002,14 @@ function renderGymCard(curKey, gym, nextGym, gymDebite1, gymDebite2) {
       + '<button onclick="addFixeEntree(\'gym\',\'' + curKey + '\')" style="background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;padding:3px 10px;cursor:pointer;">+ Ajouter</button>'
     + '</div>'
   + '</div>';
+}
+
+// Libellé des frais SANS prélèvement automatique (électricité, assurance, Bixi).
+// « non actif » ne doit apparaître que si la carte est réellement vide : afficher
+// « non actif » au-dessus de 45,07 $ de dépenses saisies était trompeur (26/08/2026).
+function noteFraisManuel(fixKey, periodeKey, montantDefaut, noteSiActif) {
+  if (hasFixeEntrees(fixKey, periodeKey)) return 'saisie manuelle';
+  return montantDefaut === 0 ? 'non actif' : noteSiActif;
 }
 
 function renderFixeEntreeCard(fixKey, label, icon, curKey, defaultMontant, note, nextInfo, dejaDebite) {
@@ -3127,6 +3217,8 @@ function render() {
     renderVueMois(selectedMois);
   }
   ajusterPillsStickyTop();
+  // Publier le contexte pour la mini-app (n'écrit que si ça a changé)
+  if (publierContexteMiniApp(calculerSoldes())) saveState();
 }
 
 // Le bandeau du haut (app-header) a grandi avec le temps (beaucoup de cartes ajoutées) —
@@ -3421,10 +3513,30 @@ function renderRappels() {
     const soldeEpargneActuel = getSoldeEpargne();
     if (soldeProjetePeriode !== null && soldeProjetePeriode < 100 && soldeEpargneActuel > 0) {
       const montantSuggere = Math.min(Math.ceil(100 - soldeProjetePeriode), soldeEpargneActuel);
+      // Date du virement = 1er du 2e mois de la période, la même que celle pré-remplie par
+      // ouvrirSuggestionVirement(). L'afficher évite de croire qu'il faut virer TOUT DE SUITE :
+      // l'alerte apparaît dès le début de période, mais l'argent doit rester en épargne
+      // jusqu'à cette date (il y rapporte des intérêts, et rien n'est prélevé avant).
+      let libelleDateVirement = '';
+      const _dbSugg = getDateDebutPeriode(curKeySuggestion);
+      if (_dbSugg) {
+        const _dv = new Date(_dbSugg.getFullYear(), _dbSugg.getMonth() + 1, 1);
+        const _mois = ['janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'];
+        libelleDateVirement = '1er ' + _mois[_dv.getMonth()] + ' ' + _dv.getFullYear();
+        // Une fois la date passée, le virement n'est plus « à venir » : on le dit autrement.
+        if (getDateRef() >= `${_dv.getFullYear()}-${String(_dv.getMonth()+1).padStart(2,'0')}-01`) {
+          libelleDateVirement = '';
+        }
+      }
       elSuggestion.style.display = 'flex';
       elSuggestion.innerHTML = `<div onclick="ouvrirSuggestionVirement(${montantSuggere},'${curKeySuggestion}')" style="position:relative;cursor:pointer;background:rgba(247,162,79,.12);border:2px solid var(--accent2);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:44px;animation:pulse-dette 1.8s ease-in-out infinite;">
         <div style="font-size:10px;font-weight:800;color:var(--accent2);letter-spacing:.5px;">💡 SUGGESTION<span class="aide-btn mini" onclick="event.stopPropagation();ouvrirAide('alerteSuggestion')" title="Aide / Help">?</span></div>
         <div style="font-size:11px;font-weight:700;color:#fff;margin-top:2px;text-align:center;">Virer ${fmt(montantSuggere)} de l'épargne</div>
+        <div style="font-size:9.5px;color:var(--muted);margin-top:2px;text-align:center;line-height:1.3;">${
+          libelleDateVirement
+            ? `à faire le <b style="color:var(--accent2);">${libelleDateVirement}</b><br>l'argent reste en épargne d'ici là`
+            : `à faire maintenant`
+        }</div>
       </div>`;
     } else {
       elSuggestion.style.display = 'none';
@@ -3455,12 +3567,16 @@ function renderRappels() {
 
 
 
-  // Cadre ÉPARGNE — reflète le solde tel qu'il était à la fin de la période sélectionnée
-  // (pas toujours le total d'aujourd'hui), pour rester historiquement exact.
+  // Cadre ÉPARGNE — pour une période PASSÉE, le solde tel qu'il était à la fin de
+  // celle-ci (exactitude historique). Pour la période EN COURS, le solde d'aujourd'hui :
+  // afficher la fin de période y ferait apparaître des mouvements encore à venir,
+  // alors que tout le reste du bandeau parle du présent (corrigé le 17/09/2026).
   const elEpargne = document.getElementById('rappelEpargneBandeau');
   if (elEpargne) {
     const keyAfficheEpargne = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
-    const soldeEpargne = keyAfficheEpargne ? getSoldeEpargneAPeriode(keyAfficheEpargne) : getSoldeEpargne();
+    const _estPassee = keyAfficheEpargne
+      && getPeriodeIndex(keyAfficheEpargne) < getCurrentPeriodeIndex();
+    const soldeEpargne = _estPassee ? getSoldeEpargneAPeriode(keyAfficheEpargne) : getSoldeEpargne();
     elEpargne.style.display = 'flex';
     elEpargne.innerHTML = `<div onclick="ouvrirEpargne()" style="position:relative;cursor:pointer;background:rgba(62,207,142,.10);border:2px solid var(--green);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:130px;min-height:38px;">
       <div style="font-size:10px;font-weight:800;color:var(--green);letter-spacing:.5px;">💰 ÉPARGNE<span class="aide-btn mini" onclick="event.stopPropagation();ouvrirAide('epargne')" title="Aide / Help">?</span></div>
@@ -3519,6 +3635,9 @@ function acquitterAlerteBudget(alerteKey) {
 // ============================================================
 function ouvrirEpargne() {
   const soldeEpargne = getSoldeEpargne();
+  // Mouvements datés après aujourd'hui : signalés à part, pas encore dans le solde.
+  const _mvAVenir = getEpargneMouvements().filter(m => m.date && m.date > getDateRef())
+                      .sort((a,b) => a.date.localeCompare(b.date));
   const totalInterets = getTotalInteretsEpargne();
   const mouvements = getEpargneMouvements().slice().sort((a, b) => b.date.localeCompare(a.date));
 
@@ -3553,7 +3672,14 @@ function ouvrirEpargne() {
         <span onclick="document.getElementById('modalEpargne').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
       </div>
       <p style="font-size:22px;font-weight:800;color:var(--green);margin:10px 0 2px;">${fmt(soldeEpargne)}</p>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">Intérêts totaux perçus : ${fmt(totalInterets)}</p>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:${_mvAVenir.length ? '8' : '14'}px;">Intérêts totaux perçus : ${fmt(totalInterets)}</p>
+      ${_mvAVenir.length ? `<div style="background:rgba(247,197,72,.08);border:1px solid rgba(247,197,72,.3);
+        border-radius:8px;padding:9px 12px;margin-bottom:14px;font-size:12px;line-height:1.5;">
+        ⏳ <b>${_mvAVenir.length} mouvement${_mvAVenir.length>1?'s':''} programmé${_mvAVenir.length>1?'s':''}</b>
+        (pas encore compté${_mvAVenir.length>1?'s':''} ci-dessus) :<br>
+        ${_mvAVenir.map(m => `${m.date} — ${m.type === 'retrait' ? '−' : '+'}${fmt(m.montant)}${m.desc ? ' ' + m.desc : ''}`).join('<br>')}
+        <br><span style="color:var(--muted);">Solde après : <b style="color:var(--text);">${fmt(getSoldeEpargneTotal())}</b></span>
+      </div>` : ''}
       <div class="form-row">
         <label>Solde déjà présent avant le suivi (n'affecte jamais le compte courant)</label>
         <input type="number" id="epargneSoldeDepart" step="0.01" value="${(state.epargne && state.epargne.soldeDepart) || 0}" onchange="modifierSoldeDepartEpargne(this.value)">
@@ -4588,9 +4714,17 @@ function getDatePourPeriode(key) {
   return `${y}-${m}-16`;
 }
 
+// ⚠️ new Date().toISOString() convertit en UTC : après 20 h à Montréal, il renvoie
+// déjà la date de DEMAIN. Les champs de saisie proposaient donc le mauvais jour
+// (constaté le 16/09/2026 à 22 h 32). Cette fonction reste en heure locale.
+function aujourdhuiLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 function getDateRef() {
   // Retourne la date de référence sous forme YYYY-MM-DD
-  return state.dateRef || new Date().toISOString().slice(0,10);
+  return state.dateRef || aujourdhuiLocal();
 }
 
 function setDateRef(val) {
@@ -4619,7 +4753,7 @@ function setSoldeRef(val) {
 
 function updateDateRefUI() {
   const dateRef = getDateRef();
-  const today = new Date().toISOString().slice(0,10);
+  const today = aujourdhuiLocal();
   const isToday = !state.dateRef || state.dateRef === today;
   document.getElementById('inputDateRef').value = dateRef;
   document.getElementById('labelDateRef').textContent = isToday ? "= aujourd'hui" : `(${state.dateRef ? '' : 'auto – '}${dateRef})`;
@@ -4899,9 +5033,9 @@ const AIDES = {
     es: { titre: "🛡️ Seguro de hogar", aquoi: "Seguro de la vivienda. Se anota a mano, como la electricidad.", etapes: ["Escribe el importe, una descripción y la fecha.", "Pulsa <b>+ Ajouter</b>."], notes: "Aparece como « non actif » mientras el importe por defecto sea 0 en los Ajustes." }
   },
   fixe_bixi: {
-    fr: { titre: "🚲 Bixi", aquoi: "Abonnement vélo, saisi à la main quand il est actif.", etapes: ["Entre le montant et la date.", "Clique sur <b>+ Ajouter</b>."], notes: "Affiché « non actif » tant que le montant par défaut est à 0." },
-    en: { titre: "🚲 Bixi", aquoi: "Bike subscription, entered by hand when active.", etapes: ["Enter the amount and date.", "Click <b>+ Ajouter</b>."], notes: "Shown as \"non actif\" while the default amount is 0." },
-    es: { titre: "🚲 Bixi", aquoi: "Abono de bicicleta, se anota a mano cuando está activo.", etapes: ["Escribe el importe y la fecha.", "Pulsa <b>+ Ajouter</b>."], notes: "Aparece como « non actif » mientras el importe por defecto sea 0." }
+    fr: { titre: "🚲 Bixi", aquoi: "Abonnement vélo et locations de vélos électriques. Tout se saisit à la main : il n'y a aucun prélèvement automatique.", etapes: ["<b>Abonnement</b> : 27,59 $ par mois. Saisis-le avec sa date réelle.", "<b>Vélos électriques</b> : facturés en plus, montants variables. Saisis chaque location sur la même carte.", "Le montant de la carte est le <b>total</b> des deux."], notes: "La carte affiche <b>« non actif »</b> uniquement si rien n'a été saisi pour la période ; dès qu'une ligne existe, elle indique <b>« saisie manuelle »</b>. L'abonnement peut être arrêté (saisonnier) : dans ce cas, il n'y a simplement plus rien à saisir." },
+    en: { titre: "🚲 Bixi", aquoi: "Bike subscription and e-bike rentals. Everything is entered by hand: there is no automatic charge.", etapes: ["<b>Subscription</b>: $27.59 per month. Enter it with its real date.", "<b>E-bikes</b>: billed on top, variable amounts. Enter each rental on the same card.", "The card total is the <b>sum</b> of both."], notes: "The card shows <b>\"non actif\"</b> only when nothing has been entered for the period; as soon as a line exists it reads <b>\"saisie manuelle\"</b>. The subscription can be stopped (seasonal): then there is simply nothing left to enter." },
+    es: { titre: "🚲 Bixi", aquoi: "Abono de bicicleta y alquileres de bicis eléctricas. Todo se anota a mano: no hay ningún cobro automático.", etapes: ["<b>Abono</b>: 27,59 $ al mes. Anótalo con su fecha real.", "<b>Bicis eléctricas</b>: se facturan aparte, importes variables. Anota cada alquiler en la misma tarjeta.", "El importe de la tarjeta es el <b>total</b> de ambos."], notes: "La tarjeta pone <b>« non actif »</b> solo si no se ha anotado nada en el periodo; en cuanto hay una línea, indica <b>« saisie manuelle »</b>. El abono se puede cancelar (es estacional): entonces simplemente ya no hay nada que anotar." }
   },
   fraisFixes: {
     fr: { titre: "🔒 Frais divers", aquoi: "Les dépenses qui reviennent chaque période : métro, gym, Fido, Netflix. L'app les compte toute seule, sans aucune saisie, en se calant sur la vraie date de prélèvement de la banque.", etapes: ["<b>Gym — 40,80 $ en deux fois.</b> 20,40 $ le <b>23</b> du 1er mois de la période, puis 20,40 $ le <b>7</b> du 2e mois. La carte Gym affiche les deux prélèvements séparément, chacun avec son propre statut.", "<b>Fido — 33,96 $</b>, prélevé le <b>29</b> du 1er mois de la période.", "<b>Netflix — 21,46 $</b>, prélevé le <b>25</b> du mois.", "<b>Métro — 110 $</b> (62,50 $ en statut AEC étudiant), prélevé le <b>1er du mois suivant</b> le début de la période.", "Le badge <b>✅ Débité</b> ou <b>⏳ Pas encore débité</b> sur chaque carte dit si la date est passée."], notes: "<b>Pourquoi ces dates comptent :</b> le solde « réel jour J » n'ajoute un frais que si sa date de prélèvement est déjà passée. C'est ce qui permet au solde affiché de correspondre au vrai solde bancaire, et pas à une moyenne théorique. Un frais prévu plus tard dans la période n'est donc pas encore déduit — il apparaît en revanche dans « prévi fin pér. »." },
@@ -5907,6 +6041,7 @@ function saveDettePaiementCourant() {
   _pendingExtra = { curKey, montant };
 }
 
+// Retourne l'id de l'extra créé, pour pouvoir y relier la ligne de dépense (16/09/2026).
 function appliquerExtra(curKey, montant) {
   if (!state.detteExtras) state.detteExtras = {};
   if (!state.detteExtras[curKey]) state.detteExtras[curKey] = [];
@@ -5919,6 +6054,7 @@ function appliquerExtra(curKey, montant) {
 
   const el = document.getElementById('dette_perm_input');
   if (el) el.value = '';
+  return extraId;
 }
 
 function confirmerAnnulExtra(periodeKey, extraId, montantExtra) {
@@ -6026,14 +6162,17 @@ function confirmerExtra() {
       state.epargne.mouvements.push(mouvement);
     }
 
-    appliquerExtra(curKey, montant);
+    const _extraId = appliquerExtra(curKey, montant);
     // Toujours ajouter dans le loyer peu importe le budget choisi
     if (!state.loyerEntrees) state.loyerEntrees = {};
     if (!state.loyerEntrees[curKey]) state.loyerEntrees[curKey] = [];
     const descLoyer = choix === 'compte' ? 'Remb. dette (compte)'
                     : choix === 'epargne' ? 'Remb. dette (épargne)'
                     : 'Remb. dette (' + choix + ')';
-    state.loyerEntrees[curKey].push({ id: uid(), montant, desc: descLoyer, date: dateSortie });
+    // _detteExtraId relie cette dépense au remboursement de dette : les deux ne doivent
+    // jamais diverger. Sans ce lien, modifier ou supprimer l'un laissait l'autre en place
+    // (constaté le 16/09/2026 : dette réduite de 700 $, dépense restée à 1 100 $).
+    state.loyerEntrees[curKey].push({ id: uid(), montant, desc: descLoyer, date: dateSortie, _detteExtraId: _extraId });
     saveState();
     render();
     renderDette();
@@ -6407,6 +6546,16 @@ function addLoyerEntree(key) {
 
 function deleteLoyerEntree(key, id) {
   if (!state.loyerEntrees || !state.loyerEntrees[key]) return;
+  const ligne = state.loyerEntrees[key].find(e => e.id === id);
+  // Ligne liée à un remboursement de dette : supprimer les DEUX, sinon la dette
+  // resterait baissée alors que l'argent revient sur le compte.
+  if (ligne && ligne._detteExtraId) {
+    if (!confirm(`Cette ligne est un remboursement de dette de ${fmt(ligne.montant)}.\n\n`
+      + `La dette remontera d'autant.\n\nContinuer ?`)) return;
+    Object.keys(state.detteExtras || {}).forEach(k => {
+      state.detteExtras[k] = (state.detteExtras[k] || []).filter(x => x.id !== ligne._detteExtraId);
+    });
+  }
   state.loyerEntrees[key] = state.loyerEntrees[key].filter(e => e.id !== id);
   saveState();
   render();
@@ -6433,7 +6582,16 @@ function saveEditLoyer(rowId, id, key) {
   if (!montant || montant <= 0) return;
   const entries = (state.loyerEntrees || {})[key] || [];
   const e = entries.find(x => x.id === id);
-  if (e) { e.montant = montant; e.desc = desc; e.date = date; }
+  if (e) {
+    // Ligne liée à un remboursement de dette : le montant de l'extra suit, sinon
+    // la dette et la dépense divergent.
+    if (e._detteExtraId && montant !== e.montant) {
+      Object.keys(state.detteExtras || {}).forEach(k => {
+        (state.detteExtras[k] || []).forEach(x => { if (x.id === e._detteExtraId) x.montant = montant; });
+      });
+    }
+    e.montant = montant; e.desc = desc; e.date = date;
+  }
   saveState();
   render();
   renderVueMois(key);
@@ -6684,7 +6842,7 @@ function openModal(id) {
     makeDraggable(modal);
   }
   // Pré-remplir date
-  const today = new Date().toISOString().slice(0,10);
+  const today = aujourdhuiLocal();
   const dateFields = {
     modalDepense: 'depDate',
     modalAutreSource: 'asDate',
@@ -6849,7 +7007,10 @@ function saveSimFixe() {
   // Toujours ancré sur la période RÉELLE actuelle (aujourd'hui), jamais sur l'onglet affiché à l'écran —
   // sinon un changement peut s'appliquer à partir d'un mois différent selon la navigation en cours.
   const keyEffectif = PERIODES[getCurrentPeriodeIndex()]?.key;
-  const dateEffet = (getDateDebutPeriode(keyEffectif) || new Date(getDateRef())).toISOString().slice(0,10);
+  const _dEff = getDateDebutPeriode(keyEffectif);
+  const dateEffet = _dEff
+    ? `${_dEff.getFullYear()}-${String(_dEff.getMonth()+1).padStart(2,'0')}-${String(_dEff.getDate()).padStart(2,'0')}`
+    : getDateRef();
   for (const k of keys) {
     const el = document.getElementById('fix_' + k);
     if (!el) continue;
@@ -6971,14 +7132,14 @@ function confirmSwitchAEC() {
   // Pré-remplir date au prochain 1er du mois
   const today = new Date();
   const nextMonth = new Date(today.getFullYear(), today.getMonth()+1, 1);
-  document.getElementById('aecDate').value = nextMonth.toISOString().slice(0,10);
+  document.getElementById('aecDate').value = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth()+1).padStart(2,'0')}-${String(nextMonth.getDate()).padStart(2,'0')}`;
   openModal('modalConfirmAEC');
 }
 
 function activateAEC() {
   const dateStr = document.getElementById('aecDate').value;
   if (!dateStr) return;
-  const periode = dateToPeriode(new Date(dateStr).toISOString().slice(0,10));
+  const periode = dateToPeriode(dateStr);
   state.mode = 'aec';
   state.aecDepuis = periode;
   saveState();
@@ -7046,7 +7207,7 @@ if (state.mode === 'aec') {
 }
 
 // Init date de référence
-const _today = new Date().toISOString().slice(0,10);
+const _today = aujourdhuiLocal();
 document.getElementById('inputDateRef').value = state.dateRef || _today;
 if (state.soldeRef !== null && state.soldeRef !== undefined) {
   document.getElementById('inputSoldeRef').value = state.soldeRef;

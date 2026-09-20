@@ -1712,6 +1712,18 @@ function renderRattrapage() {
     d.max = `${y}-${String(m).padStart(2,'0')}-15`;
   }
 
+  const cat = RATTRAP_CATS.find(c => c.id === RATTRAP_CAT);
+  const elT = document.getElementById('rattrap-total');
+  if (elT && cat) {
+    const { total, n } = getTotalCategoriePeriode(cat.id, prec);
+    const auto = (!n && ['gym','netflix','fido','metro','bixi'].includes(cat.id));
+    elT.innerHTML = `<b style="color:#cfe6ff;">${cat.lib}</b> sur ${getPeriodeLabel(prec)}<br>`
+      + (auto
+          ? `<span style="color:#6b8bb5;">aucune saisie — montant automatique appliqué</span>`
+          : `<b style="color:${cat.signe > 0 ? '#5dcaa5' : '#e8a87a'};font-size:15px;">${fmt(total)}</b>`
+            + `<span style="color:#6b8bb5;"> · ${n} saisie${n > 1 ? 's' : ''}</span>`);
+  }
+
   const a = getRattrapAjust();
   const elA = document.getElementById('rattrap-avert');
   if (elA) elA.innerHTML = a
@@ -1737,6 +1749,24 @@ function renderRattrapage() {
 }
 
 function choisirRattrapCat(id) { RATTRAP_CAT = id; renderRattrapage(); }
+
+// Total d'une catégorie sur une période donnée — les 4 stockages sont différents.
+function getTotalCategoriePeriode(catId, per) {
+  if (!state) return { total: 0, n: 0 };
+  let liste = [];
+  if (['nourriture','perso','exceptionnel','salaire','autre'].includes(catId)) {
+    liste = _asArray((state.entrees || {})[per]).filter(e => e.type === catId);
+  } else if (catId === 'loyer') {
+    liste = _asArray((state.loyerEntrees || {})[per]);
+  } else if (catId === 'sante' || catId === 'sante_remb') {
+    const voulu = catId === 'sante_remb' ? 'remboursement' : 'depense';
+    liste = _asArray((state.santeEntrees || {})[per])
+              .filter(e => (e.sens === 'remboursement' ? 'remboursement' : 'depense') === voulu);
+  } else {
+    liste = _asArray(((state.fixesEntrees || {})[catId] || {})[per]);
+  }
+  return { total: liste.reduce((a,e) => a + e.montant, 0), n: liste.length };
+}
 
 async function ajouterRattrapage() {
   const montant = parseFloat(document.getElementById('rattrap-amt').value);
@@ -2488,6 +2518,11 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div style="font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">Catégorie</div>
           <div class="rattrap-cat" id="rattrap-cats"></div>
+          <!-- Total de la catégorie sélectionnée sur la période précédente : permet de
+               comparer poste par poste avec le relevé, pas seulement le solde global. -->
+          <div id="rattrap-total" style="background:#0d1a2d;border:1px solid #24405f;
+               border-radius:10px;padding:9px 12px;font-size:12px;line-height:1.5;
+               color:#9fb4cc;margin-bottom:4px;"></div>
 
           <div class="f-row">
             <input class="amt" type="number" id="rattrap-amt" placeholder="Montant $" step="0.01" min="0">

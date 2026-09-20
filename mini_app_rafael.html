@@ -448,7 +448,7 @@
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal">
     <div class="modal-title" id="modal-title">🛒 Ajouter nourriture</div>
-    <input type="number" class="montant-input" id="montant-input" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+    <input type="number" class="montant-input" id="montant-input" placeholder="0.00" step="0.01" inputmode="decimal">
     <input type="text" class="desc-input" id="desc-input" placeholder="Description (ex: IGA, Pharmaprix...)">
     <div style="font-size:12px;color:#7a8ca0;margin-bottom:4px;">Date de la dépense</div>
     <input type="date" class="desc-input" id="date-input">
@@ -462,7 +462,7 @@
 <div class="modal-overlay" id="edit-modal-overlay">
   <div class="modal">
     <div class="modal-title" id="edit-modal-title">✏️ Modifier</div>
-    <input type="number" class="montant-input" id="edit-montant-input" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+    <input type="number" class="montant-input" id="edit-montant-input" placeholder="0.00" step="0.01" inputmode="decimal">
     <input type="text" class="desc-input" id="edit-desc-input" placeholder="Description">
     <div style="font-size:12px;color:#7a8ca0;margin-bottom:4px;">Date de la dépense</div>
     <input type="date" class="desc-input" id="edit-date-input">
@@ -944,7 +944,9 @@ async function validerEdition() {
   const montant = parseFloat(document.getElementById('edit-montant-input').value);
   const desc = document.getElementById('edit-desc-input').value.trim();
   const nouvelleDate = document.getElementById('edit-date-input').value;
-  if (!montant || montant<=0) { alert('Entre un montant valide.'); return; }
+  // Montants NÉGATIFS autorisés (20/09/2026) : achat rendu, avance reçue pour un achat
+  // précis, vente… s'écrivent comme une ligne négative dans la catégorie concernée.
+  if (isNaN(montant) || montant === 0) { alert('Entre un montant (négatif autorisé).'); return; }
   if (!nouvelleDate) { alert('Entre une date valide.'); return; }
   setSyncStatus('loading','⏳ Sauvegarde...');
   try {
@@ -1264,7 +1266,10 @@ async function ajouterLogement(kind) {
   const desc    = (document.getElementById(kind + '-dsc').value || '').trim();
   const date    = document.getElementById(kind + '-dt').value || getDateAujourdhui();
   // 0 est accepté : c'est ainsi qu'on dit « pas de prélèvement ce mois-ci ».
-  if (isNaN(montant) || montant < 0) { alert('Entre un montant (0 est accepté).'); return; }
+  // Montants NÉGATIFS autorisés (20/09/2026) : un achat rendu, une avance reçue pour
+  // un achat précis ou une vente s'écrivent comme une ligne négative dans la catégorie.
+  // Chaque mouvement garde sa vraie date, et le budget se recrédite.
+  if (isNaN(montant)) { alert('Entre un montant.'); return; }
   if (!state) { alert('Données non chargées.'); return; }
   const cible = getPeriodeKeyPourDate(date);
   const entry = { id: uid(), montant, desc: desc || LOGEMENT_META[kind].defaut, date };
@@ -1331,7 +1336,7 @@ async function ajouterFraisDivers(cle) {
   const montant = parseFloat(document.getElementById(cle + '-amt').value);
   const desc    = (document.getElementById(cle + '-dsc').value || '').trim();
   const date    = document.getElementById(cle + '-dt').value || getDateAujourdhui();
-  if (isNaN(montant) || montant < 0) { alert('Entre un montant (0 est accepté : « rien prélevé ce mois-ci »).'); return; }
+  if (isNaN(montant)) { alert('Entre un montant (0 = rien prélevé ce mois-ci, négatif autorisé).'); return; }
   if (!state) { alert('Données non chargées.'); return; }
   const cible = getPeriodeKeyPourDate(date);
   const entry = { id: uid(), montant, desc: desc || DIVERS_META[cle].nom, date };
@@ -1375,7 +1380,10 @@ async function ajouterSante(sens, libelleDefaut) {
   const montant = parseFloat(document.getElementById('sante-amt').value);
   const desc    = (document.getElementById('sante-dsc').value || '').trim();
   const date    = document.getElementById('sante-dt').value || getDateAujourdhui();
-  if (!montant || montant <= 0) { alert('Entre un montant valide.'); return; }
+  // Montants NÉGATIFS autorisés (20/09/2026) : un achat rendu, une avance reçue pour
+  // un achat précis ou une vente s'écrivent comme une ligne négative dans la catégorie.
+  // Chaque mouvement garde sa vraie date, et le budget se recrédite.
+  if (isNaN(montant) || montant === 0) { alert('Entre un montant (négatif autorisé).'); return; }
   if (!state) { alert('Données non chargées.'); return; }
   const cible = getPeriodeKeyPourDate(date);
   const entry = { id: uid(), montant,
@@ -1772,7 +1780,10 @@ async function ajouterRattrapage() {
   const montant = parseFloat(document.getElementById('rattrap-amt').value);
   const desc    = (document.getElementById('rattrap-dsc').value || '').trim();
   const date    = document.getElementById('rattrap-dt').value;
-  if (!montant || montant <= 0) { alert('Entre un montant valide.'); return; }
+  // Montants NÉGATIFS autorisés (20/09/2026) : un achat rendu, une avance reçue pour
+  // un achat précis ou une vente s'écrivent comme une ligne négative dans la catégorie.
+  // Chaque mouvement garde sa vraie date, et le budget se recrédite.
+  if (isNaN(montant) || montant === 0) { alert('Entre un montant (négatif autorisé).'); return; }
   if (!date) { alert('Choisis une date.'); return; }
   const cible = getPeriodeKeyPourDate(date);
   const prec  = getPeriodePrecedente();
@@ -1975,7 +1986,10 @@ async function ajouterCredit(type) {
   const montant = parseFloat(document.getElementById(type + '-amt').value);
   const desc    = (document.getElementById(type + '-dsc').value || '').trim();
   const date    = document.getElementById(type + '-dt').value || getDateAujourdhui();
-  if (!montant || montant <= 0) { alert('Entre un montant valide.'); return; }
+  // Montants NÉGATIFS autorisés (20/09/2026) : un achat rendu, une avance reçue pour
+  // un achat précis ou une vente s'écrivent comme une ligne négative dans la catégorie.
+  // Chaque mouvement garde sa vraie date, et le budget se recrédite.
+  if (isNaN(montant) || montant === 0) { alert('Entre un montant (négatif autorisé).'); return; }
   if (!state) { alert('Données non chargées.'); return; }
   const cible = getPeriodeKeyPourDate(date);
   const entry = { id: uid(), type, montant,
@@ -2019,7 +2033,9 @@ async function validerSaisie() {
   const montant = parseFloat(document.getElementById('montant-input').value);
   const desc = document.getElementById('desc-input').value.trim();
   const dateChoisie = document.getElementById('date-input').value || getDateAujourdhui();
-  if (!montant || montant<=0) { alert('Entre un montant valide.'); return; }
+  // Montants NÉGATIFS autorisés (20/09/2026) : achat rendu, avance reçue pour un achat
+  // précis, vente… s'écrivent comme une ligne négative dans la catégorie concernée.
+  if (isNaN(montant) || montant === 0) { alert('Entre un montant (négatif autorisé).'); return; }
   if (!state) { alert('Données non chargées.'); return; }
   const type = categorieActive==='nourr'?'nourriture':categorieActive==='perso'?'perso':'exceptionnel';
   const descFinale = desc||(type==='nourriture'?'Nourriture':type==='perso'?'Perso':'Exceptionnel');
@@ -2142,7 +2158,7 @@ chargerDepuisFirebase();
           Les dépôts de paie de la clinique.
         </div>
         <div class="f-row">
-          <input class="amt" type="number" id="salaire-amt" placeholder="Montant $" step="0.01" min="0">
+          <input class="amt" type="number" id="salaire-amt" placeholder="Montant $" step="0.01">
           <input class="dsc" type="text" id="salaire-dsc" placeholder="ex : Paie du 3 sept">
         </div>
         <div class="f-row">
@@ -2165,7 +2181,7 @@ chargerDepuisFirebase();
           et qui n'est pas la paie.
         </div>
         <div class="f-row">
-          <input class="amt" type="number" id="autre-amt" placeholder="Montant $" step="0.01" min="0">
+          <input class="amt" type="number" id="autre-amt" placeholder="Montant $" step="0.01">
           <input class="dsc" type="text" id="autre-dsc" placeholder="ex : Interac reçu">
         </div>
         <div class="f-row">
@@ -2191,7 +2207,7 @@ chargerDepuisFirebase();
             Le loyer payé au propriétaire. Mets la <b>date réelle</b> du relevé bancaire.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="loyer-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="amt" type="number" id="loyer-amt" placeholder="Montant $" step="0.01">
             <input class="dsc" type="text" id="loyer-dsc" placeholder="ex : Loyer octobre">
           </div>
           <div class="f-row">
@@ -2214,7 +2230,7 @@ chargerDepuisFirebase();
             saisis rien, le montant n'est pas compté.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="electricite-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="amt" type="number" id="electricite-amt" placeholder="Montant $" step="0.01">
             <input class="dsc" type="text" id="electricite-dsc" placeholder="ex : Hydro sept">
           </div>
           <div class="f-row">
@@ -2236,7 +2252,7 @@ chargerDepuisFirebase();
             Assurance habitation. Se saisit à la main, comme l'électricité.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="assurance-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="amt" type="number" id="assurance-amt" placeholder="Montant $" step="0.01">
             <input class="dsc" type="text" id="assurance-dsc" placeholder="ex : Assurance">
           </div>
           <div class="f-row">
@@ -2265,7 +2281,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="gym-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="gym-amt" placeholder="Montant (0 ok)" step="0.01" min="0">
+            <input class="amt" type="number" id="gym-amt" placeholder="Montant (0 ok)" step="0.01">
             <input class="dsc" type="text" id="gym-dsc" placeholder="ex : Gym 23/09">
           </div>
           <div class="f-row">
@@ -2284,7 +2300,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="netflix-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="netflix-amt" placeholder="Montant (0 ok)" step="0.01" min="0">
+            <input class="amt" type="number" id="netflix-amt" placeholder="Montant (0 ok)" step="0.01">
             <input class="dsc" type="text" id="netflix-dsc" placeholder="ex : Netflix">
           </div>
           <div class="f-row">
@@ -2303,7 +2319,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="fido-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="fido-amt" placeholder="Montant (0 ok)" step="0.01" min="0">
+            <input class="amt" type="number" id="fido-amt" placeholder="Montant (0 ok)" step="0.01">
             <input class="dsc" type="text" id="fido-dsc" placeholder="ex : Fido sept">
           </div>
           <div class="f-row">
@@ -2322,7 +2338,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="metro-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="metro-amt" placeholder="Montant (0 ok)" step="0.01" min="0">
+            <input class="amt" type="number" id="metro-amt" placeholder="Montant (0 ok)" step="0.01">
             <input class="dsc" type="text" id="metro-dsc" placeholder="ex : Passe STM">
           </div>
           <div class="f-row">
@@ -2341,7 +2357,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="bixi-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="bixi-amt" placeholder="Montant (0 ok)" step="0.01" min="0">
+            <input class="amt" type="number" id="bixi-amt" placeholder="Montant (0 ok)" step="0.01">
             <input class="dsc" type="text" id="bixi-dsc" placeholder="ex : Abonnement / vélo élec">
           </div>
           <div class="f-row">
@@ -2367,7 +2383,7 @@ chargerDepuisFirebase();
             tu l'as payé, le remboursement rentre le jour où tu l'as reçu.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="sante-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="amt" type="number" id="sante-amt" placeholder="Montant $" step="0.01">
             <input class="dsc" type="text" id="sante-dsc" placeholder="ex : dentiste">
           </div>
           <div class="f-row">
@@ -2402,7 +2418,7 @@ chargerDepuisFirebase();
             Un « Autre revenu » est créé automatiquement dans les comptes.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="ep-ret-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="amt" type="number" id="ep-ret-amt" placeholder="Montant $" step="0.01">
             <input class="dsc" type="text" id="ep-ret-dsc" placeholder="ex : virement">
           </div>
           <div class="f-row">
@@ -2422,7 +2438,7 @@ chargerDepuisFirebase();
             Une dépense « Exceptionnel » est créée automatiquement.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="ep-dep-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="amt" type="number" id="ep-dep-amt" placeholder="Montant $" step="0.01">
             <input class="dsc" type="text" id="ep-dep-dsc" placeholder="ex : mise de côté">
           </div>
           <div class="f-row">
@@ -2442,7 +2458,7 @@ chargerDepuisFirebase();
             C'est le seul mouvement qui ne crée aucune écriture.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="ep-int-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="amt" type="number" id="ep-int-amt" placeholder="Montant $" step="0.01">
             <input class="dt" type="date" id="ep-int-dt">
             <button class="f-btn vert2" onclick="resetSessionTimer();ajouterEpargne('interet')">+ Créditer</button>
           </div>
@@ -2479,7 +2495,7 @@ chargerDepuisFirebase();
             Mets la <b>date réelle</b> à laquelle l'argent sort du compte.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="dette-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="amt" type="number" id="dette-amt" placeholder="Montant $" step="0.01">
             <input class="dt" type="date" id="dette-dt">
           </div>
           <div class="f-row">
@@ -2525,7 +2541,7 @@ chargerDepuisFirebase();
                color:#9fb4cc;margin-bottom:4px;"></div>
 
           <div class="f-row">
-            <input class="amt" type="number" id="rattrap-amt" placeholder="Montant $" step="0.01" min="0">
+            <input class="amt" type="number" id="rattrap-amt" placeholder="Montant $" step="0.01">
             <input class="dsc" type="text" id="rattrap-dsc" placeholder="Description">
           </div>
           <div class="f-row">

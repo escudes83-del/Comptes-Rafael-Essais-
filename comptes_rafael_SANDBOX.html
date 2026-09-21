@@ -645,6 +645,13 @@
     padding: 5px 7px;
   }
   .vm-form input:focus { outline: none; border-color: var(--accent); }
+  .btn-signe {
+    background: #2a1f3d; border: 1px solid #6b3d8a; border-radius: 5px;
+    color: #d8b8f0; font-size: 11px; font-weight: 700; padding: 0 9px;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+  .btn-signe:hover { background: #3a2a52; }
+  .btn-signe.neg { background: #6b3d8a; color: #fff; }
   .vm-form-btn {
     padding: 5px 12px;
     border: none;
@@ -1180,20 +1187,16 @@ input, textarea, select { cursor: text; }
 
 </head>
 <body>
-<!-- 🧪 Bandeau BAC À SABLE -->
 <div id="sandboxBanner" style="position:sticky;top:0;z-index:10000;background:repeating-linear-gradient(
      45deg,#5a3a00,#5a3a00 12px,#6b4500 12px,#6b4500 24px);border-bottom:2px solid #f7c548;
      padding:7px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
   <span style="font-size:13px;font-weight:800;color:#ffd97a;letter-spacing:.4px;">🧪 BAC À SABLE</span>
   <span style="font-size:11px;color:#e8d5a8;flex:1;min-width:200px;">
-    Données de test — <b>aucune synchronisation</b>. Les comptes réels de Rafael ne sont pas touchés.
-  </span>
+    Données de test — <b>aucune synchronisation</b>. Les comptes réels de Rafael ne sont pas touchés.</span>
   <button onclick="rechargerDepuisReel()" style="background:transparent;border:1px solid #f7c548;
-    border-radius:5px;color:#ffd97a;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;">
-    ↻ Recharger les vraies données</button>
+    border-radius:5px;color:#ffd97a;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;">↻ Recharger les vraies données</button>
   <button onclick="viderSandbox()" style="background:transparent;border:1px solid rgba(255,217,122,.4);
-    border-radius:5px;color:#e8d5a8;font-size:11px;padding:4px 10px;cursor:pointer;">
-    🧹 Vider</button>
+    border-radius:5px;color:#e8d5a8;font-size:11px;padding:4px 10px;cursor:pointer;">🧹 Vider</button>
 </div>
 
 
@@ -1719,13 +1722,8 @@ input, textarea, select { cursor: text; }
 // CONSTANTES & DONNÉES INITIALES
 // ============================================================
 
-// ============================================================
-//  🧪 BAC À SABLE — copie isolée du vrai fichier
-//  Clé localStorage DIFFÉRENTE et synchro Firebase COUPÉE : rien de ce qui est
-//  fait ici ne peut atteindre les comptes réels de Rafael.
-//  ⚠️ Les données vivent dans la clé comptes_rafael_SANDBOX, PAS dans ce fichier :
-//  le remplacer ne touche donc jamais aux saisies déjà faites.
-// ============================================================
+// 🧪 BAC À SABLE — clé isolée, Firebase coupé. Les données vivent dans la clé
+// comptes_rafael_SANDBOX, pas dans ce fichier : le remplacer ne les touche pas.
 const SANDBOX = true;
 const STORAGE_KEY_REEL = 'comptes_rafael_v1';
 const STORAGE_KEY = 'comptes_rafael_SANDBOX';
@@ -1902,28 +1900,22 @@ function defaultState() {
   };
 }
 
-// Amorçage UNIQUEMENT si la clé est vide : les saisies existantes sont préservées.
 function amorcerSandbox() {
   if (!SANDBOX) return;
-  if (localStorage.getItem(STORAGE_KEY)) return;
+  if (localStorage.getItem(STORAGE_KEY)) return;   // saisies existantes preservees
   const reel = localStorage.getItem(STORAGE_KEY_REEL);
   if (reel) localStorage.setItem(STORAGE_KEY, reel);
 }
-
 function rechargerDepuisReel() {
   const reel = localStorage.getItem(STORAGE_KEY_REEL);
-  if (!reel) { alert("Aucune donnée réelle trouvée sur cet appareil.\n\nOuvre d'abord le vrai fichier une fois dans ce navigateur."); return; }
-  if (!confirm("Recharger les données réelles ?\n\n⚠️ Tout ce que tu as saisi dans le bac à sable sera REMPLACÉ.\nLes comptes réels de Rafael ne sont pas touchés.")) return;
-  localStorage.setItem(STORAGE_KEY, reel);
-  location.reload();
+  if (!reel) { alert("Aucune donnée réelle trouvée sur cet appareil."); return; }
+  if (!confirm("Recharger les données réelles ?\n\n⚠️ Tout ce que tu as saisi dans le bac à sable sera REMPLACÉ.")) return;
+  localStorage.setItem(STORAGE_KEY, reel); location.reload();
 }
-
 function viderSandbox() {
-  if (!confirm("Vider complètement le bac à sable ?\n\nIl repartira des données réelles au prochain chargement.")) return;
-  localStorage.removeItem(STORAGE_KEY);
-  location.reload();
+  if (!confirm("Vider complètement le bac à sable ?")) return;
+  localStorage.removeItem(STORAGE_KEY); location.reload();
 }
-
 function loadState() {
   amorcerSandbox();
   try {
@@ -5737,8 +5729,17 @@ function renderVueMois(key) {
   const budgetPerso = getBudgetPersoPourPeriode(key);
 
   function formBlock(idAmt, idDesc, idDate, btnLabel, btnCls, type) {
+    // Bouton « + Remboursement » sur les DÉPENSES uniquement, comme dans la mini-app :
+    // même geste sur les trois applications (21/09/2026). Pour un revenu, la somme
+    // saisie est déjà une entrée d'argent, le bouton n'aurait pas de sens.
+    const _estDepense = ['nourriture','perso','exceptionnel'].includes(type);
+    const _btnSigne = _estDepense
+      ? `<button type="button" class="btn-signe" data-signe-for="${idAmt}"
+           onclick="inverserSigne('${idAmt}',this)"
+           title="Remboursement : l'argent revient sur le compte">+ Remb.</button>`
+      : '';
     return `<div class="vm-form">
-      <input type="number" id="${idAmt}" placeholder="Montant $" step="0.01" min="0">
+      <input type="number" id="${idAmt}" placeholder="Montant $" step="0.01">${_btnSigne}
       <input type="text" id="${idDesc}" placeholder="Description">
       <input type="date" id="${idDate}" value="${dr}">
       <button class="vm-form-btn ${btnCls}" onclick="qaAddDate('${key}','${type}','${idAmt}','${idDesc}','${idDate}')">${btnLabel}</button>
@@ -6612,11 +6613,50 @@ function toggleDetail(id, btn) {
   btn.textContent = open ? '▼ Masquer détail (' + count + ')' : '▶ Voir détail (' + count + ')';
 }
 
+// ---- Bouton « + Remboursement » (identique à la mini-app) ----
+// Un remboursement s'enregistre comme un montant NÉGATIF dans la catégorie de la dépense.
+function inverserSigne(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const v = parseFloat(el.value);
+  if (isNaN(v) || v === 0) {
+    el.dataset.negatif = el.dataset.negatif === '1' ? '' : '1';
+  } else {
+    el.value = (-v).toFixed(2);
+    el.dataset.negatif = (-v) < 0 ? '1' : '';
+  }
+  majBoutonSigne(id, btn);
+  el.focus();
+}
+function majBoutonSigne(id, btn) {
+  const el = document.getElementById(id);
+  const b = btn || document.querySelector(`[data-signe-for="${id}"]`);
+  if (!el || !b) return;
+  const v = parseFloat(el.value);
+  const neg = (!isNaN(v) && v < 0) || (el.dataset.negatif === '1' && (isNaN(v) || v === 0));
+  b.classList.toggle('neg', neg);
+  const base = b.dataset.libelle || b.textContent.replace(/^✓\s*/, '');
+  if (!b.dataset.libelle) b.dataset.libelle = base;
+  b.textContent = neg ? '✓ ' + base : base;
+}
+function lireMontantSigne(id) {
+  const el = document.getElementById(id);
+  if (!el) return NaN;
+  let v = parseFloat(el.value);
+  if (!isNaN(v) && v > 0 && el.dataset.negatif === '1') v = -v;
+  return v;
+}
+function reinitSigne(id) {
+  const el = document.getElementById(id);
+  if (el) el.dataset.negatif = '';
+  majBoutonSigne(id);
+}
+
 function qaAddDate(periode, type, idAmt, idDesc, idDate) {
   const amtEl = document.getElementById(idAmt);
   const descEl = document.getElementById(idDesc);
   const dateEl = idDate ? document.getElementById(idDate) : null;
-  const montant = parseFloat(amtEl?.value);
+  const montant = lireMontantSigne(idAmt);
   const desc = descEl?.value?.trim() || type;
   const date = dateEl?.value || getDateRef();
   if (isNaN(montant) || montant === 0) { amtEl?.focus(); return; }
@@ -6624,6 +6664,7 @@ function qaAddDate(periode, type, idAmt, idDesc, idDate) {
   state.entrees[periode].push({id: uid(), type, montant, desc, date, rembourse: false});
   saveState();
   if (amtEl) amtEl.value = '';
+  reinitSigne(idAmt);   // un « + » actif ne doit pas se reporter sur la saisie suivante
   if (descEl) descEl.value = '';
   render();
   renderVueMois(periode);

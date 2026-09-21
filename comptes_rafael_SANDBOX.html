@@ -2854,7 +2854,7 @@ function renderLogementFixeCard(curKey, logementMontant, detteFixeMensuelle) {
         '<div class="vm-tx" id="' + rowId + '_view" style="font-size:11px;padding:2px 0;">' +
           '<span class="vm-tx-date" style="font-size:10px;">' + e.date.slice(8) + '/' + e.date.slice(5,7) + '</span>' +
           '<span class="vm-tx-desc" style="font-size:11px;">' + e.desc + '</span>' +
-          '<span class="vm-tx-amt" style="font-size:11px;">' + fmt(e.montant) + '</span>' +
+          (e.montant < 0 ? '<span class="vm-tx-amt" style="font-size:11px;color:var(--green);">+' + fmt(-e.montant) + '</span>' : '<span class="vm-tx-amt" style="font-size:11px;">' + fmt(e.montant) + '</span>') +
           '<button class="vm-tx-edit" data-loyer="' + dataJ + '" onclick="startEditLoyerBtn(this)" title="Corriger" style="background:none;border:none;cursor:pointer;color:#f9a825;font-size:12px;padding:0 2px;"><i class="ti ti-pencil"></i></button>' +
           '<button class="vm-tx-del" onclick="deleteLoyerEntree(\'' + curKey + '\',\'' + e.id + '\')" title="Supprimer" style="font-size:11px;">✕</button>' +
         '</div>' +
@@ -2978,7 +2978,7 @@ function renderGymCard(curKey, gym, nextGym, gymDebite1, gymDebite2) {
         + '<div class="vm-tx" id="' + rowId + '_view" style="font-size:11px;padding:2px 0;">'
           + '<span class="vm-tx-date" style="font-size:10px;">' + e.date.slice(8) + '/' + e.date.slice(5,7) + '</span>'
           + '<span class="vm-tx-desc" style="font-size:11px;flex:1;">' + e.desc + '</span>'
-          + '<span class="vm-tx-amt" style="font-size:11px;">' + fmt(e.montant) + '</span>'
+          + (e.montant < 0 ? '<span class="vm-tx-amt" style="font-size:11px;color:var(--green);">+' + fmt(-e.montant) + '</span>' : '<span class="vm-tx-amt" style="font-size:11px;">' + fmt(e.montant) + '</span>')
           + '<button onclick="startEditFixeEntree(\'' + rowId + '\',\'' + e.id + '\',\'' + fixKey + '\',\'' + curKey + '\')" title="Modifier" style="background:none;border:none;cursor:pointer;color:#f9a825;font-size:12px;padding:0 2px;"><i class="ti ti-pencil"></i></button>'
           + '<button class="vm-tx-del" onclick="deleteFixeEntree(\'' + fixKey + '\',\'' + curKey + '\',\'' + e.id + '\')" title="Supprimer" style="font-size:11px;">✕</button>'
         + '</div>'
@@ -3045,7 +3045,7 @@ function renderFixeEntreeCard(fixKey, label, icon, curKey, defaultMontant, note,
         + '<div class="vm-tx" id="' + rowId + '_view" style="font-size:11px;padding:2px 0;">'
           + '<span class="vm-tx-date" style="font-size:10px;">' + e.date.slice(8) + '/' + e.date.slice(5,7) + '</span>'
           + '<span class="vm-tx-desc" style="font-size:11px;flex:1;">' + e.desc + '</span>'
-          + '<span class="vm-tx-amt" style="font-size:11px;">' + fmt(e.montant) + '</span>'
+          + (e.montant < 0 ? '<span class="vm-tx-amt" style="font-size:11px;color:var(--green);">+' + fmt(-e.montant) + '</span>' : '<span class="vm-tx-amt" style="font-size:11px;">' + fmt(e.montant) + '</span>')
           + '<button onclick="startEditFixeEntree(\'' + rowId + '\',\'' + e.id + '\',\'' + fixKey + '\',\'' + curKey + '\')" title="Modifier" style="background:none;border:none;cursor:pointer;color:#f9a825;font-size:12px;padding:0 2px;"><i class="ti ti-pencil"></i></button>'
           + '<button class="vm-tx-del" onclick="deleteFixeEntree(\'' + fixKey + '\',\'' + curKey + '\',\'' + e.id + '\')" title="Supprimer" style="font-size:11px;">✕</button>'
         + '</div>'
@@ -5620,7 +5620,7 @@ function renderDetailMois(key) {
         <span class="tx-date">${e.date}</span>
         ${tag}
         <span class="tx-desc">${e.desc}${e.rembourse ? '<span class="tx-remb">✓ remboursé</span>' : ''}</span>
-        <span class="tx-amt ${isRev ? 'pos' : 'neg'}">${isRev ? '+' : '-'}${fmt(e.montant)}</span>
+        <span class="tx-amt ${(isRev !== (e.montant < 0)) ? 'pos' : 'neg'}">${(isRev !== (e.montant < 0)) ? '+' : '-'}${fmt(Math.abs(e.montant))}</span>
         <div class="tx-actions">
           <button class="btn-icon" onclick="deleteEntree('${key}','${e.id}')" title="Supprimer">🗑</button>
           ${!e.rembourse && ['perso','exceptionnel','autre_fixe'].includes(e.type) ? `<button class="btn-icon btn-sm" onclick="marquerRembourse('${key}','${e.id}')" title="Marquer remboursé">↩️</button>` : ''}
@@ -6516,7 +6516,9 @@ function renderLoyerList(entries, key) {
       '<div class="vm-tx" id="' + rowId + '_view">' +
         '<span class="vm-tx-date">' + e.date.slice(5) + '</span>' +
         '<span class="vm-tx-desc">' + e.desc + '</span>' +
-        '<span class="vm-tx-amt">-' + fmt(e.montant) + '</span>' +
+        (e.montant < 0
+          ? '<span class="vm-tx-amt" style="color:var(--green);">+' + fmt(-e.montant) + '</span>'
+          : '<span class="vm-tx-amt">-' + fmt(e.montant) + '</span>') +
         '<button class="vm-tx-edit" data-loyer="' + dataJ + '" onclick="startEditLoyerBtn(this)" title="Corriger" style="background:none;border:none;cursor:pointer;color:#f9a825;font-size:13px;padding:0 3px;"><i class="ti ti-pencil"></i></button>' +
         '<button class="vm-tx-del" onclick="deleteLoyerEntree(\'' + key + '\',\'' + e.id + '\')" title="Supprimer">✕</button>' +
       '</div>' +
@@ -6661,7 +6663,10 @@ function qaAddDate(periode, type, idAmt, idDesc, idDate) {
 function vmTxRow(e, periode, isRevenu) {
   const remb = e.rembourse ? '<span class="vm-tx-remb">✓ remb.</span>' : '';
   const amtColor = isRevenu ? 'color:var(--green)' : (e.rembourse ? 'color:var(--muted);text-decoration:line-through' : '');
-  const sign = isRevenu ? '+' : '-';
+  // Montant négatif = remboursement/retour (autorisé depuis le 20/09/2026). On
+  // l'affiche « + » en vert, sinon « - » + fmt(-25) donnait « --25 » (21/09/2026).
+  const _neg = e.montant < 0;
+  const sign = _neg ? (isRevenu ? '-' : '+') : (isRevenu ? '+' : '-');
   const rowId = 'txrow_' + e.id;
   // Stocker les données en JSON dans un data-attribute pour éviter les problèmes d'apostrophes
   const dataJson = JSON.stringify({rowId, id: e.id, periode, montant: e.montant, date: e.date}).replace(/"/g, '&quot;');
@@ -6669,7 +6674,7 @@ function vmTxRow(e, periode, isRevenu) {
     <div class="vm-tx" id="${rowId}_view">
       <span class="vm-tx-date">${e.date.slice(5)}</span>
       <span class="vm-tx-desc">${e.desc}${remb}</span>
-      <span class="vm-tx-amt" style="${amtColor}">${sign}${fmt(e.montant)}</span>
+      <span class="vm-tx-amt" style="${_neg && !isRevenu ? 'color:var(--green)' : amtColor}">${sign}${fmt(Math.abs(e.montant))}</span>
       <button class="vm-tx-edit" data-info="${dataJson}" onclick="startEditTxBtn(this)" title="Corriger" style="background:none;border:none;cursor:pointer;color:#f9a825;font-size:13px;padding:0 3px;"><i class="ti ti-pencil"></i></button>
       <button class="vm-tx-del" onclick="deleteEntreeVM(&quot;${periode}&quot;,&quot;${e.id}&quot;)" title="Supprimer">✕</button>
     </div>

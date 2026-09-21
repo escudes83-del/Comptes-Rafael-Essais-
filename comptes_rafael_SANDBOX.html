@@ -3687,13 +3687,21 @@ function renderRappels() {
   const elEpargne = document.getElementById('rappelEpargneBandeau');
   if (elEpargne) {
     const keyAfficheEpargne = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
-    const _estPassee = keyAfficheEpargne
-      && getPeriodeIndex(keyAfficheEpargne) < getCurrentPeriodeIndex();
-    const soldeEpargne = _estPassee ? getSoldeEpargneAPeriode(keyAfficheEpargne) : getSoldeEpargne();
+    const _idxAff = keyAfficheEpargne ? getPeriodeIndex(keyAfficheEpargne) : getCurrentPeriodeIndex();
+    const _curIdx = getCurrentPeriodeIndex();
+    const _estPassee = _idxAff < _curIdx;
+    // Période FUTURE sélectionnée : on affiche l'épargne PROJETÉE, celle de la ligne prévi,
+    // qui baisse au fil des renflouements. Sinon la bulle restait figée au solde du jour
+    // quand on avançait dans les périodes (22/09/2026).
+    const _estFuture = _idxAff > _curIdx && PREV_EPARGNE[keyAfficheEpargne] !== undefined;
+    const soldeEpargne = _estFuture ? PREV_EPARGNE[keyAfficheEpargne]
+                       : _estPassee ? getSoldeEpargneAPeriode(keyAfficheEpargne)
+                       : getSoldeEpargne();
     elEpargne.style.display = 'flex';
     elEpargne.innerHTML = `<div onclick="ouvrirEpargne()" style="position:relative;cursor:pointer;background:rgba(62,207,142,.10);border:2px solid var(--green);border-radius:10px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:130px;min-height:38px;">
       <div style="font-size:10px;font-weight:800;color:var(--green);letter-spacing:.5px;">💰 ÉPARGNE<span class="aide-btn mini" onclick="event.stopPropagation();ouvrirAide('epargne')" title="Aide / Help">?</span></div>
-      <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:1px;">${fmt(soldeEpargne)}</div>
+      <div style="font-size:12px;font-weight:700;color:${soldeEpargne <= 0 ? 'var(--red)' : 'var(--text)'};margin-top:1px;">${fmt(soldeEpargne)}</div>
+      ${_estFuture ? '<div style="font-size:9px;color:var(--muted);margin-top:1px;">projeté</div>' : ''}
     </div>`;
   }
 

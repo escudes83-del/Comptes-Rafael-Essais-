@@ -825,7 +825,9 @@ function mettreAJourUI() {
       container.innerHTML = saisies.map(e => `<div class="hist-item">
         <span class="hist-desc">${icone} ${e.desc||e.type}<span class="hist-date">${fmtDateCourt(e.date)}</span></span>
         <span class="hist-right">
-          <span class="hist-montant ${cls}">-${fmt(e.montant)}</span>
+          <span class="hist-montant ${cls}" ${e.montant < 0 ? 'style="color:#5dcaa5;"' : ''}>${
+            e.montant < 0 ? '+' + fmt(-e.montant) : '-' + fmt(e.montant)
+          }</span>
           <span class="hist-actions">
             <button class="hist-btn" onclick="resetSessionTimer();ouvrirModalEdition('${e.id}')">✏️</button>
             <button class="hist-btn" onclick="resetSessionTimer();supprimerEntree('${e.id}')">🗑️</button>
@@ -1145,7 +1147,7 @@ function renderDrawer() {
       <div class="lg-item">
         <span class="d">${(e.date||'').slice(8)}/${(e.date||'').slice(5,7)}</span>
         <span class="l">${meta.icone} ${e.desc || meta.defaut}</span>
-        <span class="m" style="color:#e0a060;">−${fmt(e.montant)}</span>
+        <span class="m" style="color:${e.montant < 0 ? '#5dcaa5' : '#e0a060'};">${e.montant < 0 ? '+' + fmt(-e.montant) : '−' + fmt(e.montant)}</span>
         <button class="lg-del" onclick="resetSessionTimer();supprimerLogement('${kind}','${e.id}')" title="Supprimer">🗑️</button>
       </div>`).join('');
   });
@@ -1178,7 +1180,7 @@ function renderDrawer() {
       <div class="lg-item">
         <span class="d">${(e.date||'').slice(8)}/${(e.date||'').slice(5,7)}</span>
         <span class="l">${meta.icone} ${e.desc || meta.nom}</span>
-        <span class="m" style="color:#c4abf0;">−${fmt(e.montant)}</span>
+        <span class="m" style="color:${e.montant < 0 ? '#5dcaa5' : '#c4abf0'};">${e.montant < 0 ? '+' + fmt(-e.montant) : '−' + fmt(e.montant)}</span>
         <button class="lg-del" onclick="resetSessionTimer();supprimerFraisDivers('${cle}','${e.id}')" title="Supprimer">🗑️</button>
       </div>`).join('');
   });

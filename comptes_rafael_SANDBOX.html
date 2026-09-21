@@ -645,6 +645,8 @@
     padding: 5px 7px;
   }
   .vm-form input:focus { outline: none; border-color: var(--accent); }
+  .pill-ep { font-size: 9px; color: var(--green); opacity: .85; margin-top: 1px; white-space: nowrap; }
+  .pill-ep.vide { color: var(--red); font-weight: 700; opacity: 1; }
   .btn-signe {
     background: #2a1f3d; border: 1px solid #6b3d8a; border-radius: 5px;
     color: #d8b8f0; font-size: 11px; font-weight: 700; padding: 0 9px;
@@ -1284,7 +1286,7 @@ input, textarea, select { cursor: text; }
         <div class="tl-pills" id="pills2026row0" style="gap:0;flex-wrap:nowrap;"></div>
         <div id="pills2026reelLabel" class="tl-label green"><b>réel</b>jour J</div>
         <div class="tl-pills" id="pills2026row1" style="gap:0;flex-wrap:nowrap;"></div>
-        <div id="pills2026previLabel" class="tl-label blue"><b>prévi.</b>fin pér.</div>
+        <div id="pills2026previLabel" class="tl-label blue" style="cursor:pointer;" onclick="ouvrirProjection()" title="📈 Modifier la projection"><b>prévi. 📈</b>fin pér.</div>
         <div class="tl-pills" id="pills2026row2" style="gap:0;flex-wrap:nowrap;"></div>
         <div id="pills2026dispoLabel" class="tl-label" style="border-color:rgba(62,207,142,.3);background:rgba(62,207,142,.05);"><b style="color:var(--green);">dispo</b><span style="font-size:8px;color:var(--muted);">ce mois</span></div>
         <div class="tl-pills" id="pills2026row3" style="gap:0;flex-wrap:nowrap;"></div>
@@ -1888,6 +1890,8 @@ function defaultState() {
     fixesEntrees: {}, // { 'gym': { '2026-07': [{id,montant,desc,date}] }, ... }
     fixes: {...DEFAUT_FIXES},
     joursDebit: {...DEFAUT_JOURS_DEBIT},
+    scenarioSalaire: null,   // {montant, debut, duree} — projection de salaire
+    projRef: null,           // {loyerMontant, loyerDebut, bixiMontant, bixiFin}
     budgetHistorique: { nourriture: [], perso: [] }, // [{date:'YYYY-MM-DD', montant}] — permet au budget de changer sans affecter les périodes déjà passées
     rappelsPersonnalises: [], // [{id, desc, montant, dateEcheance, categorie, paye}]
     epargne: { soldeDepart: 0, mouvements: [] }, // [{id, type:'depot'|'retrait'|'interet', montant, date, desc}]
@@ -2615,6 +2619,118 @@ function publierContexteMiniApp(soldes) {
     }
   } catch(e) { /* jamais bloquant */ }
   return false;
+}
+
+function ouvrirProjection(keyClique) {
+  const r  = getProjRef();
+  const sc = state.scenarioSalaire || {};
+  const dPaie = getDerniereDatePaie();
+  let ov = document.getElementById('modalProjection');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'modalProjection';
+    ov.className = 'modal-overlay';
+    document.body.appendChild(ov);
+  }
+  const lbl = 'font-size:11px;color:var(--muted);display:block;margin-bottom:3px;';
+  const inp = 'width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:6px 8px;font-size:13px;';
+  ov.innerHTML = `
+    <div class="modal" style="max-width:480px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">📈 Trajectoire de référence</h2>
+        <span onclick="document.getElementById('modalProjection').classList.remove('open')"
+          style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
+      </div>
+      <p style="font-size:12px;color:var(--muted);line-height:1.55;margin:10px 0 12px;">
+        La ligne <b>prévi.</b> part de la <b>dernière paie</b> et déroule le mois standard :
+        frais fixes + budgets + loyer + Bixi. Chaque mois, l'épargne renfloue le compte à
+        100 $ (💰 sous chaque bulle). Compare-la à la ligne <b>réel</b> pour voir si la
+        dépense suit le standard.
+      </p>
+      <div style="background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.3);
+           border-radius:8px;padding:9px 12px;margin-bottom:14px;font-size:12px;">
+        📍 Point de départ : dernière paie du <b>${dPaie || '—'}</b>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:6px;">🏦 PRÉPAIEMENT DU LOYER <span style="font-weight:400;color:var(--muted);">(depuis l'épargne)</span></div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <div style="flex:1;"><label style="${lbl}">Montant $</label>
+          <input type="number" id="refPrepM" step="0.01" value="${r.prepayMontant}" style="${inp}"></div>
+        <div style="flex:1;"><label style="${lbl}">Le</label>
+          <input type="date" id="refPrepD" value="${r.prepayDate}" style="${inp}"></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:6px;">🏠 LOYER MENSUEL <span style="font-weight:400;color:var(--muted);">(0 tant que le loyer est prépayé)</span></div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <div style="flex:1;"><label style="${lbl}">Montant $</label>
+          <input type="number" id="refLoyerM" step="0.01" value="${r.loyerMontant}" style="${inp}"></div>
+        <div style="flex:1;"><label style="${lbl}">À partir du</label>
+          <input type="date" id="refLoyerD" value="${r.loyerDebut}" style="${inp}"></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:6px;">🚲 BIXI</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <div style="flex:1;"><label style="${lbl}">Montant $ / mois</label>
+          <input type="number" id="refBixiM" step="0.01" value="${r.bixiMontant}" style="${inp}"></div>
+        <div style="flex:1;"><label style="${lbl}">Jusqu'au</label>
+          <input type="date" id="refBixiD" value="${r.bixiFin}" style="${inp}"></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:6px;">💰 SALAIRE PRÉVU <span style="font-weight:400;color:var(--muted);">(facultatif)</span></div>
+      <div style="display:flex;gap:8px;margin-bottom:6px;">
+        <div style="flex:1;"><label style="${lbl}">$ / mois</label>
+          <input type="number" id="projMontant" step="0.01" value="${sc.montant || ''}" placeholder="aucun" style="${inp}"></div>
+        <div style="flex:1;"><label style="${lbl}">À partir du</label>
+          <input type="date" id="projDebut" value="${sc.debut || ''}" style="${inp}"></div>
+        <div style="flex:.7;"><label style="${lbl}">Mois</label>
+          <input type="number" id="projDuree" step="1" min="1" value="${sc.duree || ''}" style="${inp}"></div>
+      </div>
+      <div style="font-size:10.5px;color:var(--muted);line-height:1.5;margin-bottom:14px;">
+        Payé toutes les deux semaines ? Additionne deux paies pour le mois. Laisse vide si aucun salaire n'est prévu.
+      </div>
+
+      <div class="form-actions" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="reinitProjection()">↺ Valeurs par défaut</button>
+        <button class="btn" style="background:var(--green);color:#000;" onclick="appliquerScenario()">Appliquer</button>
+      </div>
+    </div>`;
+  ov.classList.add('open');
+  const inner = ov.querySelector('.modal');
+  if (inner && typeof makeDraggable === 'function') makeDraggable(inner);
+}
+
+function appliquerScenario() {
+  const lm = parseFloat(document.getElementById('refLoyerM').value);
+  const ld = document.getElementById('refLoyerD').value;
+  const bm = parseFloat(document.getElementById('refBixiM').value);
+  const bd = document.getElementById('refBixiD').value;
+  const pm = parseFloat(document.getElementById('refPrepM').value);
+  const pd = document.getElementById('refPrepD').value;
+  state.projRef = {
+    loyerMontant:  isNaN(lm) ? PROJ_DEFAUT.loyerMontant : lm,
+    loyerDebut:    ld || PROJ_DEFAUT.loyerDebut,
+    bixiMontant:   isNaN(bm) ? PROJ_DEFAUT.bixiMontant : bm,
+    bixiFin:       bd || PROJ_DEFAUT.bixiFin,
+    prepayMontant: isNaN(pm) ? PROJ_DEFAUT.prepayMontant : pm,
+    prepayDate:    pd || PROJ_DEFAUT.prepayDate,
+  };
+  const montant = parseFloat(document.getElementById('projMontant').value);
+  const debut   = document.getElementById('projDebut').value;
+  const duree   = parseInt(document.getElementById('projDuree').value, 10);
+  // Salaire facultatif : on ne le garde que si les trois champs sont remplis.
+  state.scenarioSalaire = (montant > 0 && debut && duree > 0) ? { montant, debut, duree } : null;
+  saveState();
+  document.getElementById('modalProjection').classList.remove('open');
+  render();
+}
+
+function reinitProjection() {
+  if (!confirm('Revenir aux valeurs par défaut ?\n\nPrépaiement 6 080 $ depuis l\'épargne le 02/10/2026, plus de loyer mensuel, Bixi 27,59 $ jusqu\'au 28/09/2026, aucun salaire.')) return;
+  state.projRef = null;
+  state.scenarioSalaire = null;
+  saveState();
+  document.getElementById('modalProjection').classList.remove('open');
+  render();
 }
 
 function calculerSoldes() {
@@ -4434,13 +4550,17 @@ function makePillTop(p, isCur, isFuture, isSelected, hasAlert) {
   </div>`;
 }
 
-function makePill(p, soldeVal, isCur, isFuture, isSelected, hasAlert) {
+function makePill(p, soldeVal, isCur, isFuture, isSelected, hasAlert, estPrevi) {
   const col = pillColor(soldeVal, isFuture);
   const cls = pillClass(soldeVal, isCur, isFuture, isSelected);
   const badge = hasAlert ? '<div class="pill-badge">!</div>' : '';
-  return `<div class="${cls}" onclick="selectMois('${p.key}')">
+  // Bulle de projection : le clic ouvre le scénario de salaire.
+  const onClick = estPrevi ? `ouvrirProjection('${p.key}')` : `selectMois('${p.key}')`;
+  const ep = estPrevi ? PREV_EPARGNE[p.key] : undefined;
+  return `<div class="${cls}" onclick="${onClick}"${estPrevi ? ' title="📈 Modifier la projection"' : ''}>
     ${badge}
     <div class="pill-solde ${col}">${fmt(soldeVal)}</div>
+    ${ep !== undefined ? `<div class="pill-ep${ep <= 0 ? ' vide' : ''}">💰 ${fmtShort(ep)}</div>` : ''}
   </div>`;
 }
 
@@ -4456,37 +4576,118 @@ function fmtShort(n) {
 // PRÉVISIONNEL — scénario fixe indépendant des vraies saisies
 // (pas de salaire tant que Rafael n'a pas le droit de travailler)
 // ============================================================
-const PREV_LOYER = 300;   // 200$ loyer + 100$ remb. dette (taux standard mensuel)
-// Le prévisionnel compte le VRAI salaire réellement reçu (peu importe le montant, ça reflète
-// ce qui a vraiment été gagné) — mais jamais les "autres revenus" (aides ponctuelles de PY,
-// Pilou, etc.), pour montrer ce qu'aurait été le solde sans cette aide.
-const PREV_PERIODE_DEPART = '2026-07';
+// ============================================================
+//  PROJECTION (ligne « prévi fin pér. ») — refondue le 21/09/2026
+//
+//  Avant : un scénario FIGÉ au 1er juillet 2026, avec 300 $ de loyer constants et
+//  aucun revenu futur. Trois mois plus tard, il ne décrivait plus rien (loyer
+//  prépayé, épargne, dépenses exceptionnelles ignorés).
+//
+//  Maintenant :
+//   • périodes passées et période EN COURS → le solde RÉEL, jamais une hypothèse ;
+//   • périodes FUTURES → projection qui part du solde réel de fin de période en
+//     cours, et applique un scénario de salaire saisi en cliquant sur une bulle :
+//     « à partir du X, environ Y $ par mois, pendant N mois ».
+//  Un salaire réellement saisi pour une période future l'emporte sur le scénario,
+//  pour ne jamais compter deux fois.
+// ============================================================
+function getScenarioSalaire() {
+  const sc = state.scenarioSalaire;
+  if (!sc || !(sc.montant > 0) || !sc.debut || !(sc.duree > 0)) return null;
+  const k0 = getPeriodeKeyPourDate(sc.debut);
+  const i0 = k0 ? getPeriodeIndex(k0) : -1;
+  if (i0 < 0) return null;
+  return { ...sc, i0, i1: i0 + sc.duree - 1 };
+}
+
+// ============================================================
+//  TRAJECTOIRE DE RÉFÉRENCE (ligne « prévi. ») — 21/09/2026
+//  Part de la DERNIÈRE PAIE réellement reçue et déroule le mois « standard » :
+//  frais fixes + budgets + loyer (à partir d'une date) + Bixi (jusqu'à une date).
+//  Chaque mois, l'épargne renfloue le compte courant pour qu'il reste à 100 $.
+//  Comparée à la ligne « réel », elle montre si la dépense réelle suit le standard.
+//  Les paramètres (loyer, Bixi, salaire éventuel) se règlent dans la fenêtre 📈.
+// ============================================================
+let PREV_EPARGNE = {};
+
+// Le propriétaire quitte le pays : Rafael lui paie le loyer D'AVANCE, en une fois,
+// depuis l'épargne (6 080 $ le 02/10/2026). Plus de loyer mensuel sur le compte courant
+// jusqu'à son retour — le champ loyer mensuel sert alors à le faire reprendre.
+const PROJ_DEFAUT = {
+  loyerMontant: 0,      loyerDebut: '2026-10-01',
+  bixiMontant: 27.59,   bixiFin: '2026-09-28',
+  prepayMontant: 6080,  prepayDate: '2026-10-02',
+};
+
+function getProjRef() { return Object.assign({}, PROJ_DEFAUT, state.projRef || {}); }
+
+function _isoLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Dernière paie RÉELLEMENT reçue (jamais une paie prévue dans le futur).
+function getDerniereDatePaie() {
+  const ref = getDateRef();
+  let d = null;
+  Object.values(state.entrees || {}).forEach(arr => {
+    (Array.isArray(arr) ? arr : Object.values(arr || {})).forEach(e => {
+      if (e && e.type === 'salaire' && e.montant > 0 && e.date <= ref && (!d || e.date > d)) d = e.date;
+    });
+  });
+  return d;
+}
 
 function calculerPrevisionnel(soldesReels) {
   const prev = {};
-  const idxDepart = getPeriodeIndex(PREV_PERIODE_DEPART);
-  let solde = null;
+  PREV_EPARGNE = {};
+  const r = getProjRef();
+  const dPaie = getDerniereDatePaie();
+  const ancreKey = dPaie ? getPeriodeKeyPourDate(dPaie) : PERIODES[getCurrentPeriodeIndex()]?.key;
+  const ancreIdx = ancreKey ? getPeriodeIndex(ancreKey) : getCurrentPeriodeIndex();
+  const sc = getScenarioSalaire();
+  let solde = 0, epargne = 0;
+
   for (const p of PERIODES) {
     const idx = getPeriodeIndex(p.key);
-    if (idx < idxDepart) {
-      // Avant la période de départ du scénario : on garde le solde réel (déjà connu/passé)
-      prev[p.key] = soldesReels[p.key]?.fin ?? 0;
+    const s = soldesReels[p.key];
+
+    // Jusqu'à la période de la dernière paie incluse : le réel. C'est le point de départ.
+    if (idx <= ancreIdx) {
+      prev[p.key] = s?.fin ?? 0;
+      PREV_EPARGNE[p.key] = getSoldeEpargneAPeriode(p.key);
+      solde = prev[p.key];
+      epargne = PREV_EPARGNE[p.key];
       continue;
     }
-    if (solde === null) solde = soldesReels[PREV_PERIODE_DEPART]?.debut ?? 0;
-    const nourriture = getBudgetNourriturePourPeriode(p.key);
-    const perso = getBudgetPersoPourPeriode(p.key);
-    const revenuPrevu = getSommeEntreesAll(p.key, 'salaire'); // vrai salaire, jamais "autre"
-    // Métro/gym/fido/netflix lus directement depuis Paramètres (state.fixes) — une seule
-    // source de vérité, pour qu'un changement dans Paramètres se répercute partout.
-    const metroPrev = state.fixes.metro_normal;
-    const gymPrev = state.fixes.gym;
-    const fidoPrev = state.fixes.fido;
-    const netflixPrev = state.fixes.netflix;
-    // Dépenses : loyer+dette, métro, gym, fido, netflix, budgets nourriture/perso
-    const depensesPrevues = PREV_LOYER + metroPrev + gymPrev + fidoPrev + netflixPrev + nourriture + perso;
-    solde = solde + revenuPrevu - depensesPrevues;
+
+    const dDeb   = getDateDebutPeriode(p.key);
+    const isoDeb = _isoLocal(dDeb);
+    const isoFin = _isoLocal(new Date(dDeb.getFullYear(), dDeb.getMonth() + 1, 15));
+
+    const fixes   = getMetroAuto(p.key) + getGymAuto(p.key) + getFidoAuto(p.key) + getNetflixAuto(p.key);
+    const budgets = getBudgetNourriturePourPeriode(p.key) + getBudgetPersoPourPeriode(p.key);
+    // Loyer : dû dès la période qui contient sa date de début.
+    const loyer   = (isoFin >= r.loyerDebut) ? r.loyerMontant : 0;
+    // Bixi : compté tant que la période commence avant sa date de fin.
+    const bixi    = (isoDeb <= r.bixiFin) ? r.bixiMontant : 0;
+    const salaire = (sc && idx >= sc.i0 && idx <= sc.i1) ? sc.montant : 0;
+
+    // Prépaiement du loyer : sort de l'ÉPARGNE, pas du compte courant. (En réalité
+    // l'épargne crédite le compte qui paie aussitôt le propriétaire : effet net nul
+    // sur le compte courant, −6 080 $ sur l'épargne.)
+    if (r.prepayMontant > 0 && r.prepayDate >= isoDeb && r.prepayDate <= isoFin) {
+      epargne = Math.max(0, epargne - r.prepayMontant);
+    }
+
+    solde += salaire - fixes - budgets - loyer - bixi;
+
+    if (solde < 100 && epargne > 0) {
+      const vire = Math.min(100 - solde, epargne);
+      solde   += vire;
+      epargne -= vire;
+    }
     prev[p.key] = solde;
+    PREV_EPARGNE[p.key] = epargne;
   }
   return prev;
 }
@@ -4605,8 +4806,10 @@ function renderPills() {
     let cls2 = 'pill row2style' + (isSelected?' selected':isCur?' current':isFuture?' future':' past');
     if (finPrev < 0) cls2 += ' neg';
     else if (finPrev < 300 && !isFuture) cls2 += ' warn';
-    row2 += `<div class="${cls2}" onclick="selectMois('${p.key}')">
+    row2 += `<div class="${cls2}" onclick="ouvrirProjection('${p.key}')" title="📈 Modifier la projection">
       <div class="pill-solde ${colFin}">${fmt(finPrev)}</div>
+      ${idx >= curIdx && PREV_EPARGNE[p.key] !== undefined
+        ? `<div class="pill-ep${PREV_EPARGNE[p.key] <= 0 ? ' vide' : ''}">💰 ${fmtShort(PREV_EPARGNE[p.key])}</div>` : ''}
     </div>`;
 
     // Row 3 : disponible (budget restant nourriture + perso)
@@ -4625,7 +4828,7 @@ function renderPills() {
     // Utilise notre calcul prévisionnel actuel (déjà couvert jusqu'à fin 2027), pas l'ancien
     // mécanisme périmé qui lisait une copie obsolète du fichier 2027 dans le localStorage.
     const finPrev = soldesPrev[p.key] ?? 0;
-    row2027 += makePill(p, finPrev, false, isFuture, isSelected, false);
+    row2027 += makePill(p, finPrev, false, isFuture, isSelected, false, true);
     // Vraie ligne "réel 2027" — mêmes vraies données que la ligne réel du haut, juste
     // affichée séparément puisque la ligne principale ne montre que 2026.
     const finReel2027 = soldes[p.key]?.fin ?? 0;
@@ -4657,7 +4860,7 @@ function renderPills() {
     const isFuture = idx > curIdx;
     const isSelected = selectedMois === p.key;
     const finPrev2028 = soldesPrev[p.key] ?? 0;
-    row2028 += makePill(p, finPrev2028, false, isFuture, isSelected, false);
+    row2028 += makePill(p, finPrev2028, false, isFuture, isSelected, false, true);
     const finReel2028 = soldes[p.key]?.fin ?? 0;
     rowReel2028 += makePill(p, finReel2028, false, isFuture, isSelected, false);
     const nourritureDepensee2028 = getSommeEntreesAll(p.key, 'nourriture');

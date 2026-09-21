@@ -261,6 +261,16 @@
     border: none; border-radius: 8px; font-size: 13px; font-weight: 700;
     padding: 9px 14px; cursor: pointer; color: #fff;
   }
+  /* Bouton ± : le clavier numérique Android (Samsung) n'affiche JAMAIS le signe moins
+     sur un champ type=number. Sans ce bouton, les montants négatifs autorisés depuis
+     le 20/09/2026 étaient impossibles à saisir depuis un téléphone (21/09/2026). */
+  .btn-signe {
+    background: #2a1f3d; border: 1px solid #6b3d8a; border-radius: 8px;
+    color: #d8b8f0; font-size: 17px; font-weight: 800; width: 40px; flex-shrink: 0;
+    cursor: pointer; line-height: 1; padding: 0;
+  }
+  .btn-signe:active { opacity: .6; }
+  .btn-signe.neg { background: #6b3d8a; color: #fff; }
   .f-btn.green { background: #1d7a56; }
   .f-btn.orange { background: #a06a28; }
   .f-btn:active { opacity: .7; }
@@ -449,6 +459,11 @@
   <div class="modal">
     <div class="modal-title" id="modal-title">🛒 Ajouter nourriture</div>
     <input type="number" class="montant-input" id="montant-input" placeholder="0.00" step="0.01" inputmode="decimal">
+    <div style="display:flex;justify-content:center;margin:-6px 0 12px;">
+      <button type="button" class="btn-signe" data-signe-for="montant-input"
+        onclick="inverserSigne('montant-input',this)"
+        style="width:auto;padding:7px 16px;font-size:13px;border-radius:18px;">± Retour / remboursement</button>
+    </div>
     <input type="text" class="desc-input" id="desc-input" placeholder="Description (ex: IGA, Pharmaprix...)">
     <div style="font-size:12px;color:#7a8ca0;margin-bottom:4px;">Date de la dépense</div>
     <input type="date" class="desc-input" id="date-input">
@@ -463,6 +478,11 @@
   <div class="modal">
     <div class="modal-title" id="edit-modal-title">✏️ Modifier</div>
     <input type="number" class="montant-input" id="edit-montant-input" placeholder="0.00" step="0.01" inputmode="decimal">
+    <div style="display:flex;justify-content:center;margin:-6px 0 12px;">
+      <button type="button" class="btn-signe" data-signe-for="edit-montant-input"
+        onclick="inverserSigne('edit-montant-input',this)"
+        style="width:auto;padding:7px 16px;font-size:13px;border-radius:18px;">± Retour / remboursement</button>
+    </div>
     <input type="text" class="desc-input" id="edit-desc-input" placeholder="Description">
     <div style="font-size:12px;color:#7a8ca0;margin-bottom:4px;">Date de la dépense</div>
     <input type="date" class="desc-input" id="edit-date-input">
@@ -941,7 +961,7 @@ function fermerModalEdition() { document.getElementById('edit-modal-overlay').cl
 
 async function validerEdition() {
   if (!entreeEnEdition) return;
-  const montant = parseFloat(document.getElementById('edit-montant-input').value);
+  const montant = lireMontantSigne('edit-montant-input');
   const desc = document.getElementById('edit-desc-input').value.trim();
   const nouvelleDate = document.getElementById('edit-date-input').value;
   // Montants NÉGATIFS autorisés (20/09/2026) : achat rendu, avance reçue pour un achat
@@ -1021,6 +1041,8 @@ function ouvrirModal(cat) {
   document.getElementById('date-input').value=getDateAujourdhui();
   document.getElementById('modal-overlay').classList.add('show');
   setTimeout(()=>document.getElementById('montant-input').focus(),100);
+  // Un « − » resté actif d'une saisie précédente ne doit pas se reporter.
+  reinitSigne('montant-input');
 }
 
 function fermerModal() { document.getElementById('modal-overlay').classList.remove('show'); }
@@ -1262,7 +1284,7 @@ const LOGEMENT_META = {
 };
 
 async function ajouterLogement(kind) {
-  const montant = parseFloat(document.getElementById(kind + '-amt').value);
+  const montant = lireMontantSigne(kind + '-amt');
   const desc    = (document.getElementById(kind + '-dsc').value || '').trim();
   const date    = document.getElementById(kind + '-dt').value || getDateAujourdhui();
   // 0 est accepté : c'est ainsi qu'on dit « pas de prélèvement ce mois-ci ».
@@ -1288,7 +1310,7 @@ async function ajouterLogement(kind) {
       state.fixesEntrees[kind][cible] = _asArray(state.fixesEntrees[kind][cible]);
       state.fixesEntrees[kind][cible].push(entry);
     }
-    document.getElementById(kind + '-amt').value = '';
+    document.getElementById(kind + '-amt').value = ''; reinitSigne(kind + '-amt');
     document.getElementById(kind + '-dsc').value = '';
     mettreAJourUI();
     renderDrawer();
@@ -1333,7 +1355,7 @@ function getDiversEntrees(cle) {
 }
 
 async function ajouterFraisDivers(cle) {
-  const montant = parseFloat(document.getElementById(cle + '-amt').value);
+  const montant = lireMontantSigne(cle + '-amt');
   const desc    = (document.getElementById(cle + '-dsc').value || '').trim();
   const date    = document.getElementById(cle + '-dt').value || getDateAujourdhui();
   if (isNaN(montant)) { alert('Entre un montant (0 = rien prélevé ce mois-ci, négatif autorisé).'); return; }
@@ -1349,7 +1371,7 @@ async function ajouterFraisDivers(cle) {
     if (!state.fixesEntrees[cle]) state.fixesEntrees[cle] = {};
     state.fixesEntrees[cle][cible] = _asArray(state.fixesEntrees[cle][cible]);
     state.fixesEntrees[cle][cible].push(entry);
-    document.getElementById(cle + '-amt').value = '';
+    document.getElementById(cle + '-amt').value = ''; reinitSigne(cle + '-amt');
     document.getElementById(cle + '-dsc').value = '';
     mettreAJourUI(); renderDrawer();
     await sauvegarderDansFirebase();
@@ -1377,7 +1399,7 @@ function getSanteEntrees() {
 }
 
 async function ajouterSante(sens, libelleDefaut) {
-  const montant = parseFloat(document.getElementById('sante-amt').value);
+  const montant = lireMontantSigne('sante-amt');
   const desc    = (document.getElementById('sante-dsc').value || '').trim();
   const date    = document.getElementById('sante-dt').value || getDateAujourdhui();
   // Montants NÉGATIFS autorisés (20/09/2026) : un achat rendu, une avance reçue pour
@@ -1397,7 +1419,7 @@ async function ajouterSante(sens, libelleDefaut) {
     if (!state.santeEntrees) state.santeEntrees = {};
     state.santeEntrees[cible] = _asArray(state.santeEntrees[cible]);
     state.santeEntrees[cible].push(entry);
-    document.getElementById('sante-amt').value = '';
+    document.getElementById('sante-amt').value = ''; reinitSigne('sante-amt');
     document.getElementById('sante-dsc').value = '';
     mettreAJourUI(); renderDrawer();
     await sauvegarderDansFirebase();
@@ -1777,7 +1799,7 @@ function getTotalCategoriePeriode(catId, per) {
 }
 
 async function ajouterRattrapage() {
-  const montant = parseFloat(document.getElementById('rattrap-amt').value);
+  const montant = lireMontantSigne('rattrap-amt');
   const desc    = (document.getElementById('rattrap-dsc').value || '').trim();
   const date    = document.getElementById('rattrap-dt').value;
   // Montants NÉGATIFS autorisés (20/09/2026) : un achat rendu, une avance reçue pour
@@ -1823,7 +1845,7 @@ async function ajouterRattrapage() {
     // Le solde de début de la période EN COURS doit refléter cette saisie passée.
     addRattrapAjust(cat.signe * montant);
 
-    document.getElementById('rattrap-amt').value = '';
+    document.getElementById('rattrap-amt').value = ''; reinitSigne('rattrap-amt');
     document.getElementById('rattrap-dsc').value = '';
     mettreAJourUI(); renderDrawer();
     await sauvegarderDansFirebase();
@@ -1952,7 +1974,7 @@ async function ajouterEpargne(type) {
     }
     state.epargne.mouvements.push(mouvement);
 
-    document.getElementById(pref + '-amt').value = '';
+    document.getElementById(pref + '-amt').value = ''; reinitSigne(pref + '-amt');
     if (descEl) descEl.value = '';
     mettreAJourUI(); renderDrawer();
     await sauvegarderDansFirebase();
@@ -1983,7 +2005,7 @@ async function supprimerEpargne(id) {
 }
 
 async function ajouterCredit(type) {
-  const montant = parseFloat(document.getElementById(type + '-amt').value);
+  const montant = lireMontantSigne(type + '-amt');
   const desc    = (document.getElementById(type + '-dsc').value || '').trim();
   const date    = document.getElementById(type + '-dt').value || getDateAujourdhui();
   // Montants NÉGATIFS autorisés (20/09/2026) : un achat rendu, une avance reçue pour
@@ -2006,7 +2028,7 @@ async function ajouterCredit(type) {
     if (!state.entrees[cible]) state.entrees[cible] = [];
     if (!Array.isArray(state.entrees[cible])) state.entrees[cible] = Object.values(state.entrees[cible]);
     state.entrees[cible].push(entry);
-    document.getElementById(type + '-amt').value = '';
+    document.getElementById(type + '-amt').value = ''; reinitSigne(type + '-amt');
     document.getElementById(type + '-dsc').value = '';
     mettreAJourUI();
     renderDrawer();
@@ -2029,8 +2051,51 @@ async function supprimerCredit(id) {
   } catch(e) { setSyncStatus('error','⚠️ Erreur suppression'); }
 }
 
+// Inverse le signe du montant. Le bouton passe en violet plein quand la valeur est
+// négative, pour qu'on voie d'un coup d'œil qu'il s'agit d'un retour/remboursement.
+function inverserSigne(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const v = parseFloat(el.value);
+  if (isNaN(v) || v === 0) {
+    // Champ vide : on mémorise l'intention, appliquée dès que le montant est tapé.
+    el.dataset.negatif = el.dataset.negatif === '1' ? '' : '1';
+  } else {
+    el.value = (-v).toFixed(2);
+    el.dataset.negatif = (-v) < 0 ? '1' : '';
+  }
+  majBoutonSigne(id, btn);
+  el.focus();
+}
+
+function majBoutonSigne(id, btn) {
+  const el = document.getElementById(id);
+  const b = btn || document.querySelector(`[data-signe-for="${id}"]`);
+  if (!el || !b) return;
+  const v = parseFloat(el.value);
+  const neg = (!isNaN(v) && v < 0) || (el.dataset.negatif === '1' && (isNaN(v) || v === 0));
+  b.classList.toggle('neg', neg);
+  b.textContent = neg ? '−' : '±';
+}
+
+// Appliquée juste avant la lecture du montant : si l'utilisateur a touché ± sur un
+// champ vide, puis tapé 25, on obtient bien −25.
+function lireMontantSigne(id) {
+  const el = document.getElementById(id);
+  if (!el) return NaN;
+  let v = parseFloat(el.value);
+  if (!isNaN(v) && v > 0 && el.dataset.negatif === '1') v = -v;
+  return v;
+}
+
+function reinitSigne(id) {
+  const el = document.getElementById(id);
+  if (el) el.dataset.negatif = '';
+  majBoutonSigne(id);
+}
+
 async function validerSaisie() {
-  const montant = parseFloat(document.getElementById('montant-input').value);
+  const montant = lireMontantSigne('montant-input');
   const desc = document.getElementById('desc-input').value.trim();
   const dateChoisie = document.getElementById('date-input').value || getDateAujourdhui();
   // Montants NÉGATIFS autorisés (20/09/2026) : achat rendu, avance reçue pour un achat
@@ -2054,6 +2119,7 @@ async function validerSaisie() {
     if (!state.entrees[cible]) state.entrees[cible]=[];
     if (!Array.isArray(state.entrees[cible])) state.entrees[cible]=Object.values(state.entrees[cible]);
     state.entrees[cible].push(entry);
+    reinitSigne('montant-input');
     mettreAJourUI();
     if (cible===periodeKey) flashConfirmCard(type);
     await sauvegarderDansFirebase();
@@ -2158,7 +2224,7 @@ chargerDepuisFirebase();
           Les dépôts de paie de la clinique.
         </div>
         <div class="f-row">
-          <input class="amt" type="number" id="salaire-amt" placeholder="Montant $" step="0.01">
+          <input class="amt" type="number" id="salaire-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="salaire-amt" onclick="inverserSigne('salaire-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
           <input class="dsc" type="text" id="salaire-dsc" placeholder="ex : Paie du 3 sept">
         </div>
         <div class="f-row">
@@ -2181,7 +2247,7 @@ chargerDepuisFirebase();
           et qui n'est pas la paie.
         </div>
         <div class="f-row">
-          <input class="amt" type="number" id="autre-amt" placeholder="Montant $" step="0.01">
+          <input class="amt" type="number" id="autre-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="autre-amt" onclick="inverserSigne('autre-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
           <input class="dsc" type="text" id="autre-dsc" placeholder="ex : Interac reçu">
         </div>
         <div class="f-row">
@@ -2207,7 +2273,7 @@ chargerDepuisFirebase();
             Le loyer payé au propriétaire. Mets la <b>date réelle</b> du relevé bancaire.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="loyer-amt" placeholder="Montant $" step="0.01">
+            <input class="amt" type="number" id="loyer-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="loyer-amt" onclick="inverserSigne('loyer-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
             <input class="dsc" type="text" id="loyer-dsc" placeholder="ex : Loyer octobre">
           </div>
           <div class="f-row">
@@ -2230,7 +2296,7 @@ chargerDepuisFirebase();
             saisis rien, le montant n'est pas compté.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="electricite-amt" placeholder="Montant $" step="0.01">
+            <input class="amt" type="number" id="electricite-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="electricite-amt" onclick="inverserSigne('electricite-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
             <input class="dsc" type="text" id="electricite-dsc" placeholder="ex : Hydro sept">
           </div>
           <div class="f-row">
@@ -2252,7 +2318,7 @@ chargerDepuisFirebase();
             Assurance habitation. Se saisit à la main, comme l'électricité.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="assurance-amt" placeholder="Montant $" step="0.01">
+            <input class="amt" type="number" id="assurance-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="assurance-amt" onclick="inverserSigne('assurance-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
             <input class="dsc" type="text" id="assurance-dsc" placeholder="ex : Assurance">
           </div>
           <div class="f-row">
@@ -2281,7 +2347,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="gym-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="gym-amt" placeholder="Montant (0 ok)" step="0.01">
+            <input class="amt" type="number" id="gym-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="gym-amt" onclick="inverserSigne('gym-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
             <input class="dsc" type="text" id="gym-dsc" placeholder="ex : Gym 23/09">
           </div>
           <div class="f-row">
@@ -2300,7 +2366,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="netflix-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="netflix-amt" placeholder="Montant (0 ok)" step="0.01">
+            <input class="amt" type="number" id="netflix-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="netflix-amt" onclick="inverserSigne('netflix-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
             <input class="dsc" type="text" id="netflix-dsc" placeholder="ex : Netflix">
           </div>
           <div class="f-row">
@@ -2319,7 +2385,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="fido-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="fido-amt" placeholder="Montant (0 ok)" step="0.01">
+            <input class="amt" type="number" id="fido-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="fido-amt" onclick="inverserSigne('fido-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
             <input class="dsc" type="text" id="fido-dsc" placeholder="ex : Fido sept">
           </div>
           <div class="f-row">
@@ -2338,7 +2404,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="metro-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="metro-amt" placeholder="Montant (0 ok)" step="0.01">
+            <input class="amt" type="number" id="metro-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="metro-amt" onclick="inverserSigne('metro-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
             <input class="dsc" type="text" id="metro-dsc" placeholder="ex : Passe STM">
           </div>
           <div class="f-row">
@@ -2357,7 +2423,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="bixi-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="bixi-amt" placeholder="Montant (0 ok)" step="0.01">
+            <input class="amt" type="number" id="bixi-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="bixi-amt" onclick="inverserSigne('bixi-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
             <input class="dsc" type="text" id="bixi-dsc" placeholder="ex : Abonnement / vélo élec">
           </div>
           <div class="f-row">
@@ -2383,7 +2449,7 @@ chargerDepuisFirebase();
             tu l'as payé, le remboursement rentre le jour où tu l'as reçu.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="sante-amt" placeholder="Montant $" step="0.01">
+            <input class="amt" type="number" id="sante-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="sante-amt" onclick="inverserSigne('sante-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
             <input class="dsc" type="text" id="sante-dsc" placeholder="ex : dentiste">
           </div>
           <div class="f-row">
@@ -2541,7 +2607,7 @@ chargerDepuisFirebase();
                color:#9fb4cc;margin-bottom:4px;"></div>
 
           <div class="f-row">
-            <input class="amt" type="number" id="rattrap-amt" placeholder="Montant $" step="0.01">
+            <input class="amt" type="number" id="rattrap-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="rattrap-amt" onclick="inverserSigne('rattrap-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
             <input class="dsc" type="text" id="rattrap-dsc" placeholder="Description">
           </div>
           <div class="f-row">

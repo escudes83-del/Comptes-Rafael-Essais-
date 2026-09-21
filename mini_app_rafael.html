@@ -462,7 +462,7 @@
     <div style="display:flex;justify-content:center;margin:-6px 0 12px;">
       <button type="button" class="btn-signe" data-signe-for="montant-input"
         onclick="inverserSigne('montant-input',this)"
-        style="width:auto;padding:7px 16px;font-size:13px;border-radius:18px;">± Retour / remboursement</button>
+        style="width:auto;padding:7px 16px;font-size:13px;border-radius:18px;">+ Remboursement / retour</button>
     </div>
     <input type="text" class="desc-input" id="desc-input" placeholder="Description (ex: IGA, Pharmaprix...)">
     <div style="font-size:12px;color:#7a8ca0;margin-bottom:4px;">Date de la dépense</div>
@@ -481,7 +481,7 @@
     <div style="display:flex;justify-content:center;margin:-6px 0 12px;">
       <button type="button" class="btn-signe" data-signe-for="edit-montant-input"
         onclick="inverserSigne('edit-montant-input',this)"
-        style="width:auto;padding:7px 16px;font-size:13px;border-radius:18px;">± Retour / remboursement</button>
+        style="width:auto;padding:7px 16px;font-size:13px;border-radius:18px;">+ Remboursement / retour</button>
     </div>
     <input type="text" class="desc-input" id="edit-desc-input" placeholder="Description">
     <div style="font-size:12px;color:#7a8ca0;margin-bottom:4px;">Date de la dépense</div>
@@ -1743,6 +1743,10 @@ function renderRattrapage() {
   }
 
   const cat = RATTRAP_CATS.find(c => c.id === RATTRAP_CAT);
+  // Le bouton « + remboursement » n'a de sens que pour une DÉPENSE. Pour un crédit
+  // (salaire, autre revenu, remboursement santé), la somme est déjà une entrée.
+  const bS = document.querySelector('[data-signe-for="rattrap-amt"]');
+  if (bS) bS.style.display = (cat && cat.signe < 0) ? '' : 'none';
   const elT = document.getElementById('rattrap-total');
   if (elT && cat) {
     const { total, n } = getTotalCategoriePeriode(cat.id, prec);
@@ -1778,7 +1782,11 @@ function renderRattrapage() {
   }
 }
 
-function choisirRattrapCat(id) { RATTRAP_CAT = id; renderRattrapage(); }
+function choisirRattrapCat(id) {
+  RATTRAP_CAT = id;
+  reinitSigne('rattrap-amt');   // on repart en positif à chaque changement de catégorie
+  renderRattrapage();
+}
 
 // Total d'une catégorie sur une période donnée — les 4 stockages sont différents.
 function getTotalCategoriePeriode(catId, per) {
@@ -2075,7 +2083,11 @@ function majBoutonSigne(id, btn) {
   const v = parseFloat(el.value);
   const neg = (!isNaN(v) && v < 0) || (el.dataset.negatif === '1' && (isNaN(v) || v === 0));
   b.classList.toggle('neg', neg);
-  b.textContent = neg ? '−' : '±';
+  // Libellé fixe : « + » = l'argent revient sur le compte. L'état actif se lit à la
+  // couleur (violet plein). Un signe « − » affiché aurait semé la confusion.
+  const base = b.dataset.libelle || b.textContent.replace(/^✓\s*/, '');
+  if (!b.dataset.libelle) b.dataset.libelle = base;
+  b.textContent = neg ? '✓ ' + base : base;
 }
 
 // Appliquée juste avant la lecture du montant : si l'utilisateur a touché ± sur un
@@ -2224,7 +2236,7 @@ chargerDepuisFirebase();
           Les dépôts de paie de la clinique.
         </div>
         <div class="f-row">
-          <input class="amt" type="number" id="salaire-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="salaire-amt" onclick="inverserSigne('salaire-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
+          <input class="amt" type="number" id="salaire-amt" placeholder="Montant $" step="0.01">
           <input class="dsc" type="text" id="salaire-dsc" placeholder="ex : Paie du 3 sept">
         </div>
         <div class="f-row">
@@ -2247,7 +2259,7 @@ chargerDepuisFirebase();
           et qui n'est pas la paie.
         </div>
         <div class="f-row">
-          <input class="amt" type="number" id="autre-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="autre-amt" onclick="inverserSigne('autre-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
+          <input class="amt" type="number" id="autre-amt" placeholder="Montant $" step="0.01">
           <input class="dsc" type="text" id="autre-dsc" placeholder="ex : Interac reçu">
         </div>
         <div class="f-row">
@@ -2273,7 +2285,7 @@ chargerDepuisFirebase();
             Le loyer payé au propriétaire. Mets la <b>date réelle</b> du relevé bancaire.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="loyer-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="loyer-amt" onclick="inverserSigne('loyer-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
+            <input class="amt" type="number" id="loyer-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="loyer-amt" onclick="inverserSigne('loyer-amt',this)" title="Remboursement : l'argent revient sur le compte">+</button>
             <input class="dsc" type="text" id="loyer-dsc" placeholder="ex : Loyer octobre">
           </div>
           <div class="f-row">
@@ -2296,7 +2308,7 @@ chargerDepuisFirebase();
             saisis rien, le montant n'est pas compté.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="electricite-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="electricite-amt" onclick="inverserSigne('electricite-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
+            <input class="amt" type="number" id="electricite-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="electricite-amt" onclick="inverserSigne('electricite-amt',this)" title="Remboursement : l'argent revient sur le compte">+</button>
             <input class="dsc" type="text" id="electricite-dsc" placeholder="ex : Hydro sept">
           </div>
           <div class="f-row">
@@ -2318,7 +2330,7 @@ chargerDepuisFirebase();
             Assurance habitation. Se saisit à la main, comme l'électricité.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="assurance-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="assurance-amt" onclick="inverserSigne('assurance-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
+            <input class="amt" type="number" id="assurance-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="assurance-amt" onclick="inverserSigne('assurance-amt',this)" title="Remboursement : l'argent revient sur le compte">+</button>
             <input class="dsc" type="text" id="assurance-dsc" placeholder="ex : Assurance">
           </div>
           <div class="f-row">
@@ -2347,7 +2359,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="gym-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="gym-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="gym-amt" onclick="inverserSigne('gym-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
+            <input class="amt" type="number" id="gym-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="gym-amt" onclick="inverserSigne('gym-amt',this)" title="Remboursement : l'argent revient sur le compte">+</button>
             <input class="dsc" type="text" id="gym-dsc" placeholder="ex : Gym 23/09">
           </div>
           <div class="f-row">
@@ -2366,7 +2378,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="netflix-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="netflix-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="netflix-amt" onclick="inverserSigne('netflix-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
+            <input class="amt" type="number" id="netflix-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="netflix-amt" onclick="inverserSigne('netflix-amt',this)" title="Remboursement : l'argent revient sur le compte">+</button>
             <input class="dsc" type="text" id="netflix-dsc" placeholder="ex : Netflix">
           </div>
           <div class="f-row">
@@ -2385,7 +2397,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="fido-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="fido-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="fido-amt" onclick="inverserSigne('fido-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
+            <input class="amt" type="number" id="fido-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="fido-amt" onclick="inverserSigne('fido-amt',this)" title="Remboursement : l'argent revient sur le compte">+</button>
             <input class="dsc" type="text" id="fido-dsc" placeholder="ex : Fido sept">
           </div>
           <div class="f-row">
@@ -2404,7 +2416,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="metro-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="metro-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="metro-amt" onclick="inverserSigne('metro-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
+            <input class="amt" type="number" id="metro-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="metro-amt" onclick="inverserSigne('metro-amt',this)" title="Remboursement : l'argent revient sur le compte">+</button>
             <input class="dsc" type="text" id="metro-dsc" placeholder="ex : Passe STM">
           </div>
           <div class="f-row">
@@ -2423,7 +2435,7 @@ chargerDepuisFirebase();
         <div class="sect-body">
           <div id="bixi-info" style="font-size:12px;color:#8fa6bd;line-height:1.5;"></div>
           <div class="f-row">
-            <input class="amt" type="number" id="bixi-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="bixi-amt" onclick="inverserSigne('bixi-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
+            <input class="amt" type="number" id="bixi-amt" placeholder="Montant (0 ok)" step="0.01"><button type="button" class="btn-signe" data-signe-for="bixi-amt" onclick="inverserSigne('bixi-amt',this)" title="Remboursement : l'argent revient sur le compte">+</button>
             <input class="dsc" type="text" id="bixi-dsc" placeholder="ex : Abonnement / vélo élec">
           </div>
           <div class="f-row">
@@ -2449,7 +2461,7 @@ chargerDepuisFirebase();
             tu l'as payé, le remboursement rentre le jour où tu l'as reçu.
           </div>
           <div class="f-row">
-            <input class="amt" type="number" id="sante-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="sante-amt" onclick="inverserSigne('sante-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
+            <input class="amt" type="number" id="sante-amt" placeholder="Montant $" step="0.01">
             <input class="dsc" type="text" id="sante-dsc" placeholder="ex : dentiste">
           </div>
           <div class="f-row">
@@ -2607,7 +2619,7 @@ chargerDepuisFirebase();
                color:#9fb4cc;margin-bottom:4px;"></div>
 
           <div class="f-row">
-            <input class="amt" type="number" id="rattrap-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="rattrap-amt" onclick="inverserSigne('rattrap-amt',this)" title="Montant négatif (retour, remboursement)">±</button>
+            <input class="amt" type="number" id="rattrap-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="rattrap-amt" onclick="inverserSigne('rattrap-amt',this)" title="Remboursement : l'argent revient sur le compte">+</button>
             <input class="dsc" type="text" id="rattrap-dsc" placeholder="Description">
           </div>
           <div class="f-row">

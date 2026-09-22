@@ -3793,6 +3793,22 @@ function ouvrirEpargne() {
         <span onclick="document.getElementById('modalEpargne').classList.remove('open')" style="cursor:pointer;font-size:18px;color:var(--muted);padding:0 4px;">✕</span>
       </div>
       <p style="font-size:22px;font-weight:800;color:var(--green);margin:10px 0 2px;">${fmt(soldeEpargne)}</p>
+      <p style="font-size:11px;color:var(--muted);margin:0 0 4px;">solde réel aujourd'hui</p>
+      ${(() => {
+        // Période FUTURE sélectionnée : rappeler le solde PROJETÉ, celui de la bulle du
+        // bandeau, pour que la fenêtre et la bulle ne semblent pas se contredire.
+        const k = selectedMois;
+        if (!k || getPeriodeIndex(k) <= getCurrentPeriodeIndex() || PREV_EPARGNE[k] === undefined) return '';
+        const p = PERIODES[getPeriodeIndex(k)];
+        const lib = p ? p.label : k;
+        const v = PREV_EPARGNE[k];
+        return `<div style="background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.3);
+          border-radius:8px;padding:8px 12px;margin:6px 0 10px;font-size:12px;line-height:1.5;">
+          📈 Projeté fin <b>${lib}</b> : <b style="color:${v <= 0 ? 'var(--red)' : 'var(--text)'};">${fmt(v)}</b><br>
+          <span style="color:var(--muted);font-size:11px;">après prépaiement du loyer et renflouements du compte courant
+          (trajectoire de la ligne prévi.). Le solde réel ne baissera qu'une fois les retraits réellement saisis.</span>
+        </div>`;
+      })()}
       <p style="font-size:12px;color:var(--muted);margin-bottom:${_mvAVenir.length ? '8' : '14'}px;">Intérêts totaux perçus : ${fmt(totalInterets)}</p>
       ${_mvAVenir.length ? `<div style="background:rgba(247,197,72,.08);border:1px solid rgba(247,197,72,.3);
         border-radius:8px;padding:9px 12px;margin-bottom:14px;font-size:12px;line-height:1.5;">

@@ -1951,7 +1951,7 @@ function saveState() {
   state._savedAt = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   saveToFirebase();
-  if (!SANDBOX) backupAutomatiqueSiNecessaire();
+  backupAutomatiqueSiNecessaire();
 }
 
 // ============================================================
@@ -6836,7 +6836,9 @@ function toggleDetail(id, btn) {
   const el = document.getElementById(id);
   if (!el) return;
   const open = el.classList.toggle('open');
-  const count = el.querySelectorAll('.vm-tx').length;
+  // Chaque ligne contient DEUX .vm-tx (la vue et le formulaire d'édition masqué) :
+  // compter les .vm-tx-wrap, sinon le total affiché est doublé.
+  const count = el.querySelectorAll('.vm-tx-wrap').length;
   btn.textContent = open ? '▼ Masquer détail (' + count + ')' : '▶ Voir détail (' + count + ')';
 }
 
@@ -7503,6 +7505,10 @@ document.getElementById('depRemb')?.addEventListener('change', function() {
 // Sauvegarde automatique : au max une fois par jour, sur un chemin Firebase séparé,
 // pour ne jamais perdre plus d'une journée de données en cas de problème.
 async function backupAutomatiqueSiNecessaire() {
+  // Même garde que saveToFirebase : un état périmé ne doit pas devenir la sauvegarde
+  // du jour (c'est ce qui a abîmé celle du 01/10/2026).
+  if (SANDBOX) return;   // bac à sable : aucune sauvegarde distante
+  if (!_fbLu) return;
   const aujourdhui = getDateRef();
   if (state._dernierBackupAuto === aujourdhui) return; // déjà fait aujourd'hui
   try {
@@ -7601,13 +7607,37 @@ const FIREBASE_URL = 'https://comptes-rafael-default-rtdb.firebaseio.com';
 
 async function saveToFirebase() {
   if (SANDBOX) return;   // bac à sable : aucune écriture vers Firebase
+  // Garde : ne jamais écrire avant d'avoir lu Firebase au moins une fois.
+  if (!_fbLu) return;
+  // Une seule écriture à la fois ; une demande arrivée pendant est rejouée après.
+  if (_fbEnCours) { _fbAttente = true; return; }
+  _fbEnCours = true;
+  let fusionne = false;
   try {
+    const res = await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json');
+    const raw = await res.json();
+    const distant = (raw && typeof raw === 'object') ? normalizeFirebaseData(raw) : null;
+    const rTs = (distant && distant._savedAt) || 0;
+    if (distant && rTs > _fbVu) {
+      // Quelqu'un a écrit depuis notre dernière lecture (la mini-app, un autre onglet) :
+      // on REPREND ce qu'il a ajouté au lieu de l'écraser.
+      state = _fbFusionnerEtats(distant, state);
+      fusionne = true;
+    }
+    state._savedAt = Date.now();
     await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(state)
     });
+    _fbVu = state._savedAt;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch(e) { console.warn('Firebase save error:', e); }
+  finally {
+    _fbEnCours = false;
+    if (fusionne) render();   // afficher ce qui vient d'être repris
+    if (_fbAttente) { _fbAttente = false; saveToFirebase(); }
+  }
 }
 
 // Firebase peut convertir les tableaux JS en objets — on les restitue en tableaux
@@ -7627,12 +7657,64 @@ function normalizeFirebaseData(obj) {
   return obj;
 }
 
+// ============================================================
+//  SYNCHRONISATION SÛRE — 01/10/2026
+//  Le 01/10/2026, v2 a effacé 18 saisies faites par Rafael depuis la mini-app la
+//  veille. Enchaînement : au démarrage, v2 affiche son état local puis n'interroge
+//  Firebase que 5 s plus tard — mais ce premier affichage republie le contexte de
+//  la mini-app, ce qui déclenche une sauvegarde. L'état périmé était donc écrit
+//  AVANT la première synchro, et le sondage suivant voyait un Firebase « à jour ».
+//
+//  Deux protections :
+//   • _fbLu  : aucune écriture tant que Firebase n'a pas été lu au moins une fois.
+//   • fusion : avant chaque écriture, on relit Firebase ; si quelque chose y a été
+//     ajouté depuis notre dernière lecture, on le REPREND au lieu de l'écraser.
+// ============================================================
+let _fbVu = 0;          // _savedAt du dernier état Firebase connu
+let _fbLu = false;      // Firebase a-t-il été lu au moins une fois ?
+let _fbEnCours = false, _fbAttente = false;
+
+function _fbArr(x) { return !x ? [] : (Array.isArray(x) ? x : Object.values(x)); }
+function _fbSig(e) { return e.date + '|' + (e.type || '') + '|' + Number(e.montant).toFixed(2) + '|' + (e.desc || ''); }
+
+// Ajoute à `base` les lignes de `autre` qui n'y sont pas (même id, ou même contenu).
+function _fbFusionnerMap(base, autre) {
+  const out = Object.assign({}, base || {});
+  Object.keys(autre || {}).forEach(k => {
+    const B = _fbArr(out[k]), A = _fbArr(autre[k]);
+    const ids  = new Set(B.map(x => x && x.id));
+    const sigs = new Set(B.map(x => x && _fbSig(x)));
+    out[k] = B.concat(A.filter(x => x && x.id && !ids.has(x.id) && !sigs.has(_fbSig(x))));
+  });
+  return out;
+}
+
+// Base = NOTRE état (réglages compris), auquel on ajoute ce que le distant a en plus.
+function _fbFusionnerEtats(distant, local) {
+  const out = JSON.parse(JSON.stringify(local));
+  ['entrees','loyerEntrees','santeEntrees','detteExtras'].forEach(p => {
+    out[p] = _fbFusionnerMap(local[p], distant[p]);
+  });
+  out.fixesEntrees = Object.assign({}, local.fixesEntrees || {});
+  Object.keys(distant.fixesEntrees || {}).forEach(c => {
+    out.fixesEntrees[c] = _fbFusionnerMap(out.fixesEntrees[c], distant.fixesEntrees[c]);
+  });
+  if (distant.epargne) {
+    out.epargne = out.epargne || { soldeDepart: distant.epargne.soldeDepart || 0, mouvements: [] };
+    const B = _fbArr(out.epargne.mouvements);
+    const ids = new Set(B.map(x => x && x.id));
+    out.epargne.mouvements = B.concat(_fbArr(distant.epargne.mouvements)
+      .filter(x => x && x.id && !ids.has(x.id)));
+  }
+  return out;
+}
+
 async function loadFromFirebase() {
   if (SANDBOX) return;   // bac à sable : aucune lecture depuis Firebase
   try {
     const res = await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json');
     const raw = await res.json();
-    if (!raw || typeof raw !== 'object') return;
+    if (!raw || typeof raw !== 'object') { _fbLu = true; return; }
 
     // Normaliser les tableaux convertis par Firebase en objets
     const fbData = normalizeFirebaseData(raw);
@@ -7647,8 +7729,13 @@ async function loadFromFirebase() {
     if (fbTs > localTs) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(fbData));
       state = loadState();
+      _fbVu = Math.max(_fbVu, fbTs);
+      _fbLu = true;
       render();
+      return;
     }
+    _fbVu = Math.max(_fbVu, fbTs);
+    _fbLu = true;
   } catch(e) { console.warn('Firebase load error:', e); }
 }
 
@@ -7656,11 +7743,10 @@ async function loadFromFirebase() {
 if (!SANDBOX) setInterval(loadFromFirebase, 5000);
 
 document.addEventListener('DOMContentLoaded', async function() {
-  // Si localStorage vide, attendre Firebase avant de render
-  const localRaw = localStorage.getItem(STORAGE_KEY);
-  if (!localRaw) {
-    await loadFromFirebase();
-  }
+  // TOUJOURS lire Firebase avant le premier affichage. Avant, quand localStorage
+  // existait, v2 affichait puis sauvegardait immédiatement (publication du contexte
+  // mini-app) — donc écrivait un état périmé avant même d'avoir synchronisé.
+  await loadFromFirebase();
   // Ouvrir automatiquement la periode courante au chargement
   const curKey = PERIODES[getCurrentPeriodeIndex()]?.key;
   if (curKey) {

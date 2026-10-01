@@ -2413,7 +2413,7 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
     // Gym réellement prélevé le 23 du 1er mois et le 7 du 2e mois de la période (observé sur le relevé)
     const gymDate1 = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('gym1'));
     const gymDate2 = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, getJourDebit('gym2'));
-    const ref = new Date(dateRef);
+    const ref = _dateLocale(dateRef);
     // Gym : 1 prélèvement par demi-période (23 puis 7 du mois suivant)
     if (!hasFixeEntrees('gym', periodeKey)) {
       if (gymDate1 <= ref) total += state.fixes.gym / 2;
@@ -2863,7 +2863,7 @@ function gymMoisCourant() {
 }
 
 function renderFixesBloc() {
-  const today = new Date(getDateRef());
+  const today = _dateLocale(getDateRef());
   const fixes = state.fixes;
   const curKey = selectedMois || PERIODES[getCurrentPeriodeIndex()]?.key;
   const isAEC = state.mode === 'aec';
@@ -3328,7 +3328,7 @@ if (window.ResizeObserver) {
 }
 
 function renderRappels() {
-  const today = new Date(getDateRef());
+  const today = _dateLocale(getDateRef());
 
   // Le renouvellement revient chaque année le 8 juillet : on calcule la bonne année cible
   // (celle qui vient si on est déjà après le 8 juillet de l'année en cours)
@@ -4155,7 +4155,7 @@ function confirmerRemboursementLoyer() {
 function ouvrirRappelModal(id) {
   const r = (window._rappelsSysteme || []).find(x => x.id === id);
   if (!r) return;
-  const today = new Date(getDateRef());
+  const today = _dateLocale(getDateRef());
   const joursRestants = Math.ceil((r.dateLimit - today) / 86400000);
   const depasse = joursRestants < 0;
   const dateStr = r.dateLimit.toLocaleDateString('fr-CA', {day:'2-digit',month:'long',year:'numeric'});
@@ -4352,7 +4352,7 @@ function enregistrerNouveauRappel() {
 function ouvrirRappelPersonnalise(id) {
   const r = (state.rappelsPersonnalises || []).find(x => x.id === id);
   if (!r) return;
-  const today = new Date(getDateRef());
+  const today = _dateLocale(getDateRef());
   const echeance = new Date(r.dateEcheance + 'T00:00:00');
   const joursRestants = Math.ceil((echeance - today) / 86400000);
   const depasse = joursRestants < 0;
@@ -4518,7 +4518,7 @@ function makePillTop(p, isCur, isFuture, isSelected, hasAlert) {
   let labelHTML;
   if (isCur && parts.length === 2) {
     // Mois courant : différencier selon la date
-    const today = new Date(getDateRef());
+    const today = _dateLocale(getDateRef());
     const drPill = getDateRef(); const partsPill = drPill.split('-'); const dayOfMonth = parseInt(partsPill[2]);
     // Avant le 16 : 2ème mois brillant, 1er estompé
     // Après le 16 (ou le 16) : 1er mois brillant, 2ème estompé
@@ -4755,7 +4755,7 @@ function renderPills() {
     let labelDiv;
     if (isCur) {
       const parts = shortL.split('//');
-      const today = new Date(getDateRef());
+      const today = _dateLocale(getDateRef());
       const drMpt = getDateRef(); const partsMpt = drMpt.split('-'); const dayMpt = parseInt(partsMpt[2]);
       const firstBright = dayMpt >= 16;
       const s1 = firstBright ? 'color:var(--accent);font-weight:700;' : 'opacity:.35;font-weight:400;';
@@ -4913,6 +4913,17 @@ function aujourdhuiLocal() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
+// ⚠️ new Date('2026-10-01') est interprété en UTC : à Montréal cette date retombe
+// au 30 septembre à 20 h. Toute comparaison « ce prélèvement est-il passé ? » ratait
+// donc les débits du jour même — le métro du 1er octobre n'était pas compté dans le
+// solde jour J, d'où 110 $ d'écart avec le calcul de fin de période (01/10/2026).
+function _dateLocale(iso) {
+  if (!iso) return new Date();
+  const p = String(iso).split('-').map(Number);
+  if (!p[0] || isNaN(p[0])) return new Date(iso);
+  return new Date(p[0], (p[1] || 1) - 1, p[2] || 1);
+}
+
 function getDateRef() {
   // Retourne la date de référence sous forme YYYY-MM-DD
   return state.dateRef || aujourdhuiLocal();
@@ -4984,7 +4995,7 @@ function renderHero() {
     if (salaires.length) {
       const sorted = [...salaires].sort((a,b) => a.date.localeCompare(b.date));
       const e = sorted[0];
-      const jours = Math.round((new Date(e.date) - new Date(dateRef)) / 86400000);
+      const jours = Math.round((_dateLocale(e.date) - _dateLocale(dateRef)) / 86400000);
       prochaine = `${fmt(e.montant)}<br><span style="font-size:11px;color:var(--muted);">${e.desc}</span><br><span style="font-size:11px;color:var(--accent);">📅 ${e.date} (J+${jours})</span>`;
       break;
     }
@@ -5449,7 +5460,7 @@ function renderAlertes() {
     const depasseP = persoReel - persoBudget;
 
     if (enCours) {
-      const today = new Date(getDateRef());
+      const today = _dateLocale(getDateRef());
       const dayOfMonth = today.getDate();
       // Jours restants dans la période (fin = 15 du mois suivant)
       const p = PERIODES[i];
@@ -6878,7 +6889,7 @@ function qaAddDate(periode, type, idAmt, idDesc, idDate) {
       const icon = type === 'nourriture' ? '🛒' : '🧴';
       const label = type === 'nourriture' ? 'Nourriture' : 'Perso';
       const p = PERIODES.find(x => x.key === periode);
-      const joursRestants = Math.ceil((new Date(p.annee, parseInt(periode.slice(5))-1, 15) - new Date(getDateRef())) / 86400000);
+      const joursRestants = Math.ceil((new Date(p.annee, parseInt(periode.slice(5))-1, 15) - _dateLocale(getDateRef())) / 86400000);
 
       let msg = `${icon} <b>${label}</b> : budget à moitié dépensé.<br><br>`;
       msg += `Dépensé : <b>${fmt(total)}</b> sur <b>${fmt(budget)}</b> · `;

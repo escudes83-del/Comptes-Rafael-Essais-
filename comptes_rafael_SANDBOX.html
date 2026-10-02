@@ -3804,9 +3804,10 @@ function ouvrirEpargne() {
         const v = PREV_EPARGNE[k];
         return `<div style="background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.3);
           border-radius:8px;padding:8px 12px;margin:6px 0 10px;font-size:12px;line-height:1.5;">
-          📈 Projeté fin <b>${lib}</b> : <b style="color:${v <= 0 ? 'var(--red)' : 'var(--text)'};">${fmt(v)}</b><br>
-          <span style="color:var(--muted);font-size:11px;">après prépaiement du loyer et renflouements du compte courant
-          (trajectoire de la ligne prévi.). Le solde réel ne baissera qu'une fois les retraits réellement saisis.</span>
+          📈 Épargne fin <b>${lib}</b> : <b style="color:${v <= 0 ? 'var(--red)' : 'var(--text)'};">${fmt(v)}</b><br>
+          <span style="color:var(--muted);font-size:11px;">compte tenu des seuls mouvements réellement saisis,
+          y compris ceux datés plus tard. Aucun renflouement n'est simulé : l'épargne ne baissera
+          que lorsque tu auras enregistré le virement.</span>
         </div>`;
       })()}
       <p style="font-size:12px;color:var(--muted);margin-bottom:${_mvAVenir.length ? '8' : '14'}px;">Intérêts totaux perçus : ${fmt(totalInterets)}</p>
@@ -4669,18 +4670,23 @@ function calculerPrevisionnel(soldesReels) {
   const ancreKey = dPaie ? getPeriodeKeyPourDate(dPaie) : PERIODES[getCurrentPeriodeIndex()]?.key;
   const ancreIdx = ancreKey ? getPeriodeIndex(ancreKey) : getCurrentPeriodeIndex();
   const sc = getScenarioSalaire();
-  let solde = 0, epargne = 0;
+  let solde = 0;
 
   for (const p of PERIODES) {
     const idx = getPeriodeIndex(p.key);
     const s = soldesReels[p.key];
 
+    // ÉPARGNE AFFICHÉE — 02/10/2026 : toujours l'épargne RÉELLE à la fin de la période,
+    // c'est-à-dire la somme des mouvements effectivement saisis (y compris ceux datés
+    // plus tard). Plus aucun renflouement n'est simulé : tant que tu n'as pas enregistré
+    // de virement, le badge reste au solde réel. C'est à toi de saisir les virements,
+    // période par période, via l'alerte « DÉFICIT PROJETÉ ».
+    PREV_EPARGNE[p.key] = getSoldeEpargneAPeriode(p.key);
+
     // Jusqu'à la période de la dernière paie incluse : le réel. C'est le point de départ.
     if (idx <= ancreIdx) {
       prev[p.key] = s?.fin ?? 0;
-      PREV_EPARGNE[p.key] = getSoldeEpargneAPeriode(p.key);
       solde = prev[p.key];
-      epargne = PREV_EPARGNE[p.key];
       continue;
     }
 
@@ -4696,22 +4702,16 @@ function calculerPrevisionnel(soldesReels) {
     const bixi    = (isoDeb <= r.bixiFin) ? r.bixiMontant : 0;
     const salaire = (sc && idx >= sc.i0 && idx <= sc.i1) ? sc.montant : 0;
 
-    // Prépaiement du loyer : sort de l'ÉPARGNE, pas du compte courant. (En réalité
-    // l'épargne crédite le compte qui paie aussitôt le propriétaire : effet net nul
-    // sur le compte courant, −6 080 $ sur l'épargne.)
-    if (r.prepayMontant > 0 && r.prepayDate >= isoDeb && r.prepayDate <= isoFin) {
-      epargne = Math.max(0, epargne - r.prepayMontant);
-    }
+    // Le prépaiement du loyer n'est PLUS simulé ici : c'est un vrai mouvement d'épargne
+    // (« Paiement d'avance loyer », −6 080 $), déjà compté par getSoldeEpargneAPeriode().
+    // Le simuler en plus le déduirait deux fois.
 
     solde += salaire - fixes - budgets - loyer - bixi;
 
-    if (solde < 100 && epargne > 0) {
-      const vire = Math.min(100 - solde, epargne);
-      solde   += vire;
-      epargne -= vire;
-    }
+    // Aucun renflouement automatique : la ligne prévi montre la trajectoire SANS aide.
+    // L'alerte « DÉFICIT PROJETÉ » propose le virement ; il ne devient réel que si tu
+    // le saisis, et l'épargne ne baisse qu'à ce moment-là.
     prev[p.key] = solde;
-    PREV_EPARGNE[p.key] = epargne;
   }
   return prev;
 }

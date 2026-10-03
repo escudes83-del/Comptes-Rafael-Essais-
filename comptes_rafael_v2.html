@@ -7593,12 +7593,13 @@ async function saveToFirebase() {
     const res = await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json');
     const raw = await res.json();
     const distant = (raw && typeof raw === 'object') ? normalizeFirebaseData(raw) : null;
-    const rTs = (distant && distant._savedAt) || 0;
-    if (distant && rTs > _fbVu) {
-      // Quelqu'un a écrit depuis notre dernière lecture (la mini-app, un autre onglet) :
-      // on REPREND ce qu'il a ajouté au lieu de l'écraser.
+    // Fusion SYSTÉMATIQUE : plus aucune condition sur les horodatages. Ce que la
+    // mini-app ou un autre onglet a ajouté est repris ; ce que nous avons supprimé
+    // reste supprimé (voir _fbBase).
+    if (distant) {
+      const avant = _fbIds(state).size;
       state = _fbFusionnerEtats(distant, state);
-      fusionne = true;
+      fusionne = _fbIds(state).size !== avant;
     }
     state._savedAt = Date.now();
     await fetch(FIREBASE_URL + '/' + STORAGE_KEY + '.json', {
@@ -7607,6 +7608,8 @@ async function saveToFirebase() {
       body: JSON.stringify(state)
     });
     _fbVu = state._savedAt;
+    // Point d'accord : local et Firebase sont identiques, _fbBase repart de cet état.
+    _fbBase = _fbIds(state);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch(e) { console.warn('Firebase save error:', e); }
   finally {
@@ -7650,17 +7653,50 @@ let _fbVu = 0;          // _savedAt du dernier état Firebase connu
 let _fbLu = false;      // Firebase a-t-il été lu au moins une fois ?
 let _fbEnCours = false, _fbAttente = false;
 
+// ------------------------------------------------------------
+// FUSION À TROIS POINTS — 03/10/2026
+// Le comparatif d'horodatage ne suffisait pas : si le localStorage portait une date
+// plus récente que Firebase, l'app gardait sa copie et réécrivait par-dessus sans
+// fusionner. Les saisies faites ailleurs entre-temps disparaissaient.
+// Désormais on fusionne AVANT CHAQUE ÉCRITURE, sans condition. Pour que les
+// suppressions restent possibles, on retient les ids connus au dernier point d'accord
+// (_fbBase) : une ligne distante dont l'id y figure mais qui a disparu localement est
+// une suppression volontaire, on ne la ressuscite pas. Une ligne distante inconnue de
+// _fbBase est un ajout fait ailleurs, on la reprend.
+// ------------------------------------------------------------
+let _fbBase = new Set();
+
 function _fbArr(x) { return !x ? [] : (Array.isArray(x) ? x : Object.values(x)); }
 function _fbSig(e) { return e.date + '|' + (e.type || '') + '|' + Number(e.montant).toFixed(2) + '|' + (e.desc || ''); }
 
-// Ajoute à `base` les lignes de `autre` qui n'y sont pas (même id, ou même contenu).
+// Tous les ids présents dans un état, toutes collections confondues.
+function _fbIds(s) {
+  const out = new Set();
+  if (!s) return out;
+  ['entrees','loyerEntrees','santeEntrees','detteExtras'].forEach(p => {
+    Object.values(s[p] || {}).forEach(v => _fbArr(v).forEach(e => { if (e && e.id) out.add(e.id); }));
+  });
+  Object.values(s.fixesEntrees || {}).forEach(c => {
+    Object.values(c || {}).forEach(v => _fbArr(v).forEach(e => { if (e && e.id) out.add(e.id); }));
+  });
+  _fbArr((s.epargne || {}).mouvements).forEach(m => { if (m && m.id) out.add(m.id); });
+  return out;
+}
+
+// _fbBase ne fait que GRANDIR aux lectures : une suppression locale ne doit pas lui
+// faire oublier l'id, sinon le prochain cycle le rapatrierait depuis Firebase.
+function _fbMemoriser(s) { _fbIds(s).forEach(id => _fbBase.add(id)); }
+
+// Ajoute à `base` les lignes de `autre` qui n'y sont pas (même id, ou même contenu),
+// sauf celles que nous avons sciemment supprimées (id présent dans _fbBase).
 function _fbFusionnerMap(base, autre) {
   const out = Object.assign({}, base || {});
   Object.keys(autre || {}).forEach(k => {
     const B = _fbArr(out[k]), A = _fbArr(autre[k]);
     const ids  = new Set(B.map(x => x && x.id));
     const sigs = new Set(B.map(x => x && _fbSig(x)));
-    out[k] = B.concat(A.filter(x => x && x.id && !ids.has(x.id) && !sigs.has(_fbSig(x))));
+    out[k] = B.concat(A.filter(x => x && x.id && !ids.has(x.id)
+      && !_fbBase.has(x.id) && !sigs.has(_fbSig(x))));
   });
   return out;
 }
@@ -7680,7 +7716,7 @@ function _fbFusionnerEtats(distant, local) {
     const B = _fbArr(out.epargne.mouvements);
     const ids = new Set(B.map(x => x && x.id));
     out.epargne.mouvements = B.concat(_fbArr(distant.epargne.mouvements)
-      .filter(x => x && x.id && !ids.has(x.id)));
+      .filter(x => x && x.id && !ids.has(x.id) && !_fbBase.has(x.id)));
   }
   return out;
 }
@@ -7700,17 +7736,39 @@ async function loadFromFirebase() {
     const fbTs = fbData._savedAt || 0;
     const localTs = localData ? (localData._savedAt || 0) : 0;
 
-    // N'ecraser localStorage que si Firebase est plus recent
+    // Firebase plus récent : on adopte son état tel quel (réglages compris).
     if (fbTs > localTs) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(fbData));
       state = loadState();
       _fbVu = Math.max(_fbVu, fbTs);
       _fbLu = true;
+      _fbMemoriser(state);
+      render();
+      return;
+    }
+
+    // Notre copie est plus récente — mais Firebase peut quand même contenir des
+    // saisies que nous n'avons pas (c'est le cas qui faisait perdre les saisies de
+    // la mini-app). On les reprend sans attendre la prochaine écriture.
+    // Test rapide avant la fusion (ce code tourne toutes les 5 s) : y a-t-il là-bas
+    // un id que nous n'avons pas ET que nous n'avons jamais eu ?
+    const idsLocaux = _fbIds(state);
+    let aReprendre = false;
+    _fbIds(fbData).forEach(id => {
+      if (!idsLocaux.has(id) && !_fbBase.has(id)) aReprendre = true;
+    });
+    if (aReprendre) {
+      state = _fbFusionnerEtats(fbData, state);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      _fbVu = Math.max(_fbVu, fbTs);
+      _fbLu = true;
+      _fbMemoriser(state);
       render();
       return;
     }
     _fbVu = Math.max(_fbVu, fbTs);
     _fbLu = true;
+    _fbMemoriser(state);
   } catch(e) { console.warn('Firebase load error:', e); }
 }
 

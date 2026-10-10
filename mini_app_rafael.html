@@ -1073,7 +1073,7 @@ function ouvrirDrawer(groupe) {
   document.getElementById('drawerTabs').classList.add('hidden');
   ['salaire-dt','autre-dt','loyer-dt','electricite-dt','assurance-dt',
    'gym-dt','netflix-dt','fido-dt','metro-dt','bixi-dt','sante-dt',
-   'ep-ret-dt','ep-dep-dt','ep-int-dt','dette-dt'].forEach(id => {
+   'ep-ret-dt','ep-dep-dt','ep-int-dt','ep-ext-dt','dette-dt'].forEach(id => {
     const d = document.getElementById(id);
     if (d && !d.value) d.value = getDateAujourdhui();
   });
@@ -1250,9 +1250,9 @@ function renderDrawer() {
   if (elEL) {
     if (!mv.length) elEL.innerHTML = '<div class="vide">Aucun mouvement.</div>';
     else elEL.innerHTML = [...mv].sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(m => {
-      const plus = (m.type === 'depot' || m.type === 'interet');
-      const ic = m.type === 'depot' ? '⬇️' : m.type === 'retrait' ? '⬆️' : '📈';
-      const lib = m.type === 'depot' ? 'Dépôt' : m.type === 'retrait' ? 'Retrait' : 'Intérêts';
+      const plus = (m.type !== 'retrait');
+      const ic = m.type === 'depot' ? '⬇️' : m.type === 'retrait' ? '⬆️' : m.type === 'externe' ? '🏦' : '📈';
+      const lib = m.type === 'depot' ? 'Dépôt' : m.type === 'retrait' ? 'Retrait' : m.type === 'externe' ? 'Dépôt direct' : 'Intérêts';
       return `<div class="lg-item">
         <span class="d">${(m.date||'').slice(8)}/${(m.date||'').slice(5,7)}</span>
         <span class="l">${ic} ${lib}${m.desc ? ' — ' + m.desc : ''}</span>
@@ -1938,12 +1938,15 @@ function getSoldeEpargne() {
   const mv = getEpargneMouvements().filter(m => !m.date || m.date <= ref);
   const d = mv.filter(m => m.type === 'depot').reduce((s,m) => s + m.montant, 0);
   const r = mv.filter(m => m.type === 'retrait').reduce((s,m) => s + m.montant, 0);
-  const i = mv.filter(m => m.type === 'interet').reduce((s,m) => s + m.montant, 0);
+  // Interets ET depots directs : tous deux creditent l'epargne sans toucher au courant.
+  const i = mv.filter(m => m.type === 'interet' || m.type === 'externe')
+              .reduce((s,m) => s + m.montant, 0);
   return depart + d - r + i;
 }
 
 async function ajouterEpargne(type) {
-  const pref = type === 'retrait' ? 'ep-ret' : type === 'depot' ? 'ep-dep' : 'ep-int';
+  const pref = type === 'retrait' ? 'ep-ret' : type === 'depot' ? 'ep-dep'
+              : type === 'externe' ? 'ep-ext' : 'ep-int';
   const montant = parseFloat(document.getElementById(pref + '-amt').value);
   const descEl  = document.getElementById(pref + '-dsc');
   const desc    = descEl ? (descEl.value || '').trim() : '';
@@ -2541,6 +2544,27 @@ chargerDepuisFirebase();
             <input class="amt" type="number" id="ep-int-amt" placeholder="Montant $" step="0.01">
             <input class="dt" type="date" id="ep-int-dt">
             <button class="f-btn vert2" onclick="resetSessionTimer();ajouterEpargne('interet')">+ Créditer</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sect" id="sect-ep-externe">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-ep-externe')">
+          <span class="t"><span class="chev">▶</span>🏦 Dépôt direct</span>
+        </div>
+        <div class="sect-body">
+          <div style="font-size:12px;color:#8fa6bd;line-height:1.5;">
+            De l'argent reçu <b>directement sur l'épargne</b>, sans passer par le compte
+            courant — un chèque déposé là-bas, par exemple. Aucune écriture n'est créée
+            dans les comptes, et ça ne compte pas comme des intérêts.
+          </div>
+          <div class="f-row">
+            <input class="amt" type="number" id="ep-ext-amt" placeholder="Montant $" step="0.01">
+            <input class="dsc" type="text" id="ep-ext-dsc" placeholder="ex : chèque aide gouv.">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="ep-ext-dt">
+            <button class="f-btn vert2" onclick="resetSessionTimer();ajouterEpargne('externe')">🏦 Créditer</button>
           </div>
         </div>
       </div>

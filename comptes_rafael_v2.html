@@ -2141,6 +2141,11 @@ function calculerProjectionEpargne() {
   return resultats;
 }
 
+// Mouvements qui CREDITENT l'epargne sans toucher au compte courant : les interets,
+// et depuis le 10/10/2026 les depots directs (un cheque encaisse droit sur l'epargne).
+// Les deux s'ajoutent au solde ; seuls les interets comptent dans les interets percus.
+function _epCreditDirect(m) { return m.type === 'interet' || m.type === 'externe'; }
+
 // Solde de l'épargne AUJOURD'HUI : les mouvements datés dans le futur ne sont pas
 // encore comptés, exactement comme pour le compte courant. Avant, un retrait programmé
 // au 2 octobre était déjà déduit dès sa saisie (constaté le 17/09/2026).
@@ -2150,7 +2155,7 @@ function getSoldeEpargne() {
   const mouvements = getEpargneMouvements().filter(m => !m.date || m.date <= ref);
   const depots = mouvements.filter(m => m.type === 'depot').reduce((s, m) => s + m.montant, 0);
   const retraits = mouvements.filter(m => m.type === 'retrait').reduce((s, m) => s + m.montant, 0);
-  const interets = mouvements.filter(m => m.type === 'interet').reduce((s, m) => s + m.montant, 0);
+  const interets = mouvements.filter(_epCreditDirect).reduce((s, m) => s + m.montant, 0);
   return depart + depots - retraits + interets;
 }
 
@@ -2163,7 +2168,7 @@ function getSoldeEpargneTotal() {
   return depart
     + mv.filter(m => m.type === 'depot').reduce((s,m) => s + m.montant, 0)
     - mv.filter(m => m.type === 'retrait').reduce((s,m) => s + m.montant, 0)
-    + mv.filter(m => m.type === 'interet').reduce((s,m) => s + m.montant, 0);
+    + mv.filter(_epCreditDirect).reduce((s,m) => s + m.montant, 0);
 }
 
 function getSoldeEpargneAPeriode(periodeKey) {
@@ -2174,7 +2179,7 @@ function getSoldeEpargneAPeriode(periodeKey) {
   const mouvements = getEpargneMouvements().filter(m => new Date(m.date + 'T00:00:00') <= finPeriode);
   const depots = mouvements.filter(m => m.type === 'depot').reduce((s, m) => s + m.montant, 0);
   const retraits = mouvements.filter(m => m.type === 'retrait').reduce((s, m) => s + m.montant, 0);
-  const interets = mouvements.filter(m => m.type === 'interet').reduce((s, m) => s + m.montant, 0);
+  const interets = mouvements.filter(_epCreditDirect).reduce((s, m) => s + m.montant, 0);
   return depart + depots - retraits + interets;
 }
 
@@ -3739,8 +3744,8 @@ function ouvrirEpargne() {
   const historiqueHtml = mouvements.length === 0
     ? '<div style="font-size:12px;color:var(--muted);padding:8px 0;">Aucun mouvement pour l\'instant.</div>'
     : mouvements.map(m => {
-        const icone = m.type === 'depot' ? '⬇️' : m.type === 'retrait' ? '⬆️' : '📈';
-        const label = m.type === 'depot' ? 'Dépôt' : m.type === 'retrait' ? 'Retrait' : 'Intérêts';
+        const icone = m.type === 'depot' ? '⬇️' : m.type === 'retrait' ? '⬆️' : m.type === 'externe' ? '🏦' : '📈';
+        const label = m.type === 'depot' ? 'Dépôt' : m.type === 'retrait' ? 'Retrait' : m.type === 'externe' ? 'Dépôt direct' : 'Intérêts';
         const signe = m.type === 'retrait' ? '-' : '+';
         const couleur = m.type === 'retrait' ? 'var(--red)' : 'var(--green)';
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);">
@@ -3796,6 +3801,7 @@ function ouvrirEpargne() {
           <option value="depot">⬇️ Dépôt (du compte courant vers l'épargne)</option>
           <option value="retrait">⬆️ Retrait (de l'épargne vers le compte courant)</option>
           <option value="interet">📈 Intérêts reçus</option>
+          <option value="externe">🏦 Dépôt direct (sans passer par le compte courant)</option>
         </select>
       </div>
       <div class="form-row">
@@ -5175,7 +5181,7 @@ const AIDES = {
     es: { titre: "🚫 Anular la deuda", aquoi: "Borra la deuda porque el propietario renuncia a ella, por ejemplo compensada por el prepago de la vivienda. NO es una devolución.", etapes: ["Pulsa <b>🚫 Annuler la dette</b>.", "Indica el motivo (se propone un texto).", "Confirma."], notes: "⚠️ No se registra ningún movimiento de dinero: la cuenta y el ahorro no cambian. Es reversible en cualquier momento con <b>↩ Rétablir la dette</b>, y el historial se conserva intacto." }
   },
   epargne: {
-    fr: { titre: "💰 Compte Épargne", aquoi: "Compte séparé du compte courant. Clique sur la bulle verte du bandeau pour l'ouvrir : tu y vois le solde, l'historique, et tu peux déposer ou retirer.", etapes: ["<b>Dépôt</b> : l'argent quitte le compte courant. Une dépense « Exceptionnel » nommée « Dépôt épargne » est créée automatiquement.", "<b>Retrait</b> : l'argent revient sur le compte courant. Un « Autre revenu » nommé « Retrait épargne » est créé automatiquement.", "<b>Intérêts</b> : s'ajoutent à l'épargne <b>sans toucher</b> au compte courant. Seul mouvement sans écriture liée.", "Le solde de la bulle est celui de la <b>période sélectionnée</b> dans les pilules, pas forcément celui d'aujourd'hui.", "<b>📊 Voir la projection</b>, en bas de la fenêtre, ouvre un second écran : jusqu'à quand l'épargne peut tenir. Il a sa propre aide."], notes: "<b>Le point à comprendre :</b> un dépôt ou un retrait n'est jamais un simple chiffre dans un coin — il crée toujours une <b>vraie écriture liée</b> dans les comptes. Les deux vivent et meurent ensemble : supprimer le mouvement supprime l'écriture, supprimer l'écriture supprime le mouvement, avec une confirmation à chaque fois. C'est ce qui garantit que le total épargne + compte courant reste juste. ⚠️ Ne saisis donc <b>jamais</b> un virement d'épargne à la main en « Autre revenu » : il serait compté deux fois." },
+    fr: { titre: "💰 Compte Épargne", aquoi: "Compte séparé du compte courant. Clique sur la bulle verte du bandeau pour l'ouvrir : tu y vois le solde, l'historique, et tu peux déposer ou retirer.", etapes: ["<b>Dépôt</b> : l'argent quitte le compte courant. Une dépense « Exceptionnel » nommée « Dépôt épargne » est créée automatiquement.", "<b>Retrait</b> : l'argent revient sur le compte courant. Un « Autre revenu » nommé « Retrait épargne » est créé automatiquement.", "<b>Intérêts</b> : s'ajoutent à l'épargne <b>sans toucher</b> au compte courant. Seul mouvement sans écriture liée.", "<b>Dépôt direct</b> 🏦 : un encaissement reçu directement sur l'épargne (un chèque, par exemple). Comme les intérêts, il ne crée aucune écriture dans le compte courant — mais il n'entre pas dans le total des intérêts perçus.", "Le solde de la bulle est celui de la <b>période sélectionnée</b> dans les pilules, pas forcément celui d'aujourd'hui.", "<b>📊 Voir la projection</b>, en bas de la fenêtre, ouvre un second écran : jusqu'à quand l'épargne peut tenir. Il a sa propre aide."], notes: "<b>Le point à comprendre :</b> un dépôt ou un retrait n'est jamais un simple chiffre dans un coin — il crée toujours une <b>vraie écriture liée</b> dans les comptes. Les deux vivent et meurent ensemble : supprimer le mouvement supprime l'écriture, supprimer l'écriture supprime le mouvement, avec une confirmation à chaque fois. C'est ce qui garantit que le total épargne + compte courant reste juste. ⚠️ Ne saisis donc <b>jamais</b> un virement d'épargne à la main en « Autre revenu » : il serait compté deux fois." },
     en: { titre: "💰 Savings account", aquoi: "An account separate from the current account. Click the green bubble in the banner to open it: you see the balance, the history, and can deposit or withdraw.", etapes: ["<b>Deposit</b>: money leaves the current account. An \"Exceptionnel\" expense called \"Dépôt épargne\" is created automatically.", "<b>Withdrawal</b>: money returns to the current account. An \"Autre revenu\" entry called \"Retrait épargne\" is created automatically.", "<b>Interest</b>: added to savings <b>without touching</b> the current account. The only movement with no linked entry.", "The bubble's balance is for the <b>period selected</b> in the pills, not necessarily today's.", "<b>📊 Voir la projection</b>, at the bottom of the window, opens a second screen: how long the savings can last. It has its own help page."], notes: "<b>The key idea:</b> a deposit or withdrawal is never just a number in a corner — it always creates a <b>real linked entry</b> in the accounts. The two live and die together: deleting the movement deletes the entry, deleting the entry deletes the movement, with a confirmation each time. That is what keeps savings + current account correct. ⚠️ So <b>never</b> enter a savings transfer by hand as \"Autre revenu\": it would be counted twice." },
     es: { titre: "💰 Cuenta de Ahorro", aquoi: "Cuenta separada de la cuenta corriente. Pulsa la burbuja verde de la barra superior para abrirla: verás el saldo, el historial, y podrás ingresar o retirar.", etapes: ["<b>Ingreso (dépôt)</b>: el dinero sale de la cuenta corriente. Se crea automáticamente un gasto « Exceptionnel » llamado « Dépôt épargne ».", "<b>Retirada (retrait)</b>: el dinero vuelve a la cuenta corriente. Se crea automáticamente un « Autre revenu » llamado « Retrait épargne ».", "<b>Intereses</b>: se suman al ahorro <b>sin tocar</b> la cuenta corriente. Es el único movimiento sin apunte vinculado.", "El saldo de la burbuja es el del <b>periodo seleccionado</b> en las píldoras, no necesariamente el de hoy.", "<b>📊 Voir la projection</b>, abajo en la ventana, abre otra pantalla: hasta cuándo puede durar el ahorro. Tiene su propia ayuda."], notes: "<b>Lo importante:</b> un ingreso o una retirada nunca es una simple cifra suelta — siempre crea un <b>apunte real vinculado</b> en las cuentas. Los dos viven y mueren juntos: borrar el movimiento borra el apunte, borrar el apunte borra el movimiento, siempre con una confirmación. Eso es lo que mantiene correcto el total ahorro + cuenta corriente. ⚠️ Por eso <b>nunca</b> anotes a mano una transferencia de ahorro como « Autre revenu »: se contaría dos veces." }
   },
@@ -7000,7 +7006,7 @@ function detacherMouvementEpargneLie(periode, id) {
   const mvs = (state.epargne && state.epargne.mouvements) || [];
   const mv = mvs.find(m => m.id === entree._linkedEpargneId);
   if (!mv) return true;
-  const libelle = mv.type === 'retrait' ? 'retrait' : mv.type === 'depot' ? 'dépôt' : mv.type;
+  const libelle = mv.type === 'retrait' ? 'retrait' : mv.type === 'depot' ? 'dépôt' : mv.type === 'externe' ? 'dépôt direct' : mv.type;
   if (!confirm(
       `Cette entrée est liée au compte épargne.\n\n` +
       `Le ${libelle} de ${fmt(mv.montant)} du ${mv.date} sera lui aussi supprimé de l'épargne.\n\n` +

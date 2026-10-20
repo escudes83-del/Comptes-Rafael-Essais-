@@ -1698,6 +1698,8 @@ const RATTRAP_CATS = [
   { id:'sante_remb',   lib:'🏥 Remb. santé',  signe:+1 },
 ];
 let RATTRAP_CAT = 'nourriture';
+// Saisie en cours de modification (null = on ajoute une nouvelle ligne).
+let RATTRAP_EDIT = null;
 
 function getPeriodePrecedente() {
   const [y,m] = periodeKey.split('-').map(Number);
@@ -1775,14 +1777,30 @@ function renderRattrapage() {
         .sort((a,b) => (b.date || '').localeCompare(a.date || ''))
         .map(e => {
           const neg = e.montant < 0;
-          return `<div class="lg-item">
+          const lie = e._linkedEpargneId ? 'epargne' : e._detteExtraId ? 'dette' : '';
+          const enCours = RATTRAP_EDIT && RATTRAP_EDIT.id === e.id;
+          const actions = lie
+            ? `<button class="lg-del" onclick="resetSessionTimer();expliquerLien('${lie}')" title="Écriture liée">🔗</button>`
+            : `<button class="lg-del" onclick="resetSessionTimer();editerRattrapage('${e.id}')" title="Modifier">✏️</button>`
+            + `<button class="lg-del" onclick="resetSessionTimer();supprimerRattrapage('${e.id}')" title="Supprimer">🗑️</button>`;
+          return `<div class="lg-item"${enCours ? ' style="background:rgba(154,95,192,.14);border-radius:8px;"' : ''}>
             <span class="d">${(e.date||'').slice(8)}/${(e.date||'').slice(5,7)}</span>
-            <span class="l">${e.desc ? e.desc : '<i style="color:#6b8bb5;">sans description</i>'}</span>
+            <span class="l">${e.desc ? e.desc : '<i style="color:#6b8bb5;">sans description</i>'}${e.rembourse ? ' <span style="color:#e8c07a;font-size:10px;">remboursé</span>' : ''}</span>
             <span class="m" style="color:${neg ? '#5dcaa5' : '#c9d6e6'};">${neg ? '+' : ''}${fmt(Math.abs(e.montant))}</span>
+            ${actions}
           </div>`;
         }).join('');
     }
   }
+
+  // Mode modification : le bouton change de rôle et une bannière permet d'annuler.
+  const bAdd = document.getElementById('rattrap-btn');
+  if (bAdd) bAdd.textContent = RATTRAP_EDIT ? '✓ Enregistrer' : '+ Ajouter';
+  const elE = document.getElementById('rattrap-edit-avert');
+  if (elE) elE.innerHTML = RATTRAP_EDIT
+    ? `✏️ Modification d'une saisie existante — <span style="text-decoration:underline;cursor:pointer;" `
+      + `onclick="resetSessionTimer();annulerEditionRattrapage()">annuler</span>`
+    : '';
 
   const a = getRattrapAjust();
   const elA = document.getElementById('rattrap-avert');
@@ -1809,6 +1827,9 @@ function renderRattrapage() {
 }
 
 function choisirRattrapCat(id) {
+  if (RATTRAP_EDIT) { RATTRAP_EDIT = null;
+    const dsc = document.getElementById('rattrap-dsc'); if (dsc) dsc.value = '';
+    const amt = document.getElementById('rattrap-amt'); if (amt) amt.value = ''; }
   RATTRAP_CAT = id;
   reinitSigne('rattrap-amt');   // on repart en positif à chaque changement de catégorie
   renderRattrapage();
@@ -1830,6 +1851,96 @@ function getTotalCategoriePeriode(catId, per) {
     liste = _asArray(((state.fixesEntrees || {})[catId] || {})[per]);
   }
   return { total: liste.reduce((a,e) => a + e.montant, 0), n: liste.length, liste };
+}
+
+// Le tableau de stockage d'une catégorie pour une période. Les quatre familles sont
+// rangées différemment ; on normalise au passage (Firebase convertit parfois les
+// tableaux en objets), et on réaffecte pour que les modifications portent sur state.
+function _rattrapStore(catId, per) {
+  if (['nourriture','perso','exceptionnel','salaire','autre'].includes(catId)) {
+    state.entrees = state.entrees || {};
+    return (state.entrees[per] = _asArray(state.entrees[per]));
+  }
+  if (catId === 'loyer') {
+    state.loyerEntrees = state.loyerEntrees || {};
+    return (state.loyerEntrees[per] = _asArray(state.loyerEntrees[per]));
+  }
+  if (catId === 'sante' || catId === 'sante_remb') {
+    state.santeEntrees = state.santeEntrees || {};
+    return (state.santeEntrees[per] = _asArray(state.santeEntrees[per]));
+  }
+  state.fixesEntrees = state.fixesEntrees || {};
+  state.fixesEntrees[catId] = state.fixesEntrees[catId] || {};
+  return (state.fixesEntrees[catId][per] = _asArray(state.fixesEntrees[catId][per]));
+}
+
+function _saisieRattrap(id) {
+  const r = getTotalCategoriePeriode(RATTRAP_CAT, getPeriodePrecedente());
+  return (r.liste || []).find(x => x.id === id) || null;
+}
+
+// Une écriture liée (épargne, dette) ne se touche QUE depuis son propre tiroir :
+// la modifier ici laisserait son jumeau derrière, et les comptes seraient faux.
+function expliquerLien(quoi) {
+  alert(quoi === 'epargne'
+    ? "Cette écriture est liée à un mouvement du compte épargne.\n\n"
+      + "Passe par le tiroir 💰 Épargne : la ligne et le mouvement partiront ensemble."
+    : "Cette écriture est liée à un remboursement de dette.\n\n"
+      + "Passe par le tiroir 🏠 Dette : la dette remontera d'autant.");
+}
+
+function editerRattrapage(id) {
+  const e = _saisieRattrap(id);
+  if (!e) return;
+  if (e._linkedEpargneId) { expliquerLien('epargne'); return; }
+  if (e._detteExtraId)    { expliquerLien('dette');   return; }
+  RATTRAP_EDIT = { id, cat: RATTRAP_CAT };
+  const a = document.getElementById('rattrap-amt');
+  if (a) {
+    a.value = Math.abs(e.montant).toFixed(2);
+    a.dataset.negatif = e.montant < 0 ? '1' : '';
+    majBoutonSigne('rattrap-amt');
+  }
+  const d = document.getElementById('rattrap-dsc'); if (d) d.value = e.desc || '';
+  const t = document.getElementById('rattrap-dt');  if (t) t.value = e.date || '';
+  renderRattrapage();
+  if (a) a.focus();
+}
+
+function annulerEditionRattrapage() {
+  RATTRAP_EDIT = null;
+  const a = document.getElementById('rattrap-amt'); if (a) a.value = '';
+  reinitSigne('rattrap-amt');
+  const d = document.getElementById('rattrap-dsc'); if (d) d.value = '';
+  renderRattrapage();
+}
+
+async function supprimerRattrapage(id) {
+  const cat = RATTRAP_CATS.find(c => c.id === RATTRAP_CAT);
+  const prec = getPeriodePrecedente();
+  const e = _saisieRattrap(id);
+  if (!e || !cat) return;
+  if (e._linkedEpargneId) { expliquerLien('epargne'); return; }
+  if (e._detteExtraId)    { expliquerLien('dette');   return; }
+  if (!confirm('Supprimer cette saisie ?\n\n'
+      + e.date + '   ' + fmt(e.montant) + (e.desc ? '\n' + e.desc : ''))) return;
+  setSyncStatus('loading','⏳ Suppression...');
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
+    const fresh = await res.json();
+    if (fresh && typeof fresh === 'object') state = fresh;
+    const arr = _rattrapStore(cat.id, prec);
+    const i = arr.findIndex(x => x.id === id);
+    if (i < 0) { setSyncStatus('error','⚠️ Saisie introuvable'); return; }
+    const sup = arr[i];
+    arr.splice(i, 1);
+    // Une ligne déjà marquée « remboursé » n'entrait pas dans le solde : la retirer
+    // ne doit rien changer.
+    if (!sup.rembourse) addRattrapAjust(-(cat.signe * sup.montant));
+    if (RATTRAP_EDIT && RATTRAP_EDIT.id === id) RATTRAP_EDIT = null;
+    mettreAJourUI(); renderDrawer();
+    await sauvegarderDansFirebase();
+  } catch(err) { setSyncStatus('error','⚠️ Erreur suppression'); }
 }
 
 async function ajouterRattrapage() {
@@ -1854,6 +1965,29 @@ async function ajouterRattrapage() {
     const res = await fetch(`${FIREBASE_URL}/${STORAGE_KEY}.json`);
     const fresh = await res.json();
     if (fresh && typeof fresh === 'object') state = fresh;
+
+    // MODIFICATION d'une ligne existante : on remplace sur place, on ne crée rien.
+    if (RATTRAP_EDIT) {
+      const arr = _rattrapStore(cat.id, cible);
+      const i = arr.findIndex(x => x.id === RATTRAP_EDIT.id);
+      if (i < 0) {
+        RATTRAP_EDIT = null; renderRattrapage();
+        setSyncStatus('error','⚠️ Saisie introuvable');
+        alert('Cette saisie n\'existe plus — elle a sans doute été supprimée ailleurs.');
+        return;
+      }
+      const ancien = arr[i].montant;
+      arr[i].montant = montant;
+      arr[i].desc    = desc || arr[i].desc;
+      arr[i].date    = date;
+      if (!arr[i].rembourse) addRattrapAjust(cat.signe * (montant - ancien));
+      RATTRAP_EDIT = null;
+      document.getElementById('rattrap-amt').value = ''; reinitSigne('rattrap-amt');
+      document.getElementById('rattrap-dsc').value = '';
+      mettreAJourUI(); renderDrawer();
+      await sauvegarderDansFirebase();
+      return;
+    }
 
     if (['nourriture','perso','exceptionnel','salaire','autre'].includes(cat.id)) {
       if (!state.entrees) state.entrees = {};
@@ -2678,8 +2812,9 @@ chargerDepuisFirebase();
           </div>
           <div class="f-row">
             <input class="dt" type="date" id="rattrap-dt">
-            <button class="f-btn" style="background:#6b3d8a;" onclick="resetSessionTimer();ajouterRattrapage()">+ Ajouter</button>
+            <button class="f-btn" id="rattrap-btn" style="background:#6b3d8a;" onclick="resetSessionTimer();ajouterRattrapage()">+ Ajouter</button>
           </div>
+          <div id="rattrap-edit-avert" style="font-size:11.5px;color:#c9a8e8;margin-top:7px;line-height:1.5;"></div>
           <div id="rattrap-avert" style="font-size:11px;color:#e8c07a;margin-top:8px;line-height:1.5;"></div>
 
         </div>

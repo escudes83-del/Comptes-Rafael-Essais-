@@ -1760,6 +1760,30 @@ function renderRattrapage() {
             + `<span style="color:#6b8bb5;"> · ${n} saisie${n > 1 ? 's' : ''}</span>`);
   }
 
+  // Détail des saisies déjà enregistrées — 20/10/2026. Sans cette liste il fallait
+  // ouvrir l'app principale pour voir ce qui manquait : on pouvait constater l'écart
+  // avec le relevé, pas le localiser. Ligne à ligne, l'oubli se repère ici.
+  const elDet = document.getElementById('rattrap-detail');
+  if (elDet && cat) {
+    const { liste } = getTotalCategoriePeriode(cat.id, prec);
+    if (!liste.length) {
+      elDet.innerHTML = ['gym','netflix','fido','metro','bixi'].includes(cat.id)
+        ? ''
+        : '<div class="vide">Aucune saisie sur cette période.</div>';
+    } else {
+      elDet.innerHTML = [...liste]
+        .sort((a,b) => (b.date || '').localeCompare(a.date || ''))
+        .map(e => {
+          const neg = e.montant < 0;
+          return `<div class="lg-item">
+            <span class="d">${(e.date||'').slice(8)}/${(e.date||'').slice(5,7)}</span>
+            <span class="l">${e.desc ? e.desc : '<i style="color:#6b8bb5;">sans description</i>'}</span>
+            <span class="m" style="color:${neg ? '#5dcaa5' : '#c9d6e6'};">${neg ? '+' : ''}${fmt(Math.abs(e.montant))}</span>
+          </div>`;
+        }).join('');
+    }
+  }
+
   const a = getRattrapAjust();
   const elA = document.getElementById('rattrap-avert');
   if (elA) elA.innerHTML = a
@@ -1805,7 +1829,7 @@ function getTotalCategoriePeriode(catId, per) {
   } else {
     liste = _asArray(((state.fixesEntrees || {})[catId] || {})[per]);
   }
-  return { total: liste.reduce((a,e) => a + e.montant, 0), n: liste.length };
+  return { total: liste.reduce((a,e) => a + e.montant, 0), n: liste.length, liste };
 }
 
 async function ajouterRattrapage() {
@@ -2643,6 +2667,10 @@ chargerDepuisFirebase();
           <div id="rattrap-total" style="background:#0d1a2d;border:1px solid #24405f;
                border-radius:10px;padding:9px 12px;font-size:12px;line-height:1.5;
                color:#9fb4cc;margin-bottom:4px;"></div>
+          <!-- Le détail ligne à ligne : c'est lui qui permet de pointer le relevé
+               bancaire sans ouvrir l'app principale. -->
+          <div id="rattrap-detail" style="max-height:210px;overflow:auto;
+               padding:0 2px;margin-bottom:10px;"></div>
 
           <div class="f-row">
             <input class="amt" type="number" id="rattrap-amt" placeholder="Montant $" step="0.01"><button type="button" class="btn-signe" data-signe-for="rattrap-amt" onclick="inverserSigne('rattrap-amt',this)" title="Remboursement : l'argent revient sur le compte">+</button>
@@ -2654,9 +2682,6 @@ chargerDepuisFirebase();
           </div>
           <div id="rattrap-avert" style="font-size:11px;color:#e8c07a;margin-top:8px;line-height:1.5;"></div>
 
-          <div style="margin-top:14px;font-size:11px;color:#6b8bb5;text-transform:uppercase;letter-spacing:.5px;">
-            Ajouté depuis la mini-app</div>
-          <div id="rattrap-liste"></div>
         </div>
       </div>
     </div><!-- /grp-rattrap -->

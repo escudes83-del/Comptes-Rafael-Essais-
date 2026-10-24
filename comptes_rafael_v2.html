@@ -2484,17 +2484,6 @@ function getDateDebutPeriode(periodeKey) {
 // Montant "attendu" au rythme de la période : budget total × (jours écoulés / jours total de la
 // période), sans marge de tolérance — un dépassement de ce montant déclenche l'alerte.
 // Si le lendemain rien n'est dépensé, le rythme moyen redescend automatiquement.
-function getMontantAttenduPourPeriode(budgetTotal, periodeKey, dateRefStr) {
-  const debut = getDateDebutPeriode(periodeKey);
-  if (!debut) return budgetTotal;
-  const fin = new Date(debut.getFullYear(), debut.getMonth() + 1, 15);
-  const ref = new Date(dateRefStr + 'T00:00:00');
-  const joursTotal = Math.round((fin - debut) / 86400000) + 1;
-  let joursEcoules = Math.round((ref - debut) / 86400000) + 1;
-  joursEcoules = Math.max(0, Math.min(joursEcoules, joursTotal));
-  return budgetTotal * (joursEcoules / joursTotal);
-}
-
 function getBudgetHistoriquePourPeriode(type, periodeKey) {
   const valeurActuelle = type === 'nourriture' ? state.fixes.budget_nourriture : state.fixes.budget_perso;
   const hist = (state.budgetHistorique && state.budgetHistorique[type]) || [];
@@ -3530,26 +3519,21 @@ function renderRappels() {
     const curIdx2 = getCurrentPeriodeIndex();
     const idxAffiche = getPeriodeIndex(keyAffiche);
     const isPeriodePassee = idxAffiche < curIdx2;
-    const dateRefAlerte = getDateRef();
-
-    let nourritureDepasse = false, persoDepasse = false, deficitProjete = false;
-    let texteNourriture = '', textePerso = '', texteDeficit = '';
+    let deficitProjete = false;
+    let texteDeficit = '';
     let sAlerte = null;
 
-    if (!isPeriodePassee && idxAffiche === curIdx2) {
-      const nourritureBudget = getBudgetNourriturePourPeriode(keyAffiche);
-      const persoBudget = getBudgetPersoPourPeriode(keyAffiche);
-      const nourritureReel = getSommeEntreesAll(keyAffiche, 'nourriture');
-      const persoReel = getSommeEntreesAll(keyAffiche, 'perso');
-      const nourritureAttendue = getMontantAttenduPourPeriode(nourritureBudget, keyAffiche, dateRefAlerte);
-      const persoAttendu = getMontantAttenduPourPeriode(persoBudget, keyAffiche, dateRefAlerte);
-
-      nourritureDepasse = nourritureReel > nourritureAttendue;
-      texteNourriture = `Dépassé de ${fmt(nourritureReel - nourritureAttendue)}<br><span style="font-size:10px;color:var(--muted);font-weight:600;">Normale: ${fmt(nourritureAttendue)} · Aujourd'hui: ${fmt(nourritureReel)}</span>`;
-
-      persoDepasse = persoReel > persoAttendu;
-      textePerso = `Dépassé de ${fmt(persoReel - persoAttendu)}<br><span style="font-size:10px;color:var(--muted);font-weight:600;">Normale: ${fmt(persoAttendu)} · Aujourd'hui: ${fmt(persoReel)}</span>`;
-    }
+    // ALERTE DE RYTHME RETIRÉE — 24/10/2026. Deux bandeaux (« NOURRITURE / PERSO —
+    // Budget journalier dépassé ») comparaient le total dépensé depuis le début de la
+    // période au prorata du budget : budget × jours écoulés / jours de la période.
+    // Le calcul était exact, mais la dépense n'est pas régulière : un gros achat qui
+    // couvre deux périodes faisait sonner l'alerte sans que le budget soit menacé.
+    // Signal non révélateur, donc supprimé. L'alerte DÉFICIT PROJETÉ ci-dessous reste :
+    // elle porte sur le solde réel de fin de période, pas sur une cadence.
+    ['rappelAlerteNourritureBandeau','rappelAlertePersoBandeau'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.innerHTML = ''; el.style.display = 'none'; }
+    });
 
     if (!isPeriodePassee) {
       const soldesAlerte = calculerSoldes();
@@ -3557,14 +3541,6 @@ function renderRappels() {
       deficitProjete = sAlerte ? sAlerte.fin < 0 : false;
       texteDeficit = deficitProjete ? `Solde de fin de période projeté négatif : ${fmt(sAlerte.fin)}` : '';
     }
-
-    renderAlerteBudgetIndependante('rappelAlerteNourritureBandeau', nourritureDepasse,
-      'NOURRITURE — Budget journalier dépassé', texteNourriture,
-      'alerte_budget_nourriture_' + keyAffiche + '_' + dateRefAlerte);
-
-    renderAlerteBudgetIndependante('rappelAlertePersoBandeau', persoDepasse,
-      'PERSO — Budget journalier dépassé', textePerso,
-      'alerte_budget_perso_' + keyAffiche + '_' + dateRefAlerte);
 
     // Bulle DÉFICIT PROJETÉ — cliquable : propose directement le virement épargne→courant
     // nécessaire pour ramener CETTE période à 100$, plutôt qu'un simple constat.

@@ -2309,8 +2309,10 @@ function getGymAuto(key) {
     '2026-06': 40.80,
     '2026-07': 40.80,
   };
+  // Périodes janvier→juillet 2026 : rapprochées avec la banque, on ne les bouge pas.
   if (hist[key] !== undefined) return hist[key];
-  return state.fixes.gym;
+  // Ensuite : autant de prélèvements que le cycle en place dans la période (2, parfois 3).
+  return getGymDatesPeriode(key).length * getGymMontantUnitaire();
 }
 
 function getNetflixPeriode(key) {
@@ -2448,14 +2450,11 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
   const p = PERIODES.find(x => x.key === periodeKey);
   if (p) {
     const debutPeriode = new Date(p.anneeDebut, p.moisDebut - 1, 16);
-    // Gym réellement prélevé le 23 du 1er mois et le 7 du 2e mois de la période (observé sur le relevé)
-    const gymDate1 = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('gym1'));
-    const gymDate2 = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, getJourDebit('gym2'));
     const ref = _dateLocale(dateRef);
-    // Gym : 1 prélèvement par demi-période (23 puis 7 du mois suivant)
+    // Gym : on compte les prélèvements du cycle déjà passés à la date de référence.
     if (!hasFixeEntrees('gym', periodeKey)) {
-      if (gymDate1 <= ref) total += state.fixes.gym / 2;
-      if (gymDate2 <= ref) total += state.fixes.gym / 2;
+      total += getGymDatesPeriode(periodeKey).filter(d => d <= ref).length
+               * getGymMontantUnitaire();
     }
     // Fido : réellement prélevé le 29 du 1er mois de la période (observé sur le relevé)
     if (!hasFixeEntrees('fido', periodeKey) && state.fixes.fido > 0) {
@@ -2591,6 +2590,10 @@ function publierContexteMiniApp(soldes) {
       joursDebit: { gym1: getJourDebit('gym1'), gym2: getJourDebit('gym2'),
                     fido: getJourDebit('fido'), netflix: getJourDebit('netflix'),
                     metro: getJourDebit('metro') },
+      // Dates réelles du cycle gym pour la période : la mini-app n'a plus à les deviner.
+      gymDates: getGymDatesPeriode(key).map(d =>
+        d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0')),
+      gymUnitaire: getGymMontantUnitaire(),
       fraisAuto: {
         gym:         getGymAuto(key),
         netflix:     getNetflixAuto(key),
@@ -2831,8 +2834,45 @@ let currentYear = 2026;
 
 // ── FRAIS FIXES ────────────────────────────────────────────────────
 
-// Gym : tous les 14 jours depuis le 23/12/2025 (montant lu depuis Paramètres, state.fixes.gym)
-const GYM_DEBUT = new Date('2025-12-23');
+// Gym : cycle de 14 jours, ancré sur un prélèvement RÉEL constaté au relevé.
+// 24/10/2026 — refonte. Il y avait AVANT deux modèles contradictoires : une série de
+// 14 jours partant du 23/12/2025, qui ne servait qu'à afficher « Prochain », et deux
+// jours fixes (23 et 7) qui, eux, pilotaient le solde. Les deux étaient faux : le
+// relevé donne 17/09, 01/10, 15/10 puis 29/10 — l'ancienne série avait deux jours de
+// retard, et aucun prélèvement ne tombe le 23 ni le 7. Un seul modèle désormais :
+// l'ancre + le cycle, d'où découlent les dates ET le montant de chaque période.
+// Un cycle bimensuel peut glisser (il l'a déjà fait), donc l'ancre est réglable.
+const GYM_ANCRE_DEFAUT = '2026-10-15';
+const GYM_CYCLE_JOURS = 14;
+
+function getGymAncre() {
+  const s = (state && state.gymAncre) || GYM_ANCRE_DEFAUT;
+  const p = String(s).split('-').map(Number);
+  if (!p[0] || isNaN(p[0]) || !p[1] || !p[2]) return _dateLocale(GYM_ANCRE_DEFAUT);
+  return new Date(p[0], p[1] - 1, p[2]);
+}
+
+// Montant d'UN prélèvement. state.fixes.gym reste le montant par période normale
+// (deux prélèvements) : on n'a donc aucune valeur enregistrée à migrer.
+function getGymMontantUnitaire() { return (state.fixes.gym || 0) / 2; }
+
+// Les dates de prélèvement du gym comprises dans une période. Une période de 31 jours
+// peut en contenir TROIS : c'est ce qui manquait, et qui était rattrapé à la main par
+// une exception codée en dur pour avril 2026.
+function getGymDatesPeriode(key) {
+  const deb = getDateDebutPeriode(key);
+  if (!deb) return [];
+  const fin = new Date(deb.getFullYear(), deb.getMonth() + 1, 15);
+  let d = getGymAncre();
+  while (d > deb) d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - GYM_CYCLE_JOURS);
+  while (d < deb) d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + GYM_CYCLE_JOURS);
+  const out = [];
+  while (d <= fin) {
+    out.push(d);
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + GYM_CYCLE_JOURS);
+  }
+  return out;
+}
 
 // Netflix : autour du 25 de chaque mois (montant lu depuis Paramètres, state.fixes.netflix)
 const NETFLIX_DEBUT = new Date('2025-12-24');
@@ -2840,19 +2880,18 @@ const NETFLIX_DEBUT = new Date('2025-12-24');
 // Metro : 1er du mois (montants lus depuis Paramètres, state.fixes.metro_normal/metro_etudiant)
 
 function getNextGym(fromDate) {
-  // Prochain prélèvement gym (tous les 14j depuis GYM_DEBUT)
   const from = new Date(fromDate);
-  let d = new Date(GYM_DEBUT);
-  while (d <= from) d.setDate(d.getDate() + 14);
+  let d = getGymAncre();
+  while (d > from) d.setDate(d.getDate() - GYM_CYCLE_JOURS);
+  while (d <= from) d.setDate(d.getDate() + GYM_CYCLE_JOURS);
   return d;
 }
 
 function getLastGym(fromDate) {
   const from = new Date(fromDate);
-  let d = new Date(GYM_DEBUT);
-  let last = new Date(d);
-  while (d <= from) { last = new Date(d); d.setDate(d.getDate() + 14); }
-  return last;
+  let d = getGymAncre();
+  while (d > from) d.setDate(d.getDate() - GYM_CYCLE_JOURS);
+  return d;
 }
 
 function getNextNetflix(fromDate) {
@@ -2873,20 +2912,13 @@ function fmtDate(d) {
   return d.toLocaleDateString('fr-CA', {day:'2-digit', month:'2-digit', year:'numeric'});
 }
 
+// Nb de prélèvements gym dans la période courante. C'était un TROISIÈME modèle gym,
+// avec sa propre boucle sur l'ancienne ancre — unifié le 24/10/2026.
 function gymMoisCourant() {
-  // Nb de prélèvements gym dans la période courante (16 du mois précédent au 15 du mois)
-  const curIdx = getCurrentPeriodeIndex();
-  const p = PERIODES[curIdx];
-  if (!p) return {count:0, montant:0};
-  const debut = new Date(p.anneeDebut, p.moisDebut - 1, 16);
-  const fin = new Date(p.annee, parseInt(p.key.slice(5)) - 1, 15);
-  let d = new Date(GYM_DEBUT);
-  let count = 0;
-  while (d <= fin) {
-    if (d >= debut) count++;
-    d.setDate(d.getDate() + 14);
-  }
-  return {count, montant: count * (state.fixes.gym / 2)};
+  const key = PERIODES[getCurrentPeriodeIndex()]?.key;
+  if (!key) return {count:0, montant:0};
+  const count = getGymDatesPeriode(key).length;
+  return {count, montant: count * getGymMontantUnitaire()};
 }
 
 function renderFixesBloc() {
@@ -2911,12 +2943,9 @@ function renderFixesBloc() {
   // Statut "déjà débité" par poste : mêmes règles de date que getFraisFixesEngagesAvant,
   // pour un repère visuel immédiat de ce qui est déjà compté dans le solde.
   const debutPeriode = getDateDebutPeriode(curKey);
-  let gymDebite1 = false, gymDebite2 = false, fidoDebite = false, netflixDebite = false, metroDebite = false;
+  let gymStatuts = [], fidoDebite = false, netflixDebite = false, metroDebite = false;
   if (debutPeriode) {
-    const gymDate1 = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('gym1'));
-    const gymDate2 = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth() + 1, getJourDebit('gym2'));
-    gymDebite1 = gymDate1 <= today;
-    gymDebite2 = gymDate2 <= today;
+    gymStatuts = getGymDatesPeriode(curKey).map(d => ({ date: d, debite: d <= today }));
     const fidoDate = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('fido'));
     fidoDebite = fidoDate <= today;
     const netflixDate = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('netflix'));
@@ -2929,7 +2958,7 @@ function renderFixesBloc() {
   html += renderLogementFixeCard(curKey, logementMontant, detteFixeMensuelle);
   html += renderFixeEntreeCard('electricite', 'Électricité', '⚡', curKey, fixes.electricite, noteFraisManuel('electricite', curKey, fixes.electricite, 'mensuel'), null, false);
   html += renderFixeEntreeCard('assurance', 'Assurance log.', '🛡️', curKey, fixes.assurance, noteFraisManuel('assurance', curKey, fixes.assurance, 'mensuel'), null, false);
-  html += renderGymCard(curKey, gym, nextGym, gymDebite1, gymDebite2);
+  html += renderGymCard(curKey, gym, nextGym, gymStatuts);
   html += renderFixeEntreeCard('netflix', 'Netflix', '🎬', curKey, fixes.netflix, '~' + getJourDebit('netflix') + ' du mois', 'Prochain : ' + fmtDate(nextNetflix), netflixDebite);
   html += renderFixeEntreeCard('fido', 'Fido (tél)', '📱', curKey, fixes.fido, 'irrégulier', null, fidoDebite);
   html += renderFixeEntreeCard('metro', 'Métro', '🚇', curKey, metroMontant, isAEC ? 'tarif étudiant' : 'tarif normal', 'Prochain : ' + fmtDate(nextMetro), metroDebite);
@@ -3047,30 +3076,26 @@ function renderSanteCard(curKey) {
   + '</div>';
 }
 
-function renderGymCard(curKey, gym, nextGym, gymDebite1, gymDebite2) {
+function renderGymCard(curKey, gym, nextGym, gymStatuts) {
   const fixKey = 'gym';
   const entries = getFixeEntreesPeriode(fixKey, curKey);
   const hasE = entries.length > 0;
-  const montantUnitaire = state.fixes.gym / 2;
+  const montantUnitaire = getGymMontantUnitaire();
   const cls = (hasE ? sommeFixeEntrees(fixKey, curKey) : gym.montant) > 0 ? 'fixes-item actif' : 'fixes-item inactif';
   const dateDefault = getDatePourPeriode(curKey);
 
   let corpsHTML = '';
   if (!hasE) {
-    // Vue par défaut : les 2 prélèvements côte à côte, chacun avec son propre statut
-    corpsHTML = '<div style="display:flex;gap:14px;margin-top:4px;">'
-      + '<div style="text-align:center;">'
-        + '<div class="fixes-item-montant" style="font-size:15px;">' + fmt(montantUnitaire) + '</div>'
-        + (gymDebite1
-            ? '<div style="font-size:9px;font-weight:700;color:var(--green);">✅ Débité</div>'
-            : '<div style="font-size:9px;font-weight:700;color:var(--muted);">⏳ Pas encore</div>')
-      + '</div>'
-      + '<div style="text-align:center;">'
-        + '<div class="fixes-item-montant" style="font-size:15px;">' + fmt(montantUnitaire) + '</div>'
-        + (gymDebite2
-            ? '<div style="font-size:9px;font-weight:700;color:var(--green);">✅ Débité</div>'
-            : '<div style="font-size:9px;font-weight:700;color:var(--muted);">⏳ Pas encore</div>')
-      + '</div>'
+    // Vue par défaut : un bloc par prélèvement du cycle — deux le plus souvent,
+    // trois quand la quinzaine tombe trois fois dans la période.
+    corpsHTML = '<div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap;">'
+      + (gymStatuts || []).map(s => '<div style="text-align:center;">'
+          + '<div style="font-size:9px;color:var(--muted);">' + fmtDate(s.date) + '</div>'
+          + '<div class="fixes-item-montant" style="font-size:15px;">' + fmt(montantUnitaire) + '</div>'
+          + (s.debite
+              ? '<div style="font-size:9px;font-weight:700;color:var(--green);">✅ Débité</div>'
+              : '<div style="font-size:9px;font-weight:700;color:var(--muted);">⏳ Pas encore</div>')
+        + '</div>').join('')
     + '</div>';
   } else {
     let listeHTML = '';
@@ -7249,8 +7274,6 @@ function renderSimFixesGrid() {
 
   // ---- Jours de prélèvement (réglables, plus besoin de saisie manuelle) ----
   const jours = [
-    {key:'gym1',    label:'Gym — 1er prélèvement', aide:'jour du 1er mois de la période'},
-    {key:'gym2',    label:'Gym — 2e prélèvement',  aide:'jour du 2e mois de la période'},
     {key:'fido',    label:'Fido',                  aide:'jour du 1er mois'},
     {key:'netflix', label:'Netflix',               aide:'jour du 1er mois'},
     {key:'metro',   label:'Métro',                 aide:'jour du 2e mois'},
@@ -7270,6 +7293,18 @@ function renderSimFixesGrid() {
       <input type="number" id="jour_${j.key}" value="${getJourDebit(j.key)}" min="1" max="31" step="1">
     </div>`;
   }
+  // Le gym ne tombe pas un jour fixe du mois : il suit un cycle de 14 jours.
+  const _ga = (state && state.gymAncre) || GYM_ANCRE_DEFAUT;
+  html += `<div class="sim-item" style="grid-column:1/-1;">
+    <label>🏋️ Gym — date d'un prélèvement réel<span style="color:var(--muted);font-weight:400;">
+      — cycle de 14 jours calé sur cette date</span></label>
+    <input type="date" id="gym_ancre" value="${_ga}">
+    <div style="font-size:10px;color:var(--muted);line-height:1.4;margin-top:4px;">
+      Le gym est prélevé toutes les deux semaines, pas à date fixe. Reprends ici la date
+      d'un prélèvement lu sur le relevé : l'app en déduit tous les autres, avant comme
+      après. Si le cycle glisse un jour, il suffit de remettre une date récente.
+    </div>
+  </div>`;
   document.getElementById('simFixesGrid').innerHTML = html;
 }
 
@@ -7305,7 +7340,9 @@ function saveSimFixe() {
   }
   // Jours de prélèvement — bornés 1..31, valeur invalide = on garde l'ancienne
   if (!state.joursDebit) state.joursDebit = {...DEFAUT_JOURS_DEBIT};
-  for (const jk of ['gym1','gym2','fido','netflix','metro']) {
+  const _elGa = document.getElementById('gym_ancre');
+  if (_elGa && /^\d{4}-\d{2}-\d{2}$/.test(_elGa.value)) state.gymAncre = _elGa.value;
+  for (const jk of ['fido','netflix','metro']) {
     const el = document.getElementById('jour_' + jk);
     if (!el) continue;
     const n = parseInt(el.value, 10);

@@ -2311,8 +2311,9 @@ function getGymAuto(key) {
   };
   // Périodes janvier→juillet 2026 : rapprochées avec la banque, on ne les bouge pas.
   if (hist[key] !== undefined) return hist[key];
-  // Ensuite : autant de prélèvements que le cycle en place dans la période (2, parfois 3).
-  return getGymDatesPeriode(key).length * getGymMontantUnitaire();
+  // Ensuite : la somme des prélèvements de la période — prévus par le cycle, ou corrigés
+  // un à un quand la banque a débité autrement.
+  return getGymPrelevementsPeriode(key).reduce((s,p) => s + p.montant, 0);
 }
 
 function getNetflixPeriode(key) {
@@ -2453,8 +2454,8 @@ function getFraisFixesEngagesAvant(periodeKey, dateRef) {
     const ref = _dateLocale(dateRef);
     // Gym : on compte les prélèvements du cycle déjà passés à la date de référence.
     if (!hasFixeEntrees('gym', periodeKey)) {
-      total += getGymDatesPeriode(periodeKey).filter(d => d <= ref).length
-               * getGymMontantUnitaire();
+      total += getGymPrelevementsPeriode(periodeKey)
+                 .filter(p => p.date <= ref).reduce((s,p) => s + p.montant, 0);
     }
     // Fido : réellement prélevé le 29 du 1er mois de la période (observé sur le relevé)
     if (!hasFixeEntrees('fido', periodeKey) && state.fixes.fido > 0) {
@@ -2591,8 +2592,8 @@ function publierContexteMiniApp(soldes) {
                     fido: getJourDebit('fido'), netflix: getJourDebit('netflix'),
                     metro: getJourDebit('metro') },
       // Dates réelles du cycle gym pour la période : la mini-app n'a plus à les deviner.
-      gymDates: getGymDatesPeriode(key).map(d =>
-        d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0')),
+      gymDates: getGymPrelevementsPeriode(key).map(p => _gymCle(p.date)),
+      gymMontants: getGymPrelevementsPeriode(key).map(p => p.montant),
       gymUnitaire: getGymMontantUnitaire(),
       fraisAuto: {
         gym:         getGymAuto(key),
@@ -2874,6 +2875,65 @@ function getGymDatesPeriode(key) {
   return out;
 }
 
+// PRÉLÈVEMENTS RÉELS — 31/10/2026. Le cycle ci-dessus est une PRÉVISION. Quand la
+// banque débite à une autre date, ou un autre montant, on corrige ce prélèvement-là
+// seulement : state.gymReels[<date prévue>] = { date, montant }. Les autres continuent
+// de suivre le cycle. C'est ce qui manquait : une saisie manuelle sur la carte annule
+// le calcul de TOUTE la période, et c'est ainsi qu'un prélèvement avait été perdu.
+function _gymCle(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')
+       + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// Les prélèvements d'une période, prévus ou corrigés. On balaie large (deux cycles de
+// marge) parce qu'une correction de date peut faire entrer dans la période un
+// prélèvement prévu juste avant, ou en faire sortir un prévu juste avant la fin.
+function getGymPrelevementsPeriode(key) {
+  const deb = getDateDebutPeriode(key);
+  if (!deb) return [];
+  const fin = new Date(deb.getFullYear(), deb.getMonth() + 1, 15);
+  const reels = (state && state.gymReels) || {};
+  const bas  = new Date(deb.getFullYear(), deb.getMonth(), deb.getDate() - 2*GYM_CYCLE_JOURS);
+  const haut = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate() + 2*GYM_CYCLE_JOURS);
+  let d = getGymAncre();
+  while (d > bas) d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - GYM_CYCLE_JOURS);
+  while (d < bas) d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + GYM_CYCLE_JOURS);
+  const out = [];
+  while (d <= haut) {
+    const cle = _gymCle(d);
+    const r = reels[cle];
+    const date = (r && r.date) ? _dateLocale(r.date) : d;
+    const montant = (r && typeof r.montant === 'number') ? r.montant : getGymMontantUnitaire();
+    if (date >= deb && date <= fin) out.push({ cle, prevue: d, date, montant, confirme: !!r });
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + GYM_CYCLE_JOURS);
+  }
+  out.sort((a,b) => a.date - b.date);
+  return out;
+}
+
+function basculerGymReel(cle) {
+  const el = document.getElementById('gymreel_' + cle);
+  if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+
+function enregistrerGymReel(cle) {
+  const d = document.getElementById('gymreel_dt_' + cle);
+  const m = document.getElementById('gymreel_mt_' + cle);
+  const date = d ? d.value : '';
+  const montant = m ? parseFloat(m.value) : NaN;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { alert('Choisis une date valide.'); return; }
+  if (isNaN(montant) || montant < 0) { alert('Entre un montant valide (0 accepté).'); return; }
+  if (!state.gymReels) state.gymReels = {};
+  state.gymReels[cle] = { date, montant };
+  saveState(); render();
+}
+
+function retablirGymReel(cle) {
+  if (!state.gymReels || !state.gymReels[cle]) return;
+  delete state.gymReels[cle];
+  saveState(); render();
+}
+
 // Netflix : autour du 25 de chaque mois (montant lu depuis Paramètres, state.fixes.netflix)
 const NETFLIX_DEBUT = new Date('2025-12-24');
 
@@ -2917,8 +2977,8 @@ function fmtDate(d) {
 function gymMoisCourant() {
   const key = PERIODES[getCurrentPeriodeIndex()]?.key;
   if (!key) return {count:0, montant:0};
-  const count = getGymDatesPeriode(key).length;
-  return {count, montant: count * getGymMontantUnitaire()};
+  const prels = getGymPrelevementsPeriode(key);
+  return {count: prels.length, montant: prels.reduce((s,p) => s + p.montant, 0)};
 }
 
 function renderFixesBloc() {
@@ -2945,7 +3005,8 @@ function renderFixesBloc() {
   const debutPeriode = getDateDebutPeriode(curKey);
   let gymStatuts = [], fidoDebite = false, netflixDebite = false, metroDebite = false;
   if (debutPeriode) {
-    gymStatuts = getGymDatesPeriode(curKey).map(d => ({ date: d, debite: d <= today }));
+    gymStatuts = getGymPrelevementsPeriode(curKey)
+                   .map(p => Object.assign({}, p, { debite: p.date <= today }));
     const fidoDate = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('fido'));
     fidoDebite = fidoDate <= today;
     const netflixDate = dateDebit(debutPeriode.getFullYear(), debutPeriode.getMonth(), getJourDebit('netflix'));
@@ -3089,12 +3150,25 @@ function renderGymCard(curKey, gym, nextGym, gymStatuts) {
     // Vue par défaut : un bloc par prélèvement du cycle — deux le plus souvent,
     // trois quand la quinzaine tombe trois fois dans la période.
     corpsHTML = '<div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap;">'
-      + (gymStatuts || []).map(s => '<div style="text-align:center;">'
-          + '<div style="font-size:9px;color:var(--muted);">' + fmtDate(s.date) + '</div>'
-          + '<div class="fixes-item-montant" style="font-size:15px;">' + fmt(montantUnitaire) + '</div>'
+      + (gymStatuts || []).map(s => '<div style="text-align:center;min-width:82px;">'
+          + '<div style="font-size:9px;color:' + (s.confirme ? 'var(--green)' : 'var(--muted)') + ';">'
+            + (s.confirme ? '✓ ' : '') + fmtDate(s.date) + '</div>'
+          + '<div class="fixes-item-montant" style="font-size:15px;">' + fmt(s.montant) + '</div>'
           + (s.debite
               ? '<div style="font-size:9px;font-weight:700;color:var(--green);">✅ Débité</div>'
               : '<div style="font-size:9px;font-weight:700;color:var(--muted);">⏳ Pas encore</div>')
+          + '<button class="btn-icon btn-sm" title="Corriger la date ou le montant réel"'
+            + ' onclick="basculerGymReel(\'' + s.cle + '\')">✏️</button>'
+          + '<div id="gymreel_' + s.cle + '" style="display:none;margin-top:3px;">'
+            + '<input type="date" id="gymreel_dt_' + s.cle + '" value="' + _gymCle(s.date)
+              + '" style="font-size:10px;width:100%;padding:2px;">'
+            + '<input type="number" step="0.01" min="0" id="gymreel_mt_' + s.cle + '" value="'
+              + s.montant.toFixed(2) + '" style="font-size:10px;width:100%;padding:2px;margin-top:2px;">'
+            + '<button class="btn-icon btn-sm" title="Enregistrer" onclick="enregistrerGymReel(\''
+              + s.cle + '\')">✓</button>'
+            + (s.confirme ? '<button class="btn-icon btn-sm" title="Revenir au prévu"'
+                + ' onclick="retablirGymReel(\'' + s.cle + '\')">↩</button>' : '')
+          + '</div>'
         + '</div>').join('')
     + '</div>';
   } else {

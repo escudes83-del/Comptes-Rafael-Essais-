@@ -1344,7 +1344,7 @@ async function supprimerLogement(kind, id) {
 // Stockage : state.fixesEntrees[cle][periode]
 const DIVERS_META = {
   gym:     { icone:'🏋️', nom:'Gym',     ref:() => state.fixes?.gym ?? 40.80,
-             avert:"Le gym est prélevé <b>deux fois</b> par période. Si tu saisis à la main, saisis bien <b>les deux</b> lignes, sinon il en manquera une." },
+             avert:"Le gym est prélevé tous les <b>14 jours</b> — deux fois par période, parfois trois. Si tu saisis à la main, saisis bien <b>toutes</b> les lignes, sinon il en manquera une." },
   netflix: { icone:'🎬', nom:'Netflix', ref:() => state.fixes?.netflix ?? 21.46, avert:'' },
   fido:    { icone:'📱', nom:'Fido',    ref:() => state.fixes?.fido ?? 33.96, avert:'' },
   metro:   { icone:'🚇', nom:'Métro',   ref:() => (state.mode === 'aec' ? (state.fixes?.metro_etudiant ?? 62.50) : (state.fixes?.metro_normal ?? 110)), avert:'' },
@@ -1517,10 +1517,24 @@ function getFraisEngagesAujourdhui() {
   const refD = new Date(ref);
   const aSaisie = cle => _asArray(((state.fixesEntrees || {})[cle] || {})[periodeKey]).length > 0;
 
-  // Gym : deux prélèvements, un par demi-période
+  // Gym : cycle de 14 jours. L'app principale publie les dates RÉELLES de la période
+  // (ctx.gymDates) et leur montant (ctx.gymMontants), corrections comprises ; on compte
+  // celles déjà passées. Une période peut en contenir trois.
+  // Repli sur l'ancien modèle (23 et 7) tant que l'app principale n'a pas republié.
   if (!aSaisie('gym')) {
-    if (_dateDebit(deb.getFullYear(), deb.getMonth(), jd.gym1) <= refD)     total += auto.gym / 2;
-    if (_dateDebit(deb.getFullYear(), deb.getMonth() + 1, jd.gym2) <= refD) total += auto.gym / 2;
+    const gd = (ctx && ctx.gymDates) || null;
+    if (gd && gd.length) {
+      const gm = (ctx && ctx.gymMontants) || null;
+      const unit = (ctx && ctx.gymUnitaire) || (auto.gym / gd.length);
+      gd.forEach((s, i) => {
+        if (new Date(s + 'T00:00:00') <= refD) {
+          total += (gm && typeof gm[i] === 'number') ? gm[i] : unit;
+        }
+      });
+    } else {
+      if (_dateDebit(deb.getFullYear(), deb.getMonth(), jd.gym1) <= refD)     total += auto.gym / 2;
+      if (_dateDebit(deb.getFullYear(), deb.getMonth() + 1, jd.gym2) <= refD) total += auto.gym / 2;
+    }
   }
   if (!aSaisie('fido') && auto.fido > 0) {
     if (_dateDebit(deb.getFullYear(), deb.getMonth(), jd.fido) <= refD) total += auto.fido;

@@ -3723,12 +3723,18 @@ function renderRappels() {
     const soldesSuggestion = calculerSoldes();
     const soldeProjetePeriode = curKeySuggestion ? soldesSuggestion[curKeySuggestion]?.fin : null;
     const soldeEpargneActuel = getSoldeEpargne();
-    // 02/11/2026 : borne basse à zéro. En dessous, c'est « DÉFICIT PROJETÉ » qui prend le
-    // relais ; les deux s'affichaient ensemble en proposant des montants différents.
+    // 02/11/2026 — partage des rôles entre les deux encadrés :
+    //   • BLEU (ici) = financement de la période. Se déclenche dès que la fin de période
+    //     passerait sous 100 $ UNE FOIS LE BUDGET RESTANT DÉPENSÉ. Même règle que le
+    //     montant proposé : avant, le déclencheur ignorait le budget alors que le montant
+    //     le couvrait, et une période pouvait plonger sans qu'aucune alerte n'apparaisse.
+    //     Ce n'est pas une alarme mais une tâche à cocher : elle s'éteint dès que le
+    //     virement est saisi.
+    //   • ROUGE (plus bas) = danger réel, fin de période négative avec le seul engagé.
+    // Les deux ne se chevauchent jamais, et proposent le même montant.
+    const resteBudgetSugg = getResteBudgetPeriode(curKeySuggestion);
     if (soldeProjetePeriode !== null && soldeProjetePeriode >= 0
-        && soldeProjetePeriode < 100 && soldeEpargneActuel > 0) {
-      // Même règle que l'alerte de déficit : on couvre le budget restant à dépenser.
-      const resteBudgetSugg = getResteBudgetPeriode(curKeySuggestion);
+        && (soldeProjetePeriode - resteBudgetSugg) < 100 && soldeEpargneActuel > 0) {
       const montantSuggere = Math.min(
         Math.ceil(100 - soldeProjetePeriode + resteBudgetSugg), soldeEpargneActuel);
       // Date du virement = 1er du 2e mois de la période, la même que celle pré-remplie par

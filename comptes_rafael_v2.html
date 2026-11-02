@@ -2467,6 +2467,19 @@ function getSommeEntrees(key, type) {
     .reduce((s,e) => s+e.montant, 0);
 }
 
+// Budget nourriture + perso encore disponible sur la période EN COURS — 01/11/2026.
+// Règle retenue avec PY : le virement conseillé part du principe que le budget restant
+// sera dépensé en entier. Ce qui ne le sera pas reste simplement sur le compte courant
+// et allegera le virement de la période suivante — rien n'est perdu.
+// Uniquement la période en cours : pour les suivantes, calculerSoldes() projette déjà
+// le budget complet, le recompter ici le doublerait.
+function getResteBudgetPeriode(key) {
+  if (!key || key !== PERIODES[getCurrentPeriodeIndex()]?.key) return 0;
+  const budget = getBudgetNourriturePourPeriode(key) + getBudgetPersoPourPeriode(key);
+  const depense = getSommeEntreesAll(key, 'nourriture') + getSommeEntreesAll(key, 'perso');
+  return Math.max(0, budget - depense);
+}
+
 function getSommeEntreesAll(key, type) {
   return getEntreesPeriode(key)
     .filter(e => e.type === type)
@@ -3639,13 +3652,19 @@ function renderRappels() {
     if (elDeficit) {
       if (deficitProjete) {
         const soldeEpargneDispo = getSoldeEpargne();
-        const montantSuggereDeficit = Math.min(Math.ceil(100 - sAlerte.fin), soldeEpargneDispo);
+        // Le montant proposé couvre aussi le budget restant à dépenser (voir
+        // getResteBudgetPeriode). Le besoin « engagé seul » reste affiché en dessous.
+        const resteBudgetDef = getResteBudgetPeriode(keyAffiche);
+        const besoinEngage = Math.ceil(100 - sAlerte.fin);
+        const montantSuggereDeficit = Math.min(Math.ceil(100 - sAlerte.fin + resteBudgetDef),
+                                               soldeEpargneDispo);
         const peutVirer = soldeEpargneDispo > 0;
         elDeficit.style.display = 'flex';
         elDeficit.innerHTML = `<div ${peutVirer ? `onclick="ouvrirSuggestionVirement(${montantSuggereDeficit},'${keyAffiche}')"` : ''} style="position:relative;cursor:${peutVirer?'pointer':'default'};background:rgba(242,92,92,.15);border:2px solid var(--red);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:52px;animation:pulse-dette 1.8s ease-in-out infinite;">
           <div style="font-size:9px;font-weight:800;color:var(--red);letter-spacing:.3px;">🐾 DÉFICIT PROJETÉ<span class="aide-btn mini" onclick="event.stopPropagation();ouvrirAide('alerteDeficit')" title="Aide / Help">?</span></div>
           <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:2px;text-align:center;">${texteDeficit}</div>
           ${peutVirer ? `<div style="font-size:10px;font-weight:700;color:var(--accent2);margin-top:6px;">💡 Cliquer pour virer ${fmt(montantSuggereDeficit)} de l'épargne</div>` : ''}
+          ${peutVirer && resteBudgetDef > 0 ? `<div style="font-size:9px;color:var(--muted);margin-top:2px;text-align:center;line-height:1.35;">dont ${fmt(resteBudgetDef)} de budget restant à dépenser<br>${fmt(besoinEngage)} suffiraient pour le seul engagé</div>` : ''}
         </div>`;
       } else {
         elDeficit.style.display = 'none';

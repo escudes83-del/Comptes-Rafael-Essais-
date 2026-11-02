@@ -375,9 +375,9 @@
      border-radius:14px;padding:11px 14px;animation:pulseBan 1.8s ease-in-out infinite;"
      onclick="resetSessionTimer();ouvrirDrawer('alerte')">
   <div style="display:flex;align-items:center;gap:10px;">
-    <span style="font-size:20px;">⚠️</span>
+    <span id="ban-icone" style="font-size:20px;">⚠️</span>
     <div style="flex:1;min-width:0;text-align:left;">
-      <div style="font-size:12px;font-weight:800;color:#ffd0d0;letter-spacing:.4px;">VIREMENT CONSEILLÉ</div>
+      <div id="ban-titre" style="font-size:12px;font-weight:800;color:#ffd0d0;letter-spacing:.4px;">VIREMENT CONSEILLÉ</div>
       <div id="ban-txt" style="font-size:11px;color:#f0b8b8;margin-top:1px;"></div>
     </div>
     <span style="font-size:18px;color:#ffd0d0;">›</span>
@@ -1626,17 +1626,32 @@ function renderAlerteVirement() {
   if (!tab || !box) return;
   const fin = getSoldeFinPeriode();
   const epargne = getSoldeEpargne();
-  if (fin === null || fin >= 100 || epargne <= 0) {
+  // Comme dans l'app principale : le virement conseillé couvre le budget nourriture +
+  // perso encore disponible, puisqu'il a vocation à être dépensé — et le déclencheur
+  // suit la même règle, sans quoi une période pouvait plonger sans aucune alerte.
+  const resteBudget = (fin === null) ? 0 : Math.max(0, (budgetNourr + budgetPerso)
+    - (_sommeEntrees('nourriture') + _sommeEntrees('perso')));
+  if (fin === null || (fin - resteBudget) >= 100 || epargne <= 0) {
     tab.style.display = 'none';
     if (document.getElementById('grp-alerte').style.display !== 'none') fermerDrawer();
     return;
   }
-  // Comme dans l'app principale : le virement conseillé couvre aussi le budget
-  // nourriture + perso encore disponible, puisqu'il a vocation à être dépensé.
-  const resteBudget = Math.max(0, (budgetNourr + budgetPerso)
-    - (_sommeEntrees('nourriture') + _sommeEntrees('perso')));
   const besoinEngage = Math.ceil(100 - fin);
   const montant = Math.min(Math.ceil(100 - fin + resteBudget), epargne);
+  // Bleu tant que la période ne finit pas en négatif : c'est un financement à prévoir,
+  // pas un danger. Rouge seulement quand le compte passe sous zéro avec le seul engagé.
+  const _danger = fin < 0;
+  tab.style.background = _danger ? 'linear-gradient(135deg,#5a1414,#8c2222)'
+                                 : 'linear-gradient(135deg,#102f4d,#17456e)';
+  tab.style.borderColor = _danger ? '#e24b4a' : '#378add';
+  tab.style.animation = _danger ? 'pulseBan 1.8s ease-in-out infinite' : 'none';
+  const _ttl = document.getElementById('ban-titre');
+  if (_ttl) { _ttl.textContent = _danger ? 'VIREMENT CONSEILLÉ' : 'À FINANCER CE MOIS';
+              _ttl.style.color = _danger ? '#ffd0d0' : '#a8d0f5'; }
+  const _ic = document.getElementById('ban-icone');
+  if (_ic) _ic.textContent = _danger ? '⚠️' : '💡';
+  const _txt = document.getElementById('ban-txt');
+  if (_txt) _txt.style.color = _danger ? '#f0b8b8' : '#c9dcf0';
   const dateV = getDateVirementConseillee();
   const aujourdhui = getDateAujourdhui();
   const aVenir = dateV && aujourdhui < dateV;

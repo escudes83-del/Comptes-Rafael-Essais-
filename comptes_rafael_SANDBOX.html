@@ -3723,8 +3723,14 @@ function renderRappels() {
     const soldesSuggestion = calculerSoldes();
     const soldeProjetePeriode = curKeySuggestion ? soldesSuggestion[curKeySuggestion]?.fin : null;
     const soldeEpargneActuel = getSoldeEpargne();
-    if (soldeProjetePeriode !== null && soldeProjetePeriode < 100 && soldeEpargneActuel > 0) {
-      const montantSuggere = Math.min(Math.ceil(100 - soldeProjetePeriode), soldeEpargneActuel);
+    // 02/11/2026 : borne basse à zéro. En dessous, c'est « DÉFICIT PROJETÉ » qui prend le
+    // relais ; les deux s'affichaient ensemble en proposant des montants différents.
+    if (soldeProjetePeriode !== null && soldeProjetePeriode >= 0
+        && soldeProjetePeriode < 100 && soldeEpargneActuel > 0) {
+      // Même règle que l'alerte de déficit : on couvre le budget restant à dépenser.
+      const resteBudgetSugg = getResteBudgetPeriode(curKeySuggestion);
+      const montantSuggere = Math.min(
+        Math.ceil(100 - soldeProjetePeriode + resteBudgetSugg), soldeEpargneActuel);
       // Date du virement = 1er du 2e mois de la période, la même que celle pré-remplie par
       // ouvrirSuggestionVirement(). L'afficher évite de croire qu'il faut virer TOUT DE SUITE :
       // l'alerte apparaît dès le début de période, mais l'argent doit rester en épargne
@@ -3744,6 +3750,7 @@ function renderRappels() {
       elSuggestion.innerHTML = `<div onclick="ouvrirSuggestionVirement(${montantSuggere},'${curKeySuggestion}')" style="position:relative;cursor:pointer;background:rgba(247,162,79,.12);border:2px solid var(--accent2);border-radius:10px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px;min-height:44px;animation:pulse-dette 1.8s ease-in-out infinite;">
         <div style="font-size:10px;font-weight:800;color:var(--accent2);letter-spacing:.5px;">💡 SUGGESTION<span class="aide-btn mini" onclick="event.stopPropagation();ouvrirAide('alerteSuggestion')" title="Aide / Help">?</span></div>
         <div style="font-size:11px;font-weight:700;color:#fff;margin-top:2px;text-align:center;">Virer ${fmt(montantSuggere)} de l'épargne</div>
+        ${resteBudgetSugg > 0 ? `<div style="font-size:9px;color:var(--muted);text-align:center;line-height:1.3;">dont ${fmt(resteBudgetSugg)} de budget restant à dépenser</div>` : ''}
         <div style="font-size:9.5px;color:var(--muted);margin-top:2px;text-align:center;line-height:1.3;">${
           libelleDateVirement
             ? `à faire le <b style="color:var(--accent2);">${libelleDateVirement}</b><br>l'argent reste en épargne d'ici là`

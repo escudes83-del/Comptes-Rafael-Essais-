@@ -2473,6 +2473,19 @@ function getSommeEntrees(key, type) {
 // et allegera le virement de la période suivante — rien n'est perdu.
 // Uniquement la période en cours : pour les suivantes, calculerSoldes() projette déjà
 // le budget complet, le recompter ici le doublerait.
+// Épargne réellement disponible À LA DATE de la période affichée — 02/11/2026.
+// Pour une période future, le solde d'aujourd'hui ne veut rien dire : la projection a
+// peut-être déjà tout consommé d'ici là. Constaté sur juillet 2027, où l'app proposait
+// de virer 757 $ alors que sa propre projection n'y laissait que 156 $.
+function getEpargneDisponibleAPeriode(key) {
+  const idx = getPeriodeIndex(key);
+  if (idx <= getCurrentPeriodeIndex()) return getSoldeEpargne();
+  const ligne = calculerProjectionEpargne().find(p => p.periode === key);
+  // Au-delà de la période d'épuisement, la projection s'arrête : il ne reste rien.
+  if (!ligne) return 0;
+  return Math.max(0, ligne.epargneRestante + ligne.montantPuise);
+}
+
 function getResteBudgetPeriode(key) {
   if (!key || key !== PERIODES[getCurrentPeriodeIndex()]?.key) return 0;
   const budget = getBudgetNourriturePourPeriode(key) + getBudgetPersoPourPeriode(key);
@@ -3651,7 +3664,7 @@ function renderRappels() {
     const elDeficit = document.getElementById('rappelAlerteDeficitBandeau');
     if (elDeficit) {
       if (deficitProjete) {
-        const soldeEpargneDispo = getSoldeEpargne();
+        const soldeEpargneDispo = getEpargneDisponibleAPeriode(keyAffiche);
         // Le montant proposé couvre aussi le budget restant à dépenser (voir
         // getResteBudgetPeriode). Le besoin « engagé seul » reste affiché en dessous.
         const resteBudgetDef = getResteBudgetPeriode(keyAffiche);
@@ -3665,6 +3678,7 @@ function renderRappels() {
           <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:2px;text-align:center;">${texteDeficit}</div>
           ${peutVirer ? `<div style="font-size:10px;font-weight:700;color:var(--accent2);margin-top:6px;">💡 Cliquer pour virer ${fmt(montantSuggereDeficit)} de l'épargne</div>` : ''}
           ${peutVirer && resteBudgetDef > 0 ? `<div style="font-size:9px;color:var(--muted);margin-top:2px;text-align:center;line-height:1.35;">dont ${fmt(resteBudgetDef)} de budget restant à dépenser<br>${fmt(besoinEngage)} suffiraient pour le seul engagé</div>` : ''}
+          ${!peutVirer ? `<div style="font-size:9.5px;font-weight:700;color:var(--muted);margin-top:6px;text-align:center;line-height:1.35;">épargne épuisée à cette date<br>un virement ne suffira plus</div>` : ''}
         </div>`;
       } else {
         elDeficit.style.display = 'none';
@@ -3692,10 +3706,13 @@ function renderRappels() {
     //   • ROUGE (plus bas) = danger réel, fin de période négative avec le seul engagé.
     // Les deux ne se chevauchent jamais, et proposent le même montant.
     const resteBudgetSugg = getResteBudgetPeriode(curKeySuggestion);
+    const montantSuggere = (soldeProjetePeriode === null) ? 0 : Math.min(
+      Math.ceil(100 - soldeProjetePeriode + resteBudgetSugg), soldeEpargneActuel);
+    // Seuil de 10 $ : en dessous l'écart est négligeable et l'alerte devient du bruit.
+    // Le 02/11/2026 elle proposait « virer 1,00 $ » après un virement arrondi à 470.
     if (soldeProjetePeriode !== null && soldeProjetePeriode >= 0
-        && (soldeProjetePeriode - resteBudgetSugg) < 100 && soldeEpargneActuel > 0) {
-      const montantSuggere = Math.min(
-        Math.ceil(100 - soldeProjetePeriode + resteBudgetSugg), soldeEpargneActuel);
+        && (soldeProjetePeriode - resteBudgetSugg) < 100
+        && soldeEpargneActuel > 0 && montantSuggere >= 10) {
       // Date du virement = 1er du 2e mois de la période, la même que celle pré-remplie par
       // ouvrirSuggestionVirement(). L'afficher évite de croire qu'il faut virer TOUT DE SUITE :
       // l'alerte apparaît dès le début de période, mais l'argent doit rester en épargne

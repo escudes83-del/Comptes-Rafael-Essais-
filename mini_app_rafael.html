@@ -1073,7 +1073,7 @@ function ouvrirDrawer(groupe) {
   document.getElementById('drawerTabs').classList.add('hidden');
   ['salaire-dt','autre-dt','loyer-dt','electricite-dt','assurance-dt',
    'gym-dt','netflix-dt','fido-dt','metro-dt','bixi-dt','sante-dt',
-   'ep-ret-dt','ep-dep-dt','ep-int-dt','ep-ext-dt','dette-dt'].forEach(id => {
+   'ep-ret-dt','ep-dep-dt','ep-int-dt','ep-ext-dt','ep-rdir-dt','dette-dt'].forEach(id => {
     const d = document.getElementById(id);
     if (d && !d.value) d.value = getDateAujourdhui();
   });
@@ -1250,9 +1250,9 @@ function renderDrawer() {
   if (elEL) {
     if (!mv.length) elEL.innerHTML = '<div class="vide">Aucun mouvement.</div>';
     else elEL.innerHTML = [...mv].sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(m => {
-      const plus = (m.type !== 'retrait');
-      const ic = m.type === 'depot' ? '⬇️' : m.type === 'retrait' ? '⬆️' : m.type === 'externe' ? '🏦' : '📈';
-      const lib = m.type === 'depot' ? 'Dépôt' : m.type === 'retrait' ? 'Retrait' : m.type === 'externe' ? 'Dépôt direct' : 'Intérêts';
+      const plus = (m.type !== 'retrait' && m.type !== 'retraitdirect');
+      const ic = m.type === 'depot' ? '⬇️' : m.type === 'retrait' ? '⬆️' : m.type === 'externe' ? '🏦' : m.type === 'retraitdirect' ? '💸' : '📈';
+      const lib = m.type === 'depot' ? 'Dépôt' : m.type === 'retrait' ? 'Retrait' : m.type === 'externe' ? 'Dépôt direct' : m.type === 'retraitdirect' ? 'Retrait direct' : 'Intérêts';
       return `<div class="lg-item">
         <span class="d">${(m.date||'').slice(8)}/${(m.date||'').slice(5,7)}</span>
         <span class="l">${ic} ${lib}${m.desc ? ' — ' + m.desc : ''}</span>
@@ -1631,13 +1631,16 @@ function renderAlerteVirement() {
   // suit la même règle, sans quoi une période pouvait plonger sans aucune alerte.
   const resteBudget = (fin === null) ? 0 : Math.max(0, (budgetNourr + budgetPerso)
     - (_sommeEntrees('nourriture') + _sommeEntrees('perso')));
-  if (fin === null || (fin - resteBudget) >= 100 || epargne <= 0) {
+  const besoinEngage = (fin === null) ? 0 : Math.ceil(100 - fin);
+  const montant = (fin === null) ? 0
+                : Math.min(Math.ceil(100 - fin + resteBudget), epargne);
+  // Seuil de 10 $ : en dessous, l'alerte devient du bruit (elle a proposé « virer 1,00 $ »
+  // le 02/11/2026, après un virement volontairement arrondi).
+  if (fin === null || (fin - resteBudget) >= 100 || epargne <= 0 || montant < 10) {
     tab.style.display = 'none';
     if (document.getElementById('grp-alerte').style.display !== 'none') fermerDrawer();
     return;
   }
-  const besoinEngage = Math.ceil(100 - fin);
-  const montant = Math.min(Math.ceil(100 - fin + resteBudget), epargne);
   // Bleu tant que la période ne finit pas en négatif : c'est un financement à prévoir,
   // pas un danger. Rouge seulement quand le compte passe sous zéro avec le seul engagé.
   const _danger = fin < 0;
@@ -2137,19 +2140,22 @@ function getSoldeEpargne() {
   // Interets ET depots directs : tous deux creditent l'epargne sans toucher au courant.
   const i = mv.filter(m => m.type === 'interet' || m.type === 'externe')
               .reduce((s,m) => s + m.montant, 0);
-  return depart + d - r + i;
+  // Retrait direct : sort de l'épargne sans passer par le compte courant (frais bancaires).
+  const sd = mv.filter(m => m.type === 'retraitdirect').reduce((s,m) => s + m.montant, 0);
+  return depart + d - r + i - sd;
 }
 
 async function ajouterEpargne(type) {
   const pref = type === 'retrait' ? 'ep-ret' : type === 'depot' ? 'ep-dep'
-              : type === 'externe' ? 'ep-ext' : 'ep-int';
+              : type === 'externe' ? 'ep-ext'
+              : type === 'retraitdirect' ? 'ep-rdir' : 'ep-int';
   const montant = parseFloat(document.getElementById(pref + '-amt').value);
   const descEl  = document.getElementById(pref + '-dsc');
   const desc    = descEl ? (descEl.value || '').trim() : '';
   const date    = document.getElementById(pref + '-dt').value || getDateAujourdhui();
   if (!montant || montant <= 0) { alert('Entre un montant valide.'); return; }
   if (!state) { alert('Données non chargées.'); return; }
-  if (type === 'retrait' && montant > getSoldeEpargne()) {
+  if ((type === 'retrait' || type === 'retraitdirect') && montant > getSoldeEpargne()) {
     alert('Épargne insuffisante.\n\nSolde : ' + fmt(getSoldeEpargne()));
     return;
   }
@@ -2761,6 +2767,27 @@ chargerDepuisFirebase();
           <div class="f-row">
             <input class="dt" type="date" id="ep-ext-dt">
             <button class="f-btn vert2" onclick="resetSessionTimer();ajouterEpargne('externe')">🏦 Créditer</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sect" id="sect-ep-rdir">
+        <div class="sect-head" onclick="resetSessionTimer();toggleSect('sect-ep-rdir')">
+          <span class="t"><span class="chev">▶</span>💸 Retrait direct / frais</span>
+        </div>
+        <div class="sect-body">
+          <div style="font-size:12px;color:#8fa6bd;line-height:1.5;">
+            De l'argent prélevé <b>directement sur l'épargne</b>, sans passer par le compte
+            courant — des frais bancaires, par exemple. Aucune écriture n'est créée dans
+            les comptes : seule l'épargne baisse.
+          </div>
+          <div class="f-row">
+            <input class="amt" type="number" id="ep-rdir-amt" placeholder="Montant $" step="0.01">
+            <input class="dsc" type="text" id="ep-rdir-dsc" placeholder="ex : frais chèque devises">
+          </div>
+          <div class="f-row">
+            <input class="dt" type="date" id="ep-rdir-dt">
+            <button class="f-btn orange" onclick="resetSessionTimer();ajouterEpargne('retraitdirect')">💸 Prélever</button>
           </div>
         </div>
       </div>
